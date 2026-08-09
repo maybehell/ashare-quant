@@ -323,7 +323,8 @@ shadow 门禁只统计当前冻结候选 `candidate_id` 和当前实盘相关配
 - `benchmark_comparison.csv`：策略与沪深 300 逐日对比。
 - `robustness_split.csv`：样本内 / 样本外拆分。
 - `walk_forward.csv` / `walk_forward_summary.csv`：走步验证。
-- `orders.csv`、`positions.csv`、`trades.csv`：模拟盘订单、持仓和成交。
+- `backtest_orders.csv`：仅供研究审计的回测模拟订单，不是执行输入。
+- `orders.csv`、`positions.csv`、`trades.csv`：`orders.csv` 仅由通过门禁的模拟盘流程生成；持仓和成交为本地模拟状态。
 - `order_source_diagnostics.csv`：判断当前 `orders.csv` 是可执行 paper 订单还是回测/未验证订单。
 - `orders_provenance.csv`：订单来源、信号日、执行日、信号哈希和配置哈希。
 - `account_reconciliation.csv`：模拟盘权益、现金、持仓、订单来源和 SQLite 状态库对账。

@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 import hashlib
 import json
+import os
 from html import escape
 from pathlib import Path
 from typing import Any
@@ -148,7 +149,13 @@ def write_local_operator_status(
     )
     observation_settings = strategy_config.get("observation_task", {}) if isinstance(strategy_config.get("observation_task"), dict) else {}
     scheduled_required = str(observation_settings.get("required", False)).strip().lower() in {"true", "1", "yes"}
-    daemon_gate_ok = daemon_ok if scheduled_required else True
+    startup_required = scheduled_required and str(
+        observation_settings.get("startup_required", False)
+    ).strip().lower() in {"true", "1", "yes"}
+    startup_ok, startup_value, startup_message = _observation_startup_status(
+        required=startup_required,
+    )
+    daemon_gate_ok = (daemon_ok and startup_ok) if scheduled_required else True
     scheduled_ok, scheduled_value, scheduled_message = _scheduled_observation_status(
         scheduled_observation,
         required=scheduled_required,
@@ -210,6 +217,8 @@ def write_local_operator_status(
             next_action = launcher_message
         elif not refresh_ok:
             next_action = refresh_message
+        elif not startup_ok:
+            next_action = startup_message
         elif not daemon_gate_ok:
             next_action = daemon_message
         elif not scheduled_ok:
@@ -274,6 +283,7 @@ def write_local_operator_status(
     rows = [
         _row("overall_status", status, overall_operational, "runtime", headline),
         _row("local_launcher_state", launcher_state, launcher_ok, "runtime", launcher_message),
+        _row("observation_startup", startup_value, startup_ok, "runtime", startup_message),
         _row("observation_daemon", daemon_value, daemon_ok, "runtime", daemon_message),
         _row("scheduled_observation_run", scheduled_value, scheduled_ok, "runtime", scheduled_message),
         _row("formal_forward_candidate", formal_value, formal_ok, "strategy", formal_message),
@@ -475,6 +485,46 @@ def _observation_daemon_status(
     if passed:
         return True, value, "自动观察守护心跳正常；该进程只刷新冻结候选，不生成实盘订单。"
     return False, value, "自动观察守护缺失、停止、心跳过期或运行代码已过时；请重启观察守护进程。"
+
+
+def _observation_startup_status(
+    *,
+    required: bool,
+    startup_path: Path | None = None,
+) -> tuple[bool, str, str]:
+    if not required:
+        return True, "not_required", "Current configuration does not require a persistent observation Startup entry."
+    if startup_path is None:
+        appdata = str(os.environ.get("APPDATA", "") or "").strip()
+        if not appdata:
+            return False, "startup_folder_unavailable", "Windows Startup folder is unavailable; reinstall the observation runtime."
+        startup_path = (
+            Path(appdata)
+            / "Microsoft"
+            / "Windows"
+            / "Start Menu"
+            / "Programs"
+            / "Startup"
+            / "AshareQuantDailyObservation.cmd"
+        )
+    try:
+        launcher = startup_path.read_text(encoding="ascii", errors="replace")
+    except OSError:
+        return False, f"missing:{startup_path}", "Observation Startup entry is missing; reinstall and start the observation runtime."
+    expected_supervisor = str(project_path("scripts/observation_supervisor.ps1").resolve())
+    normalized = launcher.replace("/", "\\").casefold()
+    expected = expected_supervisor.replace("/", "\\").casefold()
+    safe = (
+        expected in normalized
+        and "observation_supervisor.ps1" in normalized
+        and "auto-live-run" not in normalized
+        and "broker-account-init" not in normalized
+    )
+    value = f"installed:{startup_path}" if safe else f"invalid:{startup_path}"
+    if safe:
+        return True, value, "Observation-only Startup entry is installed and points to the current supervisor."
+    return False, value, "Observation Startup entry is stale or unsafe; reinstall it before relying on unattended observation."
+
 
 def _file_sha256(path: Path) -> str:
     try:

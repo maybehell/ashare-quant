@@ -217,6 +217,7 @@ REPORT_VALUE_LABELS = {
 DEFAULT_COLUMNS = {
     "equity_curve.csv": ["date", "cash", "market_value", "equity", "fills", "turnover"],
     "orders.csv": ["date", "symbol", "side", "quantity", "reason"],
+    "backtest_orders.csv": ["date", "symbol", "side", "quantity", "reason"],
     "positions.csv": ["symbol", "quantity", "sellable_quantity", "cost", "close", "market_value", "pnl"],
     "trades.csv": ["date", "symbol", "side", "quantity", "price", "fee", "amount", "reason"],
     "performance_metrics.csv": ["metric", "value"],
@@ -618,7 +619,10 @@ def write_outputs(
     risk_exposure: pd.DataFrame | None = None,
     raw_prices: pd.DataFrame | None = None,
     raw_benchmark: pd.DataFrame | None = None,
+    order_output_name: str = "orders.csv",
 ) -> dict[str, Path]:
+    if order_output_name not in {"orders.csv", "backtest_orders.csv"}:
+        raise ValueError("order_output_name must be orders.csv or backtest_orders.csv")
     output_dir = project_path(config["paths"]["output_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
     invalidate_execution_artifacts(config, reason="backtest_outputs_started")
@@ -752,7 +756,7 @@ def write_outputs(
 
     frames = {
         "equity_curve.csv": equity,
-        "orders.csv": orders,
+        order_output_name: orders,
         "positions.csv": positions,
         "trades.csv": trades,
         "industry_exposure.csv": industry_exposure_frame,

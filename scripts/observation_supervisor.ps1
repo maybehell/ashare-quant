@@ -159,6 +159,9 @@ try {
         }
     }
     Publish-Status "stopped" "Observation stop marker is present; supervisor will not restart the daemon." $null "none" $restartTimes.Count
+} catch {
+    Publish-Status "failed" $_.Exception.Message $null "none" $restartTimes.Count
+    throw
 } finally {
     Remove-Item -LiteralPath $supervisorLockPath -Force -ErrorAction SilentlyContinue
 }

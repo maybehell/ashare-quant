@@ -4,6 +4,39 @@ This is the chronological engineering record for the repository. New entries are
 added directly below this introduction, newest first. It records verified facts;
 it is not a release-marketing document and does not replace generated audit
 artifacts.
+## 2026-08-09 - Restore unattended observation and bind research to committed data scope
+
+**Objective**
+
+Restore reliable unattended observation, refresh the public research cache, and prevent retained historical symbols or backtest artifacts from weakening data audits or entering an execution path.
+
+**Changes**
+
+- Added verified current-user Startup installation and live-heartbeat checks for the observation supervisor; fatal supervisor failures now publish a failed status.
+- Made BaoStock the default history source and added freshness/coverage gates before reusing cached stock metadata.
+- Bound source-health checks and backtests to the exact symbol set in the latest completed fetch manifest.
+- Separated research orders into `backtest_orders.csv`; backtests no longer write the generic `orders.csv` or `rpa_orders.csv` execution artifacts.
+- Updated operator diagnostics, tests, README output guidance, and architecture artifact ownership rules.
+
+**Architecture and safety**
+
+- A stale status JSON file is not accepted as proof that unattended observation is running; both a verified Startup entry and a fresh live process heartbeat are required.
+- Research outputs cannot create generic execution-order artifacts. Broker submission remains disabled, the emergency stop remains active, and no live ledger, activation certificate, active execution strategy, or live/RPA order file was created.
+- The frozen candidates were observed without changing their identities or tuning them against the newly refreshed data.
+
+**Verification**
+
+- Manual daily observation completed in `730.601` seconds; the three frozen candidates reached `8/60`, `7/60`, and `4/60` observations, with only `5/60` common post-policy trading days.
+- Public fetch completed for `800/800` symbols through `2026-08-07`, with zero failures, reported BaoStock amount data, and `9/9` source-health checks passing.
+- The committed-scope backtest covered `750` trading days from `2023-07-06` through `2026-08-07`: total return `97.07%`, annualized return `25.64%`, maximum drawdown `-28.35%`, benchmark return `22.16%`, and excess return `74.91%`. These figures are research evidence, not a live-readiness claim.
+- Final full suite: `1022 passed, 3 skipped, 39 subtests passed in 296.44s`.
+- Protected live and generic execution paths were audited absent after the run.
+
+**Remaining work**
+
+- Do not promote the strategy: the common formal forward window is only `5/60`, `optimized_on_current_cache` remains true, and bootstrap/factor-robustness gates still fail.
+- Continue daily observation until the full untuned forward window is available, then reassess stability, excess return, drawdown, turnover, and factor degradation.
+- The current-user Startup mechanism requires Windows logon and is not equivalent to an operating-system service.
 ## 2026-08-09 - Add private GitHub source synchronization
 
 **Objective**

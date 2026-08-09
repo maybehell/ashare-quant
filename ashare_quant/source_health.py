@@ -7,7 +7,7 @@ from typing import Any
 import pandas as pd
 
 from .config import project_path
-from .data import DataStore, cached_universe_symbols
+from .data import DataStore, cached_universe_symbols, committed_fetch_market_scope
 from .validation import cache_age_days, complete_market_dates, filter_complete_market_data
 
 SOURCE_HEALTH_COLUMNS = ["check", "passed", "value", "threshold", "severity", "next_action", "command"]
@@ -58,10 +58,12 @@ def build_data_source_health(config: dict[str, Any], store: DataStore | None = N
         return pd.DataFrame(rows, columns=SOURCE_HEALTH_COLUMNS)
 
     benchmark = store.load_benchmark(required=False)
-    filtered_prices, filtered_benchmark = filter_complete_market_data(prices, benchmark, config)
-    complete_dates = complete_market_dates(prices, benchmark, config)
+    scoped_prices, fetch_scope_passed, fetch_scope_value = committed_fetch_market_scope(store, prices)
+    analysis_prices = scoped_prices if fetch_scope_passed else prices
+    filtered_prices, filtered_benchmark = filter_complete_market_data(analysis_prices, benchmark, config)
+    complete_dates = complete_market_dates(analysis_prices, benchmark, config)
     complete_end = complete_dates[-1] if complete_dates else None
-    raw_latest, raw_count, raw_ratio = raw_latest_coverage(prices)
+    raw_latest, raw_count, raw_ratio = raw_latest_coverage(analysis_prices)
     partial = read_cached_frame(store, "prices_partial")
     try:
         partial_latest, partial_count, _partial_ratio = raw_latest_coverage(partial)
@@ -76,7 +78,7 @@ def build_data_source_health(config: dict[str, Any], store: DataStore | None = N
     add(
         "cached_market_data",
         not stocks.empty and not prices.empty,
-        f"stocks={len(stocks)}, prices={len(prices)}",
+        f"stocks={len(stocks)}, prices={len(prices)}, fetch_scope={fetch_scope_value}",
         "non-empty stocks/prices",
         "ok" if not stocks.empty and not prices.empty else "blocker",
         "本地行情缓存存在。" if not stocks.empty and not prices.empty else "重新刷新行情缓存。",

@@ -7,6 +7,7 @@
   },
   "observation_task": {
     "required": true,
+    "startup_required": true,
     "max_age_hours": 36,
     "max_runtime_hours": 6
   },
@@ -18,12 +19,14 @@
     "history_retries": 2,
     "history_session_retries": 2,
     "history_session_retry_delay_seconds": 1,
-    "history_source": "auto",
+    "history_source": "baostock",
     "history_fallback_to_baostock": true,
     "benchmark_fallback_to_baostock": true,
     "metadata_source": "baostock",
     "metadata_fallback_to_akshare": true,
     "metadata_priced_only": true,
+    "metadata_cache_max_age_days": 30,
+    "metadata_cache_min_coverage": 0.90,
     "metadata_workers": 3,
     "enrich_metadata": true,
     "disable_requests_proxy": true,

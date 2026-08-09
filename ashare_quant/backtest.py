@@ -7,7 +7,7 @@ from typing import Any
 import pandas as pd
 
 from .capital_aware import build_capital_aware_target_weights, capital_aware_enabled
-from .data import DataStore, make_proxy_benchmark
+from .data import DataStore, committed_fetch_market_scope, make_proxy_benchmark
 from .factors import build_configured_target_portfolio
 from .portfolio import Portfolio, generate_rebalance_orders
 from .report import write_outputs
@@ -29,6 +29,13 @@ def run_backtest(config: dict[str, Any]) -> dict[str, Path]:
     store = DataStore.from_config(config)
     stocks, prices, fundamentals = store.load_market_data()
     benchmark = store.load_benchmark(required=False)
+    scoped_prices, fetch_scope_passed, _fetch_scope_value = committed_fetch_market_scope(store, prices)
+    if fetch_scope_passed:
+        prices = scoped_prices
+        scoped_symbols = set(prices["symbol"].astype(str))
+        stocks = stocks[stocks["symbol"].astype(str).isin(scoped_symbols)].copy()
+        if not fundamentals.empty and "symbol" in fundamentals.columns:
+            fundamentals = fundamentals[fundamentals["symbol"].astype(str).isin(scoped_symbols)].copy()
     raw_prices = prices.copy()
     raw_benchmark = benchmark.copy()
     data_errors = validate_market_data(stocks, prices, fundamentals)
@@ -134,6 +141,7 @@ def run_backtest(config: dict[str, Any]) -> dict[str, Path]:
         risk_exposure=pd.DataFrame(risk_rows),
         raw_prices=raw_prices,
         raw_benchmark=raw_benchmark,
+        order_output_name="backtest_orders.csv",
     )
     store.log_run("backtest", "ok", f"wrote {len(paths)} output files")
     return paths

@@ -41,11 +41,13 @@ def test_backtest_equity_and_benchmark_period_start_after_factor_warmup() -> Non
     def capture_outputs(_config, *, equity, orders, **_kwargs):
         captured["equity"] = equity.copy()
         captured["orders"] = orders.copy()
+        captured["order_output_name"] = _kwargs.get("order_output_name")
         return {"equity_curve.csv": root / "equity_curve.csv"}
 
     with patch("ashare_quant.backtest.write_outputs", side_effect=capture_outputs):
         run_backtest(config)
 
+    assert captured["order_output_name"] == "backtest_orders.csv"
     orders = captured["orders"]
     dates = sorted(prices["date"].unique())
     assert not orders.empty

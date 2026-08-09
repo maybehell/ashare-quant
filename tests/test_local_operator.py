@@ -12,6 +12,7 @@ from ashare_quant.local_operator import (
     _challenger_observation_set_status,
     _formal_candidate_observation_status,
     _observation_daemon_status,
+    _observation_startup_status,
     _recovery_candidate_capital_status,
     _recovery_candidate_status,
     _scheduled_observation_status,
@@ -23,6 +24,41 @@ from ashare_quant.local_operator import (
 
 class LocalOperatorTests(unittest.TestCase):
 
+    def test_observation_startup_status_requires_current_safe_launcher(self):
+        output = Path("test_outputs") / "observation_startup_status"
+        output.mkdir(parents=True, exist_ok=True)
+        launcher = output / "AshareQuantDailyObservation.cmd"
+        expected = (Path.cwd() / "scripts" / "observation_supervisor.ps1").resolve()
+        launcher.unlink(missing_ok=True)
+
+        missing_ok, missing_value, _ = _observation_startup_status(
+            required=True,
+            startup_path=launcher,
+        )
+        self.assertFalse(missing_ok)
+        self.assertIn("missing:", missing_value)
+
+        launcher.write_text(
+            f'@echo off\nstart "" /min powershell.exe -File "{expected}"\n',
+            encoding="ascii",
+        )
+        installed_ok, installed_value, _ = _observation_startup_status(
+            required=True,
+            startup_path=launcher,
+        )
+        self.assertTrue(installed_ok)
+        self.assertIn("installed:", installed_value)
+
+        launcher.write_text(
+            f'@echo off\nstart "" /min powershell.exe -File "{expected}" auto-live-run\n',
+            encoding="ascii",
+        )
+        unsafe_ok, unsafe_value, _ = _observation_startup_status(
+            required=True,
+            startup_path=launcher,
+        )
+        self.assertFalse(unsafe_ok)
+        self.assertIn("invalid:", unsafe_value)
     def test_scheduled_observation_distinguishes_heartbeat_from_failed_run(self):
         failed = pd.DataFrame([{
             "status": "failed",

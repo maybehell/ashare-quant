@@ -566,8 +566,12 @@ def fetch_akshare(store: DataStore, config: dict[str, Any]) -> list[Path]:
             metadata_symbols = sorted(set(fetched_prices["symbol"].astype(str)))
             metadata_source = str(config.get("data", {}).get("metadata_source", "baostock")).lower()
             metadata_errors: list[str] = []
-            metadata_success = False
-            if metadata_source == "baostock":
+            metadata_success, metadata_cache_value = reusable_metadata_cache(
+                store, stocks, metadata_symbols, config
+            )
+            if metadata_success:
+                print(f"BaoStock metadata cache: reused ({metadata_cache_value}).")
+            if not metadata_success and metadata_source == "baostock":
                 try:
                     stocks, provenance = enrich_stock_metadata_baostock(stocks, metadata_symbols)
                     store.write_frame("stock_metadata_provenance", provenance)
@@ -1421,6 +1425,56 @@ def refresh_cached_metadata(store: DataStore, config: dict[str, Any], max_symbol
         paths.append(store.write_frame("metadata_failures", pd.DataFrame(failures)))
     return paths
 
+
+def reusable_metadata_cache(
+    store: DataStore,
+    stocks: pd.DataFrame,
+    symbols: list[str],
+    config: dict[str, Any],
+    *,
+    now: pd.Timestamp | None = None,
+) -> tuple[bool, str]:
+    settings = config.get("data", {}) if isinstance(config.get("data"), dict) else {}
+    max_age_days = float(settings.get("metadata_cache_max_age_days", 30))
+    min_coverage = float(settings.get("metadata_cache_min_coverage", 0.95))
+    if max_age_days <= 0 or not 0 < min_coverage <= 1:
+        return False, "disabled_or_invalid_policy"
+    wanted = {normalize_symbol(value) for value in symbols if normalize_symbol(value)}
+    if not wanted:
+        return True, "symbols=0;coverage=1.0000"
+    provenance = store.read_frame("stock_metadata_provenance", required=False)
+    if provenance.empty or not {"symbol", "retrieved_at"}.issubset(provenance.columns):
+        return False, "provenance_missing"
+    checked_at = pd.Timestamp.now(tz="UTC") if now is None else pd.Timestamp(now)
+    if checked_at.tzinfo is None:
+        checked_at = checked_at.tz_localize("UTC")
+    else:
+        checked_at = checked_at.tz_convert("UTC")
+    cutoff = checked_at - pd.Timedelta(days=max_age_days)
+    retrieved = pd.to_datetime(provenance["retrieved_at"], errors="coerce", utc=True)
+    fresh_symbols = set(
+        provenance.loc[retrieved.ge(cutoff), "symbol"].map(normalize_symbol).astype(str)
+    )
+    normalized = normalize_stocks(stocks)
+    normalized = normalized[normalized["symbol"].astype(str).isin(wanted)].copy()
+    list_dates = pd.to_datetime(normalized["list_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    industries = normalized["industry"].fillna("").astype(str).str.strip().str.casefold()
+    complete_symbols = set(
+        normalized.loc[
+            list_dates.notna()
+            & list_dates.ne("2000-01-01")
+            & industries.ne("")
+            & industries.ne("unknown"),
+            "symbol",
+        ].astype(str)
+    )
+    covered = wanted & fresh_symbols & complete_symbols
+    coverage = len(covered) / len(wanted)
+    value = (
+        f"symbols={len(wanted)};covered={len(covered)};coverage={coverage:.4f};"
+        f"max_age_days={max_age_days:g}"
+    )
+    return coverage >= min_coverage, value
 
 def metadata_refresh_symbols(
     stocks: pd.DataFrame,

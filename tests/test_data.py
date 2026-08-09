@@ -36,6 +36,7 @@ from ashare_quant.data import (
     metadata_refresh_symbols,
     price_frame_issues,
     repair_tx_history_with_hfq,
+    reusable_metadata_cache,
     recover_partial_prices,
     resolve_finalized_trading_date,
     select_fetch_symbols,
@@ -722,6 +723,42 @@ class DataFetchTests(unittest.TestCase):
         config = {"universe": {"boards": ["main", "gem", "star"], "liquidity_lookback": 20}}
         self.assertEqual(metadata_refresh_symbols(stocks, prices, config, max_symbols=3), ["300001", "600000", "000001"])
 
+    def test_reusable_metadata_cache_requires_fresh_complete_coverage(self):
+        class FakeStore:
+            def __init__(self, retrieved_at: str):
+                self.retrieved_at = retrieved_at
+
+            def read_frame(self, name, required=False):
+                self.assert_name = name
+                return pd.DataFrame([
+                    {"symbol": "600000", "retrieved_at": self.retrieved_at},
+                    {"symbol": "000001", "retrieved_at": self.retrieved_at},
+                ])
+
+        stocks = pd.DataFrame([
+            {"symbol": "600000", "name": "A", "board": "main", "industry": "bank", "list_date": "1999-11-10", "is_st": False},
+            {"symbol": "000001", "name": "B", "board": "main", "industry": "finance", "list_date": "1991-04-03", "is_st": False},
+        ])
+        config = {"data": {"metadata_cache_max_age_days": 30, "metadata_cache_min_coverage": 1.0}}
+        now = pd.Timestamp("2026-08-09T12:00:00Z")
+
+        fresh, fresh_value = reusable_metadata_cache(
+            FakeStore("2026-08-01T12:00:00Z"), stocks, ["600000", "000001"], config, now=now
+        )
+        stale, _ = reusable_metadata_cache(
+            FakeStore("2026-06-01T12:00:00Z"), stocks, ["600000", "000001"], config, now=now
+        )
+        incomplete_stocks = stocks.copy()
+        incomplete_stocks.loc[incomplete_stocks["symbol"] == "000001", "industry"] = "unknown"
+        incomplete, incomplete_value = reusable_metadata_cache(
+            FakeStore("2026-08-01T12:00:00Z"), incomplete_stocks, ["600000", "000001"], config, now=now
+        )
+
+        self.assertTrue(fresh)
+        self.assertIn("coverage=1.0000", fresh_value)
+        self.assertFalse(stale)
+        self.assertFalse(incomplete)
+        self.assertIn("coverage=0.5000", incomplete_value)
     def test_apply_stock_info_updates_metadata(self):
         stocks = pd.DataFrame(
             [{"symbol": "600000", "name": "A", "board": "main", "industry": "unknown", "list_date": "2000-01-01", "is_st": False}]

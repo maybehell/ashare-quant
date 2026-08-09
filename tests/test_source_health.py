@@ -82,6 +82,53 @@ class SourceHealthTests(unittest.TestCase):
         self.assertFalse(bool(by_check["history_source_provenance"].passed))
         self.assertIn("0.5000", by_check["history_source_provenance"].value)
 
+    def test_source_health_scopes_coverage_to_latest_committed_universe(self):
+        root = Path.cwd() / "test_outputs" / "source_health_committed_scope"
+        config = load_config()
+        config["paths"]["cache_dir"] = str(root / "cache")
+        config["paths"]["state_db"] = str(root / "state.sqlite3")
+        config["paths"]["output_dir"] = str(root / "outputs")
+        config["data"]["min_fetch_success_symbols"] = 1
+        config["data"]["max_cache_age_days"] = 10
+        store = DataStore.from_config(config)
+        stocks = pd.DataFrame([
+            {"symbol": "000001", "name": "A", "board": "main", "industry": "bank", "list_date": "2020-01-01", "is_st": False},
+            {"symbol": "000002", "name": "B", "board": "main", "industry": "bank", "list_date": "2020-01-01", "is_st": False},
+            {"symbol": "000003", "name": "legacy", "board": "main", "industry": "bank", "list_date": "2020-01-01", "is_st": False},
+        ])
+        prices = pd.DataFrame([
+            {"date": "2026-08-01", "symbol": symbol, "open": 1, "high": 1, "low": 1, "close": 1, "volume": 1, "amount": 10}
+            for symbol in ["000001", "000002", "000003"]
+        ] + [
+            {"date": "2026-08-07", "symbol": symbol, "open": 1, "high": 1, "low": 1, "close": 1, "volume": 1, "amount": 10}
+            for symbol in ["000001", "000002"]
+        ])
+        store.write_frame("stocks", stocks)
+        store.write_frame("prices", prices)
+        store.write_frame("fundamentals", pd.DataFrame(columns=["date", "symbol", "pe", "pb", "roe"]))
+        store.write_frame("benchmark", pd.DataFrame([
+            {"date": "2026-08-01", "symbol": "000300", "name": "HS300", "close": 100},
+            {"date": "2026-08-07", "symbol": "000300", "name": "HS300", "close": 101},
+        ]))
+        store.write_frame("fetch_summary", pd.DataFrame([{
+            "requested_symbols": 2,
+            "fetched_symbols": 2,
+            "failed_items": 0,
+            "stage": "complete",
+        }]))
+        store.write_frame("fetch_history_provenance", pd.DataFrame([
+            {"symbol": "000001", "source": "baostock", "amount_quality": "reported"},
+            {"symbol": "000002", "source": "baostock", "amount_quality": "reported"},
+        ]))
+        store.write_frame("fetch_failures", pd.DataFrame(columns=["symbol", "stage", "error"]))
+
+        health = build_data_source_health(config, store=store, today=date(2026, 8, 9))
+        by_check = {row.check: row for row in health.itertuples(index=False)}
+
+        self.assertTrue(bool(by_check["raw_latest_coverage"].passed))
+        self.assertEqual(float(by_check["raw_latest_coverage"].value), 1.0)
+        self.assertEqual(float(by_check["price_cache_age_days"].value), 2.0)
+        self.assertIn("stage=complete", by_check["cached_market_data"].value)
     def test_source_health_missing_cache_has_recovery_command(self):
         root = Path.cwd() / "test_outputs" / "source_health_missing"
         config = load_config()

@@ -13,7 +13,8 @@ param(
     [switch]$BrokerReadOnlyRefresh,
     [switch]$Register,
     [switch]$ConfirmReplace,
-    [switch]$StartNow
+    [switch]$StartNow,
+    [int]$VerifySeconds = 15
 )
 
 $ErrorActionPreference = "Stop"
@@ -24,6 +25,7 @@ if (-not (Test-Path -LiteralPath $supervisor)) { throw "Missing supervisor: $sup
 if ($PollSeconds -lt 10) { throw "PollSeconds must be at least 10." }
 if ($MaxDailyAttempts -lt 1) { throw "MaxDailyAttempts must be positive." }
 if ($RetryMinutes -lt 1) { throw "RetryMinutes must be positive." }
+if ($VerifySeconds -lt 1) { throw "VerifySeconds must be positive." }
 
 function Resolve-ProjectPath([string]$Value) {
     if ([IO.Path]::IsPathRooted($Value)) { return [IO.Path]::GetFullPath($Value) }
@@ -70,9 +72,34 @@ if (-not $Register) {
 if ((Test-Path -LiteralPath $target) -and -not $ConfirmReplace) {
     throw "Startup entry already exists. Use -ConfirmReplace with -Register to replace it."
 }
-$launcher | Set-Content -LiteralPath $target -Encoding ASCII
+[System.IO.File]::WriteAllText($target, $launcher, [System.Text.Encoding]::ASCII)
 Write-Host "Startup entry installed: $target"
+$installedLauncher = Get-Content -LiteralPath $target -Raw -Encoding ASCII
+if ($installedLauncher -ne $launcher) {
+    throw "Startup entry verification failed after write: $target"
+}
 if ($StartNow) {
     Start-Process powershell.exe -ArgumentList $argumentLine -WindowStyle Hidden
-    Write-Host "Observation daemon started for the current session."
+    $statusPath = Join-Path $resolvedOutput "observation_supervisor_status.json"
+    $deadline = (Get-Date).AddSeconds($VerifySeconds)
+    $verified = $false
+    do {
+        Start-Sleep -Milliseconds 250
+        try {
+            $status = Get-Content -LiteralPath $statusPath -Raw -Encoding UTF8 | ConvertFrom-Json
+            $statusAge = (Get-Date) - [DateTimeOffset]::Parse([string]$status.generated_at).LocalDateTime
+            $process = Get-Process -Id ([int]$status.pid) -ErrorAction SilentlyContinue
+            $verified = (
+                [string]$status.mode -eq "observation_only_supervisor" -and
+                $statusAge.TotalSeconds -le $VerifySeconds -and
+                $null -ne $process
+            )
+        } catch {
+            $verified = $false
+        }
+    } while (-not $verified -and (Get-Date) -lt $deadline)
+    if (-not $verified) {
+        throw "Observation supervisor did not publish a fresh live status within $VerifySeconds seconds."
+    }
+    Write-Host "Observation supervisor started and verified for the current session (PID $($status.pid))."
 }

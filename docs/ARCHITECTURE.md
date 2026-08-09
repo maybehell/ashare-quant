@@ -58,6 +58,7 @@ Rules:
 - Interfaces call domain/application services; they do not duplicate gate logic.
 - A GUI action maps to the same service and checks as its CLI equivalent.
 - Scheduling cannot silently add submission capability.
+- Required unattended observation must have both a fresh live heartbeat and a verified current-user Startup entry; stale status files are not liveness evidence.
 
 ### 3.2 Configuration, data, and market infrastructure
 
@@ -210,13 +211,13 @@ Additional constraints:
 | State/artifact | Authoritative writer | Consumers | Mutation policy |
 |---|---|---|---|
 | Parquet market cache and provenance | data layer | research, valuation | atomic refresh, source/date audit |
-| Research/backtest outputs | research workflow | governance, reports | replace by run; bind manifest |
+| Research/backtest outputs | research workflow | governance, reports | replace by run; bind manifest; simulated orders use `backtest_orders.csv` only |
 | Frozen candidate and sealed inputs | candidate governance | forward observer, activation | immutable identity |
 | Active execution strategy/epoch | strategy activation | paper/live order generation | atomic activation/deactivation |
 | Paper SQLite ledger | account/paper domain | reports, reconciliation | transactional |
 | Broker read-only snapshot/history | broker adapter/history | binding, risk, reports | append/audit; no financial writes |
 | Live SQLite ledger | broker initialization/fills | risk, settlement | explicit initialization; transactional |
-| Orders/RPA tickets | execution pipeline | preview/live control | provenance-bound, quarantine stale batch |
+| Orders/RPA tickets | paper/execution pipeline | preview/live control | `orders.csv` and `rpa_orders.csv` are never written by backtest; provenance-bound, quarantine stale batch |
 | Rollout approval/confirmation | live control plane | submission gate | signed, expiring, single purpose |
 | Auto-live journal/recovery | live control plane | recovery, audit | append-only/hash chained |
 | HTML/CSV reports | presentation | operator | derived, never authoritative for submit |
