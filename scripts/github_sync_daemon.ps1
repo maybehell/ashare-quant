@@ -16,6 +16,25 @@ $lastExitCode = $null
 
 New-Item -ItemType Directory -Path $logDir -Force | Out-Null
 
+if (Test-Path -LiteralPath $statusPath -PathType Leaf) {
+    try {
+        $previousStatus = Get-Content -LiteralPath $statusPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ($previousStatus.last_run_at) {
+            $lastRunAt = [DateTime]::Parse(
+                [string]$previousStatus.last_run_at,
+                [Globalization.CultureInfo]::InvariantCulture,
+                [Globalization.DateTimeStyles]::RoundtripKind
+            )
+        }
+        if ($null -ne $previousStatus.last_exit_code) {
+            $lastExitCode = [int]$previousStatus.last_exit_code
+        }
+    }
+    catch {
+        $lastRunAt = $null
+        $lastExitCode = $null
+    }
+}
 function Write-DaemonStatus(
     [string]$State,
     [string]$Message,
@@ -93,7 +112,7 @@ try {
         exit (Invoke-SourceSync)
     }
 
-    $lastRunDate = $null
+    $lastRunDate = if ($null -ne $lastRunAt) { ([DateTime]$lastRunAt).Date } else { $null }
     while ($true) {
         $now = Get-Date
         $todayTarget = $now.Date.Add($time.TimeOfDay)

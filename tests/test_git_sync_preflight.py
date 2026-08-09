@@ -52,6 +52,8 @@ def test_startup_daemon_is_single_instance_and_recoverable() -> None:
     assert "FileMode]::CreateNew" in daemon
     assert "another GitHub sync daemon is already running" in daemon
     assert "staleStream" in daemon
+    assert "previousStatus.last_run_at" in daemon
+    assert "previousStatus.last_exit_code" in daemon
     assert "[switch]$RunOnce" in daemon
     assert "Start-Sleep" in daemon
     assert 'GetFolderPath("Startup")' in installer
