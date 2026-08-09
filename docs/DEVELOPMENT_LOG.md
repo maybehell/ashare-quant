@@ -5,6 +5,66 @@ added directly below this introduction, newest first. It records verified facts;
 it is not a release-marketing document and does not replace generated audit
 artifacts.
 
+## 2026-08-10 - Accelerate only trusted healthy history batches
+
+**Objective**
+
+Shorten the time to authoritative independent strategy evidence while retaining
+bounded public-source use, source-failure backoff, formal-cache isolation, and
+all live-execution safety boundaries.
+
+**Changes**
+
+- Added a separate 15-minute healthy interval to the history daemon. It applies
+  only after exit zero, source status `ok`, zero failed items, at least one
+  attempt, and equal attempted/successful counts.
+- Kept the regular interval at 60 minutes for non-source degraded or ambiguous
+  results and the persisted source-wide outage backoff at 240 minutes.
+- Persisted both healthy and regular intervals in the current-user Startup
+  launcher and added lower-bound and interval-order validation.
+- Added static, parser, Startup-persistence, and invalid-parameter regression
+  coverage. Updated the architecture, ADR 0008, and history runbook.
+
+**Architecture and safety**
+
+- This is research-data scheduling only. It does not change the default or
+  isolated strategy parameters, strategy hash, formal-cache acceptance,
+  candidate authority, broker capability, account state, or submission gates.
+- The 25-symbol request budget, 15-minute lower bound, quiet window, daily
+  observation lock, 60-minute fallback, and 240-minute source backoff remain
+  independent traffic and concurrency controls.
+- The Huatai configuration remains emergency-stopped with broker and service
+  submission disabled. Live ledger, active strategy, certification, generic
+  order, and RPA order artifacts remain absent.
+
+**Verification**
+
+- Focused daemon regression after implementation: `8 passed in 3.87s`.
+  Combined daemon and documentation governance regression:
+  `11 passed in 3.91s`. Final daemon, documentation, and strategy-identity
+  regression: `14 passed in 4.48s`.
+- Manual invalid-parameter probes rejected a 10-minute healthy interval and a
+  healthy interval longer than the regular interval, both with exit code 1.
+- Replaced and verified the current-user Startup launcher with
+  healthy/regular/source-backoff intervals of 15/60/240 minutes.
+- Real PID 4012 batch exited zero with source status `ok`, attempted and
+  succeeded 25/25, zero failures, and advanced freshly revalidated progress from
+  99 to 124/800. Its status scheduled the next batch exactly 15 minutes later
+  with the audited accelerated-batch message.
+- The formal `local-status` and `report` commands completed successfully and
+  refreshed the Chinese operator artifacts.
+
+**Remaining work**
+
+- Continue trusted acquisition for the remaining 676 symbols, then let the
+  daemon run the fixed isolated long-history validation. Do not promote or tune
+  from incomplete staging.
+- Strategy remains `pause_paper_orders`; the common forward window, independent
+  history, and strict readiness checks remain incomplete.
+- Huatai authentication, repeated cross-date read-only snapshots, explicit
+  live-ledger initialization, account binding, lifecycle certification, Canary
+  approval, and any submission remain separate future gates.
+
 ## 2026-08-10 - Add trust-gated historical source failover
 
 **Objective**

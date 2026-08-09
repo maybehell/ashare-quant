@@ -3,6 +3,7 @@ param(
     [string]$OutputDir = "outputs_extended_history_validation",
     [int]$MaxSymbols = 800,
     [int]$IntervalMinutes = 60,
+    [int]$HealthyIntervalMinutes = 15,
     [int]$MaxRuntimeMinutes = 30,
     [int]$MaxValidationRuntimeMinutes = 120,
     [int]$SourceFailureBackoffMinutes = 240,
@@ -22,6 +23,8 @@ function Resolve-ProjectPath([string]$Value) {
     return [IO.Path]::GetFullPath((Join-Path $projectRoot $Value))
 }
 if ($IntervalMinutes -lt 15) { throw "IntervalMinutes must be at least 15." }
+if ($HealthyIntervalMinutes -lt 15) { throw "HealthyIntervalMinutes must be at least 15." }
+if ($HealthyIntervalMinutes -gt $IntervalMinutes) { throw "HealthyIntervalMinutes cannot exceed IntervalMinutes." }
 if ($MaxRuntimeMinutes -lt 5) { throw "MaxRuntimeMinutes must be at least 5." }
 if ($MaxValidationRuntimeMinutes -lt 10) { throw "MaxValidationRuntimeMinutes must be at least 10." }
 if ($SourceFailureBackoffMinutes -lt $IntervalMinutes) { throw "SourceFailureBackoffMinutes must be at least IntervalMinutes." }
@@ -99,6 +102,20 @@ function Read-Progress {
     if ($LASTEXITCODE -ne 0 -or -not $raw) { return $null }
     try { return ($raw | ConvertFrom-Json) } catch { return $null }
 }
+function Get-NextBatchIntervalMinutes([object]$Progress, [int]$ExitCode) {
+    if (
+        $ExitCode -eq 0 -and
+        $null -ne $Progress -and
+        [string]$Progress.source_status -eq "ok" -and
+        [int]$Progress.failed_items -eq 0 -and
+        [int]$Progress.attempted_symbols -gt 0 -and
+        [int]$Progress.successful_symbols -eq [int]$Progress.attempted_symbols
+    ) {
+        return $HealthyIntervalMinutes
+    }
+    return $IntervalMinutes
+}
+
 function Test-QuietWindow([datetime]$Now) {
     if ($quietStartTime -le $quietEndTime) {
         return $Now.TimeOfDay -ge $quietStartTime -and $Now.TimeOfDay -lt $quietEndTime
@@ -265,9 +282,15 @@ try {
         $sourceBackoffMinutes = 0
         $sourceResumeAt = $null
         if ($RunOnce) { exit $exitCode }
-        $nextRun = (Get-Date).AddMinutes($IntervalMinutes)
-        Write-Status "waiting" "Waiting before the next bounded history batch." $progress $exitCode $nextRun
-        Start-Sleep -Seconds ($IntervalMinutes * 60)
+        $nextIntervalMinutes = Get-NextBatchIntervalMinutes $progress $exitCode
+        $nextRun = (Get-Date).AddMinutes($nextIntervalMinutes)
+        $message = if ($nextIntervalMinutes -eq $HealthyIntervalMinutes) {
+            "Healthy zero-failure batch completed; waiting for the accelerated bounded retry."
+        } else {
+            "Waiting before the next bounded history batch."
+        }
+        Write-Status "waiting" $message $progress $exitCode $nextRun
+        Start-Sleep -Seconds ($nextIntervalMinutes * 60)
     }
 } catch {
     Write-Status "failed" $_.Exception.Message (Read-Progress) 1 $null

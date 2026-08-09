@@ -46,6 +46,11 @@ strategy validation.
 8. Source selection, overlap windows, trust requirements, and retry controls are
    acquisition identity rather than strategy identity. Actual accepted rows
    remain bound by data and run-manifest hashes.
+9. The unattended daemon may schedule the next bounded batch after 15 minutes
+   only when the completed batch exits zero, reports source status `ok`, has no
+   failed items, attempts at least one symbol, and succeeds for every attempt.
+   Any other non-outage result uses the regular 60-minute interval, while a
+   source-wide outage retains the persisted 240-minute backoff.
 
 ## Consequences
 
@@ -56,6 +61,8 @@ Positive:
 - Unknown-source staging can no longer inflate completion.
 - Process timeouts preserve only work with matching provenance.
 - Switching to a healthy source is not blocked by stale outage state.
+- A healthy public source can complete independent evidence collection in
+  bounded 25-symbol batches without waiting an hour between successful batches.
 
 Costs:
 
@@ -66,6 +73,9 @@ Costs:
   strategy validation remain required after completion.
 - Disabling BaoStock fallback can leave source-specific failures for a later
   batch instead of trying every provider in one run.
+- The accelerated interval increases request cadence while healthy. The
+  25-symbol budget, 15-minute lower bound, quiet window, observation lock,
+  regular fallback interval, and source-outage backoff limit that cost.
 
 ## Alternatives considered
 

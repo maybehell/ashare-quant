@@ -32,6 +32,19 @@ def test_history_daemon_has_audited_source_outage_backoff():
     assert '"submit"' not in text.lower()
 
 
+def test_history_daemon_accelerates_only_zero_failure_healthy_batches():
+    text = DAEMON.read_text(encoding="utf-8")
+
+    assert "HealthyIntervalMinutes = 15" in text
+    assert "HealthyIntervalMinutes cannot exceed IntervalMinutes" in text
+    assert "Get-NextBatchIntervalMinutes" in text
+    assert '$Progress.source_status -eq "ok"' in text
+    assert "$Progress.failed_items -eq 0" in text
+    assert "$Progress.attempted_symbols -gt 0" in text
+    assert "$Progress.successful_symbols -eq [int]$Progress.attempted_symbols" in text
+    assert "Healthy zero-failure batch completed" in text
+
+
 def source_plan_identity() -> str:
     default_hash = hashlib.sha256((ROOT / "configs" / "default.yaml").read_bytes()).hexdigest()
     override_hash = hashlib.sha256(
@@ -40,7 +53,9 @@ def source_plan_identity() -> str:
     return f"{default_hash}:{override_hash}"
 
 
-def run_dry_daemon(output_dir: Path) -> subprocess.CompletedProcess[str]:
+def run_dry_daemon(
+    output_dir: Path, extra_args: list[str] | None = None
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [
             "powershell.exe",
@@ -59,6 +74,7 @@ def run_dry_daemon(output_dir: Path) -> subprocess.CompletedProcess[str]:
             "00:00",
             "-QuietEnd",
             "00:00",
+            *(extra_args or []),
         ],
         cwd=ROOT,
         capture_output=True,
@@ -115,6 +131,29 @@ def test_history_startup_installer_persists_source_backoff_setting():
     assert "SourceFailureBackoffMinutes" in text
     assert '"-SourceFailureBackoffMinutes"' in text
     assert "Source-wide failure backoff" in text
+
+
+def test_history_daemon_rejects_unsafe_healthy_intervals(tmp_path):
+    too_fast = run_dry_daemon(
+        tmp_path / "too-fast", ["-HealthyIntervalMinutes", "10"]
+    )
+    slower_than_regular = run_dry_daemon(
+        tmp_path / "too-slow",
+        ["-IntervalMinutes", "30", "-HealthyIntervalMinutes", "45"],
+    )
+
+    assert too_fast.returncode == 1
+    assert "HealthyIntervalMinutes must be at least 15" in too_fast.stderr
+    assert slower_than_regular.returncode == 1
+    assert "HealthyIntervalMinutes cannot exceed IntervalMinutes" in slower_than_regular.stderr
+
+
+def test_history_startup_installer_persists_healthy_interval_setting():
+    text = INSTALLER.read_text(encoding="utf-8")
+
+    assert "HealthyIntervalMinutes = 15" in text
+    assert '"-HealthyIntervalMinutes"' in text
+    assert "healthy=$HealthyIntervalMinutes" in text
 
 
 @pytest.mark.skipif(not sys.platform.startswith("win"), reason="PowerShell syntax validation")

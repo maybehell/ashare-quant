@@ -4,6 +4,7 @@ param(
     [string]$OutputDir = "outputs_extended_history_validation",
     [int]$MaxSymbols = 800,
     [int]$IntervalMinutes = 60,
+    [int]$HealthyIntervalMinutes = 15,
     [int]$MaxRuntimeMinutes = 30,
     [int]$MaxValidationRuntimeMinutes = 120,
     [int]$SourceFailureBackoffMinutes = 240,
@@ -18,6 +19,8 @@ $projectRoot = Split-Path -Parent $PSScriptRoot
 $daemon = Join-Path $PSScriptRoot "history_backfill_daemon.ps1"
 if (-not (Test-Path -LiteralPath $daemon)) { throw "Missing daemon: $daemon" }
 if ($IntervalMinutes -lt 15) { throw "IntervalMinutes must be at least 15." }
+if ($HealthyIntervalMinutes -lt 15) { throw "HealthyIntervalMinutes must be at least 15." }
+if ($HealthyIntervalMinutes -gt $IntervalMinutes) { throw "HealthyIntervalMinutes cannot exceed IntervalMinutes." }
 if ($MaxRuntimeMinutes -lt 5) { throw "MaxRuntimeMinutes must be at least 5." }
 if ($MaxValidationRuntimeMinutes -lt 10) { throw "MaxValidationRuntimeMinutes must be at least 10." }
 if ($SourceFailureBackoffMinutes -lt $IntervalMinutes) { throw "SourceFailureBackoffMinutes must be at least IntervalMinutes." }
@@ -39,6 +42,7 @@ $parts = @(
     "-OutputDir", ('"' + $resolvedOutput + '"'),
     "-MaxSymbols", $MaxSymbols,
     "-IntervalMinutes", $IntervalMinutes,
+    "-HealthyIntervalMinutes", $HealthyIntervalMinutes,
     "-MaxRuntimeMinutes", $MaxRuntimeMinutes,
     "-MaxValidationRuntimeMinutes", $MaxValidationRuntimeMinutes,
     "-SourceFailureBackoffMinutes", $SourceFailureBackoffMinutes
@@ -50,7 +54,7 @@ $launcher = "@echo off" + [Environment]::NewLine +
 
 Write-Host "Startup entry: $target"
 Write-Host "Mode: research_history_backfill"
-Write-Host "Interval: $IntervalMinutes minutes; max batch runtime: $MaxRuntimeMinutes minutes"
+Write-Host "Intervals: healthy=$HealthyIntervalMinutes minutes; regular=$IntervalMinutes minutes; max batch runtime=$MaxRuntimeMinutes minutes"
 Write-Host "Fixed-strategy validation timeout: $MaxValidationRuntimeMinutes minutes"
 Write-Host "Source-wide failure backoff: $SourceFailureBackoffMinutes minutes"
 Write-Host "The daemon exits after completed history passes fixed-strategy validation."

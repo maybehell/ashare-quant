@@ -105,6 +105,10 @@ Rules:
   crash can lose recoverable work but cannot leave unproven prices eligible for
   resume. Persisted source-outage backoff is reused only when the effective
   default/override source-plan identity is unchanged.
+- A bounded history daemon may use the 15-minute healthy interval only after a
+  zero-exit batch reports source status `ok`, zero failures, at least one
+  attempt, and equal attempted/successful counts. Degraded batches use the
+  regular interval; source-wide failures retain the longer persisted backoff.
 - Backtest, readiness, stress, capital-feasibility, paper/shadow signal, and
   broker-preview calculations use the exact symbol scope of the latest
   completed fetch. Account valuation may retain prices for held symbols outside

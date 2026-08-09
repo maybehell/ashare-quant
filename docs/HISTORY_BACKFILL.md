@@ -83,3 +83,21 @@ During the current BaoStock outage the isolated config disables BaoStock as a
 second fallback, while the ordinary daily configuration remains unchanged.
 None of these staging states authorizes strategy promotion, paper orders,
 broker access, live-ledger initialization, certification, or submission.
+
+## 2026-08-10 adaptive healthy scheduling
+
+This policy supersedes the earlier fixed 60-minute cadence. The daemon keeps
+the regular interval at 60 minutes and uses a separate 15-minute healthy
+interval only after a bounded batch exits successfully,
+reports source status `ok`, has zero failed items, attempts at least one symbol,
+and succeeds for every attempt. A degraded or ambiguous batch returns to the
+regular interval. Source-wide unavailability still uses the persisted
+240-minute backoff, and the daily observation lock and quiet window still take
+priority.
+
+Both intervals are persisted in the current-user Startup command through
+`install_history_backfill_startup.ps1`. The lower bound is 15 minutes, and the
+healthy interval cannot exceed the regular interval. This scheduling policy
+changes only research-data acquisition timing; it does not change the strategy
+hash, formal cache acceptance, promotion evidence, account state, broker
+capability, or submission authority.
