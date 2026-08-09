@@ -19,9 +19,9 @@ New-Item -ItemType Directory -Path $logDir -Force | Out-Null
 function Write-DaemonStatus(
     [string]$State,
     [string]$Message,
-    [Nullable[int]]$ExitCode,
-    [Nullable[DateTime]]$LastRunAt,
-    [Nullable[DateTime]]$NextRunAt
+    $ExitCode,
+    $LastRunAt,
+    $NextRunAt
 ) {
     $payload = [ordered]@{
         schema_version = 1
@@ -30,9 +30,9 @@ function Write-DaemonStatus(
         pid = $PID
         schedule = $At
         updated_at = (Get-Date).ToString("o")
-        last_run_at = if ($LastRunAt.HasValue) { $LastRunAt.Value.ToString("o") } else { $null }
-        last_exit_code = if ($ExitCode.HasValue) { $ExitCode.Value } else { $null }
-        next_run_at = if ($NextRunAt.HasValue) { $NextRunAt.Value.ToString("o") } else { $null }
+        last_run_at = if ($null -ne $LastRunAt) { ([DateTime]$LastRunAt).ToString("o") } else { $null }
+        last_exit_code = if ($null -ne $ExitCode) { [int]$ExitCode } else { $null }
+        next_run_at = if ($null -ne $NextRunAt) { ([DateTime]$NextRunAt).ToString("o") } else { $null }
     }
     $tempPath = "$statusPath.tmp"
     $payload | ConvertTo-Json | Set-Content -LiteralPath $tempPath -Encoding UTF8
