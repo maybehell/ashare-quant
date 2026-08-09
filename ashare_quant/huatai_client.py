@@ -140,11 +140,82 @@ def restore_huatai_trading_window(executable: Path) -> tuple[bool, str]:
         return False, f"{type(exc).__name__}: {exc}"
     return True, "restored the pinned minimized Huatai trading window"
 
+
+def open_huatai_trading_module(executable: Path) -> tuple[bool, str]:
+    """Send one F12 navigation key to the unique pinned Huatai market root."""
+    import win32api
+    import win32con
+    import win32gui
+    import win32process
+
+    executable = executable.resolve()
+    hexin_pids: set[int] = set()
+    xiadan_pids: set[int] = set()
+    for pid in win32process.EnumProcesses():
+        handle = None
+        try:
+            handle = win32api.OpenProcess(
+                win32con.PROCESS_QUERY_INFORMATION | win32con.PROCESS_VM_READ,
+                False,
+                pid,
+            )
+            process_path = Path(win32process.GetModuleFileNameEx(handle, 0)).resolve()
+            if process_path == executable:
+                hexin_pids.add(int(pid))
+            elif (
+                process_path.name.lower() == "xiadan.exe"
+                and process_path.parent == executable.parent
+            ):
+                xiadan_pids.add(int(pid))
+        except Exception:
+            continue
+        finally:
+            if handle is not None:
+                handle.Close()
+    if len(hexin_pids) != 1 or len(xiadan_pids) != 1:
+        return False, (
+            "expected one pinned Huatai market process and one trading process; "
+            f"found hexin={len(hexin_pids)}, xiadan={len(xiadan_pids)}"
+        )
+
+    candidates: list[int] = []
+
+    def collect(hwnd: int, _extra: object) -> bool:
+        try:
+            _, pid = win32process.GetWindowThreadProcessId(hwnd)
+            title = win32gui.GetWindowText(hwnd).strip()
+            if (
+                int(pid) in hexin_pids
+                and win32gui.IsWindowVisible(hwnd)
+                and win32gui.IsWindowEnabled(hwnd)
+                and title.startswith("华泰行情交易客户端")
+            ):
+                candidates.append(int(hwnd))
+        except Exception:
+            pass
+        return True
+
+    win32gui.EnumWindows(collect, None)
+    candidates = sorted(set(candidates))
+    if len(candidates) != 1:
+        return False, f"expected one visible pinned Huatai market root, found {len(candidates)}"
+
+    hwnd = candidates[0]
+    try:
+        win32gui.PostMessage(hwnd, win32con.WM_KEYDOWN, win32con.VK_F12, 0)
+        win32gui.PostMessage(hwnd, win32con.WM_KEYUP, win32con.VK_F12, 0)
+    except Exception as exc:
+        return False, f"{type(exc).__name__}: {exc}"
+    return True, "requested the pinned Huatai trading module with one F12 navigation key"
+
+
 def request_huatai_client_window_wake(
     config: dict[str, Any],
     *,
     launcher: Callable[..., Any] = subprocess.Popen,
     restorer: Callable[[Path], tuple[bool, str]] = restore_huatai_trading_window,
+    module_opener: Callable[[Path], tuple[bool, str]] = open_huatai_trading_module,
+    process_counts: Callable[[], dict[str, int]] = huatai_process_counts,
 ) -> tuple[bool, str]:
     client = config.get("desktop_client", {}) if isinstance(config.get("desktop_client"), dict) else {}
     if not bool(client.get("wake_windowless_on_refresh", False)):
@@ -161,6 +232,24 @@ def request_huatai_client_window_wake(
         restored, restore_message = False, f"{type(exc).__name__}: {exc}"
     if restored:
         return True, restore_message
+
+    module_message = "trading-module navigation is disabled"
+    if bool(client.get("open_trading_module_on_refresh", False)):
+        try:
+            opened, module_message = module_opener(configured_executable)
+        except Exception as exc:
+            opened, module_message = False, f"{type(exc).__name__}: {exc}"
+        if opened:
+            return True, module_message
+
+    counts = process_counts()
+    hexin_count = int(counts.get("hexin.exe", 0) or 0)
+    xiadan_count = int(counts.get("xiadan.exe", 0) or 0)
+    if hexin_count or xiadan_count:
+        return False, (
+            "pinned Huatai processes are already running; duplicate launch blocked; "
+            f"restore={restore_message}; module={module_message}"
+        )
     try:
         launcher(
             [str(configured_executable)],
@@ -171,7 +260,8 @@ def request_huatai_client_window_wake(
         return False, f"{type(exc).__name__}: {exc}"
     return True, (
         "window wake requested from the pinned Huatai executable; "
-        f"existing trading-window restore unavailable: {restore_message}"
+        f"existing trading-window restore unavailable: {restore_message}; "
+        f"module navigation unavailable: {module_message}"
     )
 
 

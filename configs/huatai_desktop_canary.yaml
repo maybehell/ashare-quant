@@ -13,6 +13,7 @@ desktop_client:
   auto_start: true
   startup_wait_seconds: 5
   wake_windowless_on_refresh: true
+  open_trading_module_on_refresh: true
   window_wake_wait_seconds: 3
   window_ready_timeout_seconds: 30
   window_ready_poll_seconds: 2

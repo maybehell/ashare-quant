@@ -226,21 +226,6 @@ try {
     Remove-Item -LiteralPath $lockPath -Force -ErrorAction SilentlyContinue
 }
 $observationExitCode = $exitCode
-try {
-    $reportResult = & $aqScript "--config" $resolvedConfig "report" 2>&1
-    $reportResult | Tee-Object -FilePath $logPath -Append
-} catch {
-    "Report refresh after observation failed: $($_.Exception.Message)" |
-        Tee-Object -FilePath $logPath -Append | Out-Null
-}
-
-try {
-    $statusResult = & $aqScript "--config" $resolvedConfig "local-status" "--live-config" $resolvedAlertConfig 2>&1
-    $statusResult | Tee-Object -FilePath $logPath -Append
-} catch {
-    "Local operator status refresh failed: $($_.Exception.Message)" |
-        Tee-Object -FilePath $logPath -Append | Out-Null
-}
 $brokerRefreshExitCode = 0
 $brokerRefreshMessage = if ($BrokerReadOnlyRefresh) { "not_started" } else { "disabled" }
 if ($BrokerReadOnlyRefresh) {
@@ -258,6 +243,24 @@ if ($BrokerReadOnlyRefresh) {
             Tee-Object -FilePath $logPath -Append | Out-Null
     } finally {
         $ErrorActionPreference = $previousErrorActionPreference
+    }
+}
+
+try {
+    $reportResult = & $aqScript "--config" $resolvedConfig "report" 2>&1
+    $reportResult | Tee-Object -FilePath $logPath -Append
+} catch {
+    "Report refresh after observation failed: $($_.Exception.Message)" |
+        Tee-Object -FilePath $logPath -Append | Out-Null
+}
+
+if (-not $BrokerReadOnlyRefresh) {
+    try {
+        $statusResult = & $aqScript "--config" $resolvedConfig "local-status" "--live-config" $resolvedAlertConfig 2>&1
+        $statusResult | Tee-Object -FilePath $logPath -Append
+    } catch {
+        "Local operator status refresh failed: $($_.Exception.Message)" |
+            Tee-Object -FilePath $logPath -Append | Out-Null
     }
 }
 $alertExitCode = 0

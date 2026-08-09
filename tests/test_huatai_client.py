@@ -29,7 +29,10 @@ class HuataiClientTests(unittest.TestCase):
         restorer = Mock(return_value=(False, "no minimized trading root"))
 
         attempted, message = request_huatai_client_window_wake(
-            config, launcher=launcher, restorer=restorer
+            config,
+            launcher=launcher,
+            restorer=restorer,
+            process_counts=lambda: {"hexin.exe": 0, "xiadan.exe": 0},
         )
 
         self.assertTrue(attempted)
@@ -41,6 +44,43 @@ class HuataiClientTests(unittest.TestCase):
             cwd=str(executable.parent),
             shell=False,
         )
+
+    def test_window_wake_opens_trading_module_before_duplicate_launch(self):
+        config = self.config()
+        config["desktop_client"]["wake_windowless_on_refresh"] = True
+        config["desktop_client"]["open_trading_module_on_refresh"] = True
+        launcher = Mock()
+        restorer = Mock(return_value=(False, "not minimized"))
+        opener = Mock(return_value=(True, "F12 requested"))
+
+        attempted, message = request_huatai_client_window_wake(
+            config,
+            launcher=launcher,
+            restorer=restorer,
+            module_opener=opener,
+            process_counts=lambda: {"hexin.exe": 1, "xiadan.exe": 1},
+        )
+
+        self.assertTrue(attempted)
+        self.assertEqual(message, "F12 requested")
+        opener.assert_called_once_with(Path(config["desktop_client"]["executable"]).resolve())
+        launcher.assert_not_called()
+
+    def test_window_wake_blocks_duplicate_launch_when_processes_exist(self):
+        config = self.config()
+        config["desktop_client"]["wake_windowless_on_refresh"] = True
+        launcher = Mock()
+
+        attempted, message = request_huatai_client_window_wake(
+            config,
+            launcher=launcher,
+            restorer=Mock(return_value=(False, "not minimized")),
+            process_counts=lambda: {"hexin.exe": 1, "xiadan.exe": 1},
+        )
+
+        self.assertFalse(attempted)
+        self.assertIn("duplicate launch blocked", message)
+        launcher.assert_not_called()
 
     def test_window_wake_restores_existing_trading_window_before_launch(self):
         config = self.config()

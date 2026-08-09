@@ -5,6 +5,64 @@ added directly below this introduction, newest first. It records verified facts;
 it is not a release-marketing document and does not replace generated audit
 artifacts.
 
+## 2026-08-10 - Automate fail-closed Huatai read-only observation
+
+**Objective**
+
+Make daily local operation refresh Huatai read-only evidence before reporting,
+recover a uniquely identified trading module when safe, and report expired
+trading authentication quickly without automating login or orders.
+
+**Changes**
+
+- Reordered daily observation to run broker read-only refresh after market
+  observation and before report, local status, and email alert generation.
+- Preserved broker-refresh status instead of overwriting it with a later generic
+  local-status run.
+- Added pinned one-shot F12 trading-module navigation, minimized-window restore,
+  and duplicate-client launch blocking.
+- Added desktop login-signature classification as
+  `broker_authentication_required`, explicit Chinese operator guidance, and
+  structured wake message/attempt counters in the refresh audit.
+- Enabled broker read-only refresh in the current-user daily observation Startup
+  entry and documented the durable boundary in ADR 0005 and the architecture.
+
+**Architecture and safety**
+
+- Desktop recovery is limited to the SHA-256-verified executable, one exact
+  market process, one same-directory trading process, and one unique window.
+- The automation never fills broker credentials, confirms login, initializes a
+  live ledger, creates an execution order, submits/cancels an order, or changes
+  an account balance.
+- Broker submission remained disabled, emergency stop remained active, service
+  submission remained disabled, and stale certification remains absent after
+  adapter/config changes.
+- Audited live ledger, active strategy, certification, generic order, and RPA
+  order paths remained absent.
+
+**Verification**
+
+- Focused Huatai, CLI, local operator, observation, and daemon regression:
+  `174 passed in 25.31s`; final navigation/audit regression:
+  `138 passed in 1.90s`.
+- Final full regression: `1054 passed, 39 subtests passed in 156.84s`.
+- Real `broker-refresh` failed closed in `15.8` seconds with exit code `1`, one
+  snapshot attempt, and desktop stage `broker_authentication_required`; no
+  window wake was repeated because the trading login page was already visible.
+- The real failure invalidated stale broker account evidence and regenerated
+  operator/report evidence without creating any protected live or order file.
+- After verification, the paused local tasks were restored: observation supervisor
+  PID 6352 and daemon PID 8408 are waiting with broker read-only refresh
+  enabled; history daemon PID 15628 resumed at 120/800; Git sync PID 15516
+  is waiting for 22:30 with last exit code 0.
+
+**Remaining work**
+
+- Manually complete Huatai trading authentication and open “资金股票”, then run
+  `broker-refresh` again to refresh current account/capital evidence.
+- Keep live submission disabled. Strategy promotion still requires the untuned
+  forward window and independent historical validation; no current research
+  result authorizes live orders.
 ## 2026-08-10 - Make history completion authoritative and auto-validate fixed strategy
 
 **Objective**

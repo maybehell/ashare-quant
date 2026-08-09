@@ -1977,10 +1977,12 @@ HUATAI_READ_ONLY_REFRESH_COLUMNS = [
     "total_client_windows",
     "minimized_client_windows",
     "trading_grid_count",
+    "authentication_control_count",
     "xiadan_native_window_count",
     "xiadan_visible_window_count",
     "xiadan_top_level_window_count",
     "window_wake_attempted",
+    "window_wake_message",
     "snapshot_attempts",
     "generated_at",
 ]
@@ -2223,6 +2225,7 @@ def run_huatai_read_only_refresh(
     stage = "desktop_snapshot"
     payload: dict = {}
     window_wake_attempted = False
+    window_wake_message = ""
     snapshot_attempts = 0
     canary_messages: list[str] = []
     wakeable_desktop_stages = {"client_window_absent", "client_window_minimized"}
@@ -2272,9 +2275,8 @@ def run_huatai_read_only_refresh(
             and (desktop_stage in retryable_after_wake_stages or startup_race)
         )
         if should_wait_for_ui:
-            wake_message = ""
-            if desktop_stage in wakeable_desktop_stages:
-                window_wake_attempted, wake_message = request_huatai_client_window_wake(live_config)
+            if desktop_stage in wakeable_desktop_stages | {"trading_module_ui_not_loaded"}:
+                window_wake_attempted, window_wake_message = request_huatai_client_window_wake(live_config)
             wake_wait = max(float(client.get("window_wake_wait_seconds", 3)), 0.0)
             ready_timeout = max(float(client.get("window_ready_timeout_seconds", 30)), wake_wait)
             poll_seconds = max(float(client.get("window_ready_poll_seconds", 2)), 0.25)
@@ -2293,8 +2295,8 @@ def run_huatai_read_only_refresh(
             paths["broker:huatai_client_status.csv"] = write_huatai_client_status(
                 live_config, start_if_needed=False
             )
-            if wake_message and not window_wake_attempted:
-                output = f"{output}; wake not attempted: {wake_message}".strip("; ")
+            if window_wake_message and not window_wake_attempted:
+                output = f"{output}; wake not attempted: {window_wake_message}".strip("; ")
         if completed.returncode != 0:
             raise RuntimeError(output or f"snapshot collector exited {completed.returncode}")
         if str(payload.get("status", "")).lower() != "ok":
@@ -2361,7 +2363,7 @@ def run_huatai_read_only_refresh(
         if canary_messages:
             message += " Canary remains blocked: " + " | ".join(canary_messages)
         atomic_to_csv(
-            pd.DataFrame([huatai_read_only_refresh_row("ok", "completed", message, snapshot_path, payload, window_wake_attempted=window_wake_attempted, snapshot_attempts=snapshot_attempts)], columns=HUATAI_READ_ONLY_REFRESH_COLUMNS),
+            pd.DataFrame([huatai_read_only_refresh_row("ok", "completed", message, snapshot_path, payload, window_wake_attempted=window_wake_attempted, window_wake_message=window_wake_message, snapshot_attempts=snapshot_attempts)], columns=HUATAI_READ_ONLY_REFRESH_COLUMNS),
             refresh_path,
             index=False,
             encoding="utf-8-sig",
@@ -2377,7 +2379,7 @@ def run_huatai_read_only_refresh(
             ).items():
                 paths[f"broker:{name}"] = result_path
         atomic_to_csv(
-            pd.DataFrame([huatai_read_only_refresh_row("failed", stage, f"{type(exc).__name__}: {exc}", snapshot_path, payload, window_wake_attempted=window_wake_attempted, snapshot_attempts=snapshot_attempts)], columns=HUATAI_READ_ONLY_REFRESH_COLUMNS),
+            pd.DataFrame([huatai_read_only_refresh_row("failed", stage, f"{type(exc).__name__}: {exc}", snapshot_path, payload, window_wake_attempted=window_wake_attempted, window_wake_message=window_wake_message, snapshot_attempts=snapshot_attempts)], columns=HUATAI_READ_ONLY_REFRESH_COLUMNS),
             refresh_path,
             index=False,
             encoding="utf-8-sig",
@@ -2398,6 +2400,7 @@ def huatai_read_only_refresh_row(
     payload: dict,
     *,
     window_wake_attempted: bool = False,
+    window_wake_message: str = "",
     snapshot_attempts: int = 1,
 ) -> dict[str, object]:
     diagnostics = payload.get("diagnostics", {}) if isinstance(payload.get("diagnostics"), dict) else {}
@@ -2414,10 +2417,12 @@ def huatai_read_only_refresh_row(
         "total_client_windows": int(diagnostics.get("total_client_windows", 0) or 0),
         "minimized_client_windows": int(diagnostics.get("minimized_client_windows", 0) or 0),
         "trading_grid_count": int(diagnostics.get("trading_grid_count", 0) or 0),
+        "authentication_control_count": int(diagnostics.get("authentication_control_count", 0) or 0),
         "xiadan_native_window_count": int(diagnostics.get("xiadan_native_window_count", 0) or 0),
         "xiadan_visible_window_count": int(diagnostics.get("xiadan_visible_window_count", 0) or 0),
         "xiadan_top_level_window_count": int(diagnostics.get("xiadan_top_level_window_count", 0) or 0),
         "window_wake_attempted": bool(window_wake_attempted),
+        "window_wake_message": str(window_wake_message or ""),
         "snapshot_attempts": max(int(snapshot_attempts), 0),
         "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
     }

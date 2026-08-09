@@ -392,6 +392,7 @@ def classify_desktop_stage(    *,
     xiadan_native_window_count: int | None = None,
     xiadan_visible_window_count: int | None = None,
     xiadan_top_level_window_count: int | None = None,
+    authentication_control_count: int = 0,
 ) -> str:
     if hexin_process_count == 0 or xiadan_process_count == 0:
         return "client_process_missing"
@@ -405,6 +406,8 @@ def classify_desktop_stage(    *,
         if xiadan_native_window_count == 0:
             return "client_background_process_only"
         return "client_window_absent"
+    if authentication_control_count > 0:
+        return "broker_authentication_required"
     if trading_grid_count == 0:
         if xiadan_visible_window_count == 0:
             return "trading_module_ui_not_loaded"
@@ -439,6 +442,7 @@ def collect_desktop_diagnostics() -> dict[str, Any]:
         "xiadan_native_window_count": 0,
         "xiadan_visible_window_count": 0,
         "xiadan_top_level_window_count": 0,
+        "authentication_control_count": 0,
     }
     errors: list[str] = []
     try:
@@ -474,21 +478,33 @@ def collect_desktop_diagnostics() -> dict[str, Any]:
         errors.append(f"native_window_inventory:{type(exc).__name__}: {exc}")
 
     grid_count = 0
+    authentication_control_count = 0
     for root in roots:
         try:
             descendants = root.descendants()
         except Exception as exc:
             errors.append(f"descendants:{type(exc).__name__}: {exc}")
             continue
+        login_signature_ids: set[str] = set()
         for control in descendants:
             try:
+                automation_id = str(control.element_info.automation_id or "").strip()
+                class_name = str(control.element_info.class_name or "").strip()
+                if control.is_visible() and (
+                    (automation_id in {"1006", "1008"} and class_name == "Button")
+                    or (automation_id == "1011" and class_name == "ComboBox")
+                    or (automation_id == "1012" and class_name == "Edit")
+                ):
+                    login_signature_ids.add(automation_id)
                 if (
                     control.process_id() in pids["xiadan.exe"]
-                    and control.element_info.class_name == "CVirtualGridCtrl"
+                    and class_name == "CVirtualGridCtrl"
                 ):
                     grid_count += 1
             except Exception as exc:
                 errors.append(f"grid_control:{type(exc).__name__}: {exc}")
+        if {"1006", "1008", "1011", "1012"}.issubset(login_signature_ids):
+            authentication_control_count += len(login_signature_ids)
 
     values.update(
         {
@@ -496,6 +512,7 @@ def collect_desktop_diagnostics() -> dict[str, Any]:
             "total_client_windows": len(all_roots),
             "minimized_client_windows": minimized,
             "trading_grid_count": grid_count,
+            "authentication_control_count": authentication_control_count,
         }
     )
     values["stage"] = classify_desktop_stage(**values)
@@ -521,6 +538,11 @@ def successful_snapshot_diagnostics(
 
 def desktop_failure_message(diagnostics: dict[str, Any], exc: Exception) -> str:
     stage = str(diagnostics.get("stage", "") or "")
+    if stage == "broker_authentication_required":
+        return (
+            "Huatai trading authentication is required; complete broker login manually "
+            "and keep the funds/positions page visible"
+        )
     if stage == "client_background_process_only":
         return (
             "Huatai client has background processes but no desktop window; "

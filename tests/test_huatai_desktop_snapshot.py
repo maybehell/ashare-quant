@@ -181,6 +181,24 @@ class HuataiDesktopSnapshotTests(unittest.TestCase):
             ),
             "trading_module_ui_not_loaded",
         )
+        self.assertEqual(
+            snapshot.classify_desktop_stage(
+                hexin_process_count=1,
+                xiadan_process_count=1,
+                visible_client_windows=1,
+                trading_grid_count=0,
+                authentication_control_count=4,
+            ),
+            "broker_authentication_required",
+        )
+
+    def test_authentication_failure_message_requires_manual_login(self):
+        message = snapshot.desktop_failure_message(
+            {"stage": "broker_authentication_required"},
+            RuntimeError("generic"),
+        )
+        self.assertIn("authentication is required", message)
+        self.assertIn("manually", message)
 
     def test_background_process_failure_message_is_actionable(self):
         message = snapshot.desktop_failure_message(

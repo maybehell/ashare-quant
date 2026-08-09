@@ -51,6 +51,9 @@ Responsibilities:
 - Parse operator intent and select an application workflow.
 - Display state without redefining business or safety rules.
 - Schedule observation and read-only refresh work.
+- Run scheduled broker read-only refresh after market observation and before
+  report/status/alert rendering, preserving broker failure as the current
+  operator evidence without rerunning the market workflow.
 - Return explicit exit status and artifact paths.
 
 Rules:
@@ -185,6 +188,10 @@ Rules:
 
 - Broker-specific UI details remain behind the adapter boundary.
 - Read-only refresh cannot submit orders or initialize the live ledger.
+- Unattended desktop recovery may restore one uniquely identified pinned trading
+  window or send one navigation key to one uniquely identified pinned market
+  window. It never fills credentials, confirms login, or invokes an order
+  action; a visible login page is classified as manual authentication required.
 - A stale broker snapshot clears both effective Canary and full-strategy capital
   readiness. Stale capital-sensitivity evidence blocks full-strategy review but
   cannot turn an execution-only Canary into strategy authorization.
@@ -268,7 +275,8 @@ Additional constraints:
 
 ### Daily safe operation
 
-1. Refresh market data and broker read-only evidence independently.
+1. Refresh market data, then refresh broker read-only evidence as an independent
+   fail-closed phase before rendering the daily report and alert state.
 2. Reclassify the capital operating mode from current broker and research
    evidence; never reuse stale balances.
 3. Update frozen candidate observations without tuning.

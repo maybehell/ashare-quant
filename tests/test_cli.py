@@ -2379,8 +2379,46 @@ class CliWorkflowTests(unittest.TestCase):
         self.assertEqual(calls["count"], 2)
         status = pd.read_csv(paths["broker:huatai_read_only_refresh.csv"])
         self.assertTrue(bool(status.loc[0, "window_wake_attempted"]))
+        self.assertEqual(status.loc[0, "window_wake_message"], "requested")
         self.assertEqual(int(status.loc[0, "snapshot_attempts"]), 2)
         self.assertEqual(status.loc[0, "status"], "ok")
+
+    def test_huatai_read_only_refresh_opens_unloaded_trading_module_once(self):
+        output = self.huatai_read_only_test_output("huatai_read_only_module_open")
+        snapshot_path = output / "snapshot.json"
+        config = {
+            "paths": {"output_dir": str(output)},
+            "desktop_client": {
+                "wake_windowless_on_refresh": True,
+                "window_wake_wait_seconds": 0,
+                "window_ready_max_attempts": 2,
+            },
+            "auto_live": {},
+        }
+        snapshot_path.write_text(json.dumps({
+            "status": "failed",
+            "diagnostics": {"stage": "trading_module_ui_not_loaded"},
+            "message": "module not loaded",
+        }), encoding="utf-8")
+        completed = argparse.Namespace(returncode=1, stdout="module not loaded", stderr="")
+        with (
+            patch("ashare_quant.cli.huatai_snapshot_path", return_value=snapshot_path),
+            patch("ashare_quant.cli.subprocess.run", return_value=completed),
+            patch("ashare_quant.cli.request_huatai_client_window_wake", return_value=(True, "F12 requested")) as wake_mock,
+            patch("ashare_quant.cli.time.sleep"),
+            patch("ashare_quant.cli.write_huatai_client_status", return_value=output / "client.csv"),
+            patch("ashare_quant.cli.invalidate_huatai_broker_account_evidence", return_value={}),
+            patch("ashare_quant.cli.write_huatai_canary_arming_audit", return_value=output / "canary.csv"),
+            patch("ashare_quant.cli.regenerate_report", return_value=output / "report.html"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "module not loaded"):
+                run_huatai_read_only_refresh(config)
+
+        wake_mock.assert_called_once_with(config)
+        status = pd.read_csv(output / "huatai_read_only_refresh.csv")
+        self.assertTrue(bool(status.loc[0, "window_wake_attempted"]))
+        self.assertEqual(status.loc[0, "window_wake_message"], "F12 requested")
+        self.assertEqual(int(status.loc[0, "snapshot_attempts"]), 2)
 
     def test_huatai_read_only_refresh_retries_after_minimized_window_wake(self):
         output = self.huatai_read_only_test_output("huatai_read_only_minimized_wake")
