@@ -69,6 +69,7 @@ try {
     }
 
     $sourcePaths = @(
+        ".gitattributes",
         ".gitignore",
         "AGENTS.md",
         "README.md",

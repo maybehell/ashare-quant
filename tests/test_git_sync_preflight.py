@@ -30,3 +30,15 @@ def test_normal_source_content_passes(tmp_path: Path) -> None:
     source = tmp_path / "safe.py"
     source.write_text("def value():\n    return 42\n", encoding="utf-8")
     assert audit(tmp_path, [source.name]) == []
+
+def test_sync_script_is_allowlisted_and_non_destructive() -> None:
+    script = (Path(__file__).resolve().parents[1] / "scripts" / "sync_github.ps1").read_text(
+        encoding="utf-8"
+    )
+    assert '".gitattributes"' in script
+    assert '"ashare_quant"' in script
+    assert '"configs"' in script
+    assert '"data"' not in script
+    assert "git add -A" not in script
+    assert '"push", "origin", $Branch' in script
+    assert "--force" not in script

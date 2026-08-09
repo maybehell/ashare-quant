@@ -28,11 +28,12 @@ Publish the source to a private GitHub repository and provide AI-independent dai
 
 - `.\.venv\Scripts\python.exe -m pytest tests\test_git_sync_preflight.py tests\test_documentation_governance.py -q`: `7 passed in 0.20s`.
 - `.\.venv\Scripts\python.exe -m pytest -q`: `1017 passed, 3 skipped, 39 subtests passed in 284.28s`.
-- Repository creation, first push, and scheduled-task verification are pending in this entry until authentication completes.
+- Private repository `maybehell/ashare-quant` was created and initial commit `f576ce3` was pushed over a repository-scoped SSH Deploy Key.
+- Scheduled-task verification remains pending until the task is installed and exercised.
 
 **Remaining work**
 
-- Complete GitHub CLI authentication, create the private repository, push the audited initial commit, and verify the scheduled task.
+- Install and exercise the daily scheduled task, then record its final verification result.
 
 ## 2026-08-09 - Establish architecture and development governance
 
