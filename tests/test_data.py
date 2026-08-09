@@ -9,6 +9,7 @@ from ashare_quant.data import (
     DataStore,
     committed_fetch_market_scope,
     scope_market_frames_to_committed_fetch,
+    commit_formal_fetch_then_progress,
 
     akshare_network_context,
     build_fetch_summary,
@@ -31,6 +32,7 @@ from ashare_quant.data import (
     normalize_stocks,
     history_from_tx,
     historical_backfill_required,
+    history_backfill_completion_status,
     history_staging_frame_name,
     infer_board,
     ensure_required_fetch_symbols,
@@ -48,6 +50,7 @@ from ashare_quant.data import (
     select_fetch_symbols,
     stocks_from_spot,
     tx_symbol,
+    unfinished_history_symbols,
     write_fetch_outputs,
 )
 
@@ -499,6 +502,70 @@ class DataFetchTests(unittest.TestCase):
         self.assertEqual(int(progress["remaining_symbols"]), 2)
         self.assertEqual(int(progress["deferred_symbols"]), 1)
         self.assertEqual(int(progress["request_budget"]), 1)
+    def test_history_completion_requires_zero_final_fetch_failures(self):
+        self.assertEqual(history_backfill_completion_status([]), "complete")
+        self.assertEqual(
+            history_backfill_completion_status(
+                [{"symbol": "000300", "stage": "benchmark", "error": "timeout"}]
+            ),
+            "in_progress",
+        )
+
+    def test_budgeted_history_remains_incomplete_until_every_symbol_finishes(self):
+        frames = [
+            pd.DataFrame([{"symbol": "000001", "date": "2026-08-07"}]),
+            pd.DataFrame([{"symbol": "000003", "date": "2026-08-07"}]),
+        ]
+
+        self.assertEqual(
+            unfinished_history_symbols(["000001", "000002", "000003"], frames),
+            ["000002"],
+        )
+
+    def test_history_completion_is_written_after_formal_outputs(self):
+        events = []
+
+        class Store:
+            def write_frame(self, name, frame):
+                events.append(("progress", name, frame.iloc[0]["status"]))
+                return Path(f"{name}.parquet")
+
+        def formal_writer():
+            events.append(("formal", "prices", "complete"))
+            return [Path("prices.parquet")]
+
+        paths = commit_formal_fetch_then_progress(
+            formal_writer,
+            Store(),
+            "history_progress_isolated",
+            pd.DataFrame([{"status": "complete"}]),
+        )
+
+        self.assertEqual(events[0][0], "formal")
+        self.assertEqual(events[1], ("progress", "history_progress_isolated", "complete"))
+        self.assertEqual(paths[-1], Path("history_progress_isolated.parquet"))
+
+    def test_history_completion_is_absent_when_formal_commit_fails(self):
+        writes = []
+
+        class Store:
+            def write_frame(self, name, frame):
+                writes.append(name)
+                return Path(f"{name}.parquet")
+
+        def failing_writer():
+            raise RuntimeError("formal commit failed")
+
+        with self.assertRaisesRegex(RuntimeError, "formal commit failed"):
+            commit_formal_fetch_then_progress(
+                failing_writer,
+                Store(),
+                "history_progress_isolated",
+                pd.DataFrame([{"status": "complete"}]),
+            )
+
+        self.assertEqual(writes, [])
+
     def test_fetch_summary_reports_preserved_symbols(self):
         price_frames = [pd.DataFrame([{"symbol": "000001", "date": "2026-01-02"}])]
         summary = build_fetch_summary(

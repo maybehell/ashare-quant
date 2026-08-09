@@ -5,6 +5,7 @@ param(
     [int]$MaxSymbols = 800,
     [int]$IntervalMinutes = 60,
     [int]$MaxRuntimeMinutes = 30,
+    [int]$MaxValidationRuntimeMinutes = 120,
     [switch]$Register,
     [switch]$ConfirmReplace,
     [switch]$StartNow,
@@ -17,6 +18,7 @@ $daemon = Join-Path $PSScriptRoot "history_backfill_daemon.ps1"
 if (-not (Test-Path -LiteralPath $daemon)) { throw "Missing daemon: $daemon" }
 if ($IntervalMinutes -lt 15) { throw "IntervalMinutes must be at least 15." }
 if ($MaxRuntimeMinutes -lt 5) { throw "MaxRuntimeMinutes must be at least 5." }
+if ($MaxValidationRuntimeMinutes -lt 10) { throw "MaxValidationRuntimeMinutes must be at least 10." }
 
 function Resolve-ProjectPath([string]$Value) {
     if ([IO.Path]::IsPathRooted($Value)) { return [IO.Path]::GetFullPath($Value) }
@@ -35,7 +37,8 @@ $parts = @(
     "-OutputDir", ('"' + $resolvedOutput + '"'),
     "-MaxSymbols", $MaxSymbols,
     "-IntervalMinutes", $IntervalMinutes,
-    "-MaxRuntimeMinutes", $MaxRuntimeMinutes
+    "-MaxRuntimeMinutes", $MaxRuntimeMinutes,
+    "-MaxValidationRuntimeMinutes", $MaxValidationRuntimeMinutes
 )
 $argumentLine = $parts -join " "
 $launcher = "@echo off" + [Environment]::NewLine +
@@ -45,7 +48,8 @@ $launcher = "@echo off" + [Environment]::NewLine +
 Write-Host "Startup entry: $target"
 Write-Host "Mode: research_history_backfill"
 Write-Host "Interval: $IntervalMinutes minutes; max batch runtime: $MaxRuntimeMinutes minutes"
-Write-Host "The daemon exits automatically after progress reaches complete."
+Write-Host "Fixed-strategy validation timeout: $MaxValidationRuntimeMinutes minutes"
+Write-Host "The daemon exits after completed history passes fixed-strategy validation."
 if (-not $Register) {
     Write-Host "Preview only. Re-run with -Register to install the current-user Startup entry."
     exit 0

@@ -58,6 +58,9 @@ Rules:
 - Interfaces call domain/application services; they do not duplicate gate logic.
 - A GUI action maps to the same service and checks as its CLI equivalent.
 - Scheduling cannot silently add submission capability.
+- A research scheduler may invoke fixed-parameter validation after authoritative
+  data completion, but cannot promote a candidate, activate a strategy, create
+  execution orders, or call the broker boundary.
 - Required unattended observation must have both a fresh live heartbeat and a verified current-user Startup entry; stale status files are not liveness evidence.
 
 ### 3.2 Configuration, data, and market infrastructure
@@ -96,8 +99,8 @@ Rules:
 Owners: `universe.py`, `factors.py`, `forward_factors.py`, `portfolio.py`,
 `industry_risk.py`, `backtest.py`, `walkforward.py`, `research.py`,
 `stress.py`, `factor_robustness.py`, `selection_bias.py`,
-`statistical_validation.py`, `capital_aware.py`, and
-`capital_sensitivity.py`.
+`statistical_validation.py`, `capital_aware.py`, `capital_sensitivity.py`, and
+`history_validation.py`.
 
 Responsibilities:
 
@@ -113,6 +116,10 @@ Rules:
 - Parameter selection and final evaluation evidence are distinguished.
 - Every formal result binds configuration, input data, benchmark, and code-level
   assumptions through manifests or hashes.
+- Extended-history validation requires an authoritative zero-remaining,
+  zero-failure completion record, isolated research outputs, and a formal-price
+  file hash. Its completed status is evidence only and grants no strategy
+  authority.
 
 ### 3.4 Strategy governance and promotion
 
@@ -228,6 +235,7 @@ Additional constraints:
 |---|---|---|---|
 | Parquet market cache and provenance | data layer | research, valuation | atomic refresh, source/date audit |
 | Namespaced historical backfill staging and progress | data layer and research-only daemon | data refresh, operator | resumable and replaceable; never authoritative until complete formal-cache commit |
+| Extended-history validation status | history validation workflow | operator, later research review | bind completed progress, fixed backtest config, and formal-price hash; never promotes or authorizes execution |
 | Research/backtest outputs | research workflow | governance, reports | replace by run; bind manifest; simulated orders use `backtest_orders.csv` only |
 | Frozen candidate and sealed inputs | candidate governance | forward observer, activation | immutable identity |
 | Active execution strategy/epoch | strategy activation | paper/live order generation | atomic activation/deactivation |
@@ -246,7 +254,9 @@ Additional constraints:
 
 0. When the historical sample is insufficient, fill it backward with the
    bounded research-only daemon; retain the current formal cache until the full
-   requested scope completes.
+   requested scope and final fetch stages complete with zero failures. Then run
+   the fixed strategy in isolated outputs and record hash-bound validation
+   evidence without promotion.
 1. Refresh and audit normalized data.
 2. Preregister candidate family and evaluation policy.
 3. Run the main backtest first, then bind walk-forward, benchmark, cost, factor,

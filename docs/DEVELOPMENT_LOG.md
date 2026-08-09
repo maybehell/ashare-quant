@@ -5,6 +5,78 @@ added directly below this introduction, newest first. It records verified facts;
 it is not a release-marketing document and does not replace generated audit
 artifacts.
 
+## 2026-08-10 - Make history completion authoritative and auto-validate fixed strategy
+
+**Objective**
+
+Prevent incomplete or unsuccessfully committed long-history data from appearing
+complete, then automatically produce isolated fixed-strategy evidence without
+promoting or authorizing the strategy.
+
+**Changes**
+
+- Moved the long-history complete marker after the formal fetch-output commit;
+  a formal writer exception now leaves no new complete marker.
+- Required every requested symbol and every final acquisition stage, including
+  benchmark acquisition, to finish with zero failures before bounded history can
+  become complete.
+- Added the research-only history-validate workflow and CLI command. It binds
+  completed progress, fixed backtest configuration, and the formal prices file
+  hash, writes isolated performance/report status, and reuses only exact current
+  completed evidence.
+- Extended the single-instance history daemon to launch bounded fixed-strategy
+  validation after authoritative data completion, retry validation failures, and
+  exit only after validation succeeds.
+- Preserved redirected child-process exit codes by acquiring the Windows process
+  handle before polling; successful exit code 0 is no longer serialized as null.
+- Added ADR 0004 and updated the architecture and Chinese history runbook.
+
+**Architecture and safety**
+
+- Data completion and strategy validation are separate ordered states. Neither
+  grants candidate promotion, strategy activation, paper/live order authority,
+  broker access, live-ledger initialization, or submission.
+- history-validate rejects non-research configuration, active-execution
+  application, broker submission, inactive emergency stop, shared main/live
+  outputs, live-ledger paths, incomplete progress, remaining symbols, or any
+  reported fetch failure.
+- The isolated validation explicitly fails if generic orders.csv or
+  rpa_orders.csv appears.
+- Broker submission and service submission remained disabled, emergency stop
+  remained active, and all audited live-ledger, certification, activation, and
+  generic order paths remained absent.
+
+**Verification**
+
+- Focused documentation, history validation, data, and CLI regression:
+  153 passed in 3.45s.
+- Full regression: 1047 passed, 39 subtests passed in 156.83s.
+- The real history-validate command rejected current progress with exit code 1:
+  status in_progress, completed 122/800, remaining 678, failures 0.
+- A real slow BaoStock batch reached the 30-minute cap, was terminated with exit
+  code 124, preserved 122/800 validated progress, and returned the daemon to
+  waiting instead of leaving a permanent running lock.
+- The current-user Startup entry was replaced and a fresh daemon heartbeat was
+  verified with the 120-minute fixed-strategy validation bound.
+- A minimal redirected PowerShell child reproduced null for a successful exit;
+  acquiring its Process.Handle preserved exit code 0, and both daemon child
+  paths now use that verified pattern.
+- The restarted daemon recorded last_exit_code 0. Strict resume validation now
+  reports 120/800 complete; a 25-symbol source failure remained in_progress with
+  680 remaining and will retry instead of restoring the earlier optimistic
+  count.
+- Current strategy status remains successor_observation with common formal
+  forward progress 4/60, strict_live_allowed false, and paper orders paused.
+
+**Remaining work**
+
+- Continue bounded history acquisition and run the automatic fixed-strategy
+  validation when all 800 symbols and final sources complete.
+- Do not promote from the extended historical result. Continue the preregistered
+  60-day common forward window and reassess only after its evidence is current.
+- Refresh the authenticated broker account read-only snapshot before any later
+  Canary review. Capital feasibility, account binding, live-ledger
+  initialization, certification, and all submit gates remain incomplete.
 ## 2026-08-10 - Add resumable long-history validation
 
 **Objective**

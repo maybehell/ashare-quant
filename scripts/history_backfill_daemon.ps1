@@ -4,6 +4,7 @@ param(
     [int]$MaxSymbols = 800,
     [int]$IntervalMinutes = 60,
     [int]$MaxRuntimeMinutes = 30,
+    [int]$MaxValidationRuntimeMinutes = 120,
     [string]$QuietStart = "17:30",
     [string]$QuietEnd = "21:30",
     [switch]$RunOnce,
@@ -21,6 +22,7 @@ function Resolve-ProjectPath([string]$Value) {
 }
 if ($IntervalMinutes -lt 15) { throw "IntervalMinutes must be at least 15." }
 if ($MaxRuntimeMinutes -lt 5) { throw "MaxRuntimeMinutes must be at least 5." }
+if ($MaxValidationRuntimeMinutes -lt 10) { throw "MaxValidationRuntimeMinutes must be at least 10." }
 if ($MaxSymbols -lt 1) { throw "MaxSymbols must be positive." }
 if (-not (Test-Path -LiteralPath $aqScript)) { throw "Missing aq runner: $aqScript" }
 if (-not (Test-Path -LiteralPath $python)) { throw "Missing project Python: $python" }
@@ -84,6 +86,7 @@ function Invoke-BackfillBatch {
     )
     Write-Status "running" "Bounded research history batch is running." (Read-Progress) $null $null
     $process = Start-Process powershell.exe -ArgumentList $arguments -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+    $null = $process.Handle
     $deadline = (Get-Date).AddMinutes($MaxRuntimeMinutes)
     while (-not $process.HasExited -and (Get-Date) -lt $deadline) {
         Start-Sleep -Seconds 5
@@ -111,6 +114,47 @@ function Invoke-BackfillBatch {
     return $exitCode
 }
 
+function Invoke-HistoryValidation {
+    if ($DryRun) {
+        Write-Status "dry_run" "Dry run: completed history was not backtested." (Read-Progress) 0 $null
+        return 0
+    }
+    $stdout = Join-Path $resolvedOutput "history_validation.stdout.$PID.log"
+    $stderr = Join-Path $resolvedOutput "history_validation.stderr.$PID.log"
+    Remove-Item -LiteralPath $stdout,$stderr -Force -ErrorAction SilentlyContinue
+    $arguments = @(
+        "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $aqScript,
+        "--config", $resolvedConfig, "history-validate"
+    )
+    $progress = Read-Progress
+    Write-Status "validating" "Fixed-strategy long-history validation is running." $progress $null $null
+    $process = Start-Process powershell.exe -ArgumentList $arguments -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+    $null = $process.Handle
+    $deadline = (Get-Date).AddMinutes($MaxValidationRuntimeMinutes)
+    while (-not $process.HasExited -and (Get-Date) -lt $deadline) {
+        Start-Sleep -Seconds 5
+        $process.Refresh()
+    }
+    if (-not $process.HasExited) {
+        Stop-Process -Id $process.Id -Force
+        $process.WaitForExit()
+        $exitCode = 124
+        $message = "Fixed-strategy history validation timed out and will be retried."
+    } else {
+        $process.WaitForExit()
+        $exitCode = $process.ExitCode
+        $message = if ($exitCode -eq 0) { "Fixed-strategy history validation completed." } else { "Fixed-strategy history validation failed and will be retried." }
+    }
+    foreach ($path in @($stdout, $stderr)) {
+        if (Test-Path -LiteralPath $path) {
+            Get-Content -LiteralPath $path -Encoding UTF8 | Add-Content -LiteralPath $logPath -Encoding UTF8
+            Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
+        }
+    }
+    Write-Status $(if ($exitCode -eq 0) { "complete" } else { "validation_failed" }) $message $progress $exitCode $null
+    return $exitCode
+}
+
 try {
     try {
         $lockStream = [IO.File]::Open($lockPath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
@@ -130,8 +174,13 @@ try {
     while ($true) {
         $progress = Read-Progress
         if ($null -ne $progress -and [string]$progress.status -eq "complete") {
-            Write-Status "complete" "Historical backfill is complete; daemon is exiting." $progress 0 $null
-            exit 0
+            $validationExitCode = Invoke-HistoryValidation
+            if ($validationExitCode -eq 0) { exit 0 }
+            if ($RunOnce) { exit $validationExitCode }
+            $nextRun = (Get-Date).AddMinutes($IntervalMinutes)
+            Write-Status "validation_failed" "Waiting to retry fixed-strategy history validation." $progress $validationExitCode $nextRun
+            Start-Sleep -Seconds ($IntervalMinutes * 60)
+            continue
         }
         if (Test-Path -LiteralPath $stopPath) {
             Write-Status "stopped" "Stop marker is present; daemon is exiting." $progress 0 $null
@@ -148,8 +197,7 @@ try {
         $exitCode = Invoke-BackfillBatch
         $progress = Read-Progress
         if ($null -ne $progress -and [string]$progress.status -eq "complete") {
-            Write-Status "complete" "Historical backfill is complete; daemon is exiting." $progress $exitCode $null
-            exit 0
+            continue
         }
         if ($RunOnce) { exit $exitCode }
         $nextRun = (Get-Date).AddMinutes($IntervalMinutes)

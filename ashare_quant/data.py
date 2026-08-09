@@ -12,7 +12,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, datetime, time as dt_time, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import pandas as pd
 
@@ -603,7 +603,8 @@ def fetch_akshare(store: DataStore, config: dict[str, Any]) -> list[Path]:
                 f"failed={len(failures)}, partial rows={len(partial)}."
             )
 
-        if deferred_symbols:
+        unfinished_symbols = unfinished_history_symbols(symbols, price_frames)
+        if history_budget and unfinished_symbols:
             progress = build_history_backfill_progress(
                 symbols,
                 price_frames,
@@ -652,21 +653,7 @@ def fetch_akshare(store: DataStore, config: dict[str, Any]) -> list[Path]:
                 "系统已保留原有正式缓存；请降低行情池数量或稍后重试。"
             )
 
-        if history_budget:
-            store.write_frame(
-                progress_frame_name,
-                build_history_backfill_progress(
-                    symbols,
-                    price_frames,
-                    failures,
-                    resumed_symbols,
-                    [],
-                    base_start,
-                    end,
-                    history_budget,
-                    status="complete",
-                ),
-            )
+
         fetched_prices = normalize_prices(pd.concat(price_frames, ignore_index=True))
         fetched_stocks = normalize_stocks(stocks)
         if config.get("data", {}).get("commit_price_checkpoint", True):
@@ -758,22 +745,54 @@ def fetch_akshare(store: DataStore, config: dict[str, Any]) -> list[Path]:
         if fallback_history_count:
             print(f"Used non-primary history sources for {fallback_history_count}/{len(price_frames)} symbols.")
 
-    return write_fetch_outputs(
-        store,
-        stocks,
-        prices,
-        fundamentals,
-        benchmark,
-        symbols,
-        price_frames,
-        failures,
-        fallback_history_count,
-        fetch_starts,
-        incremental,
-        "complete",
-        history_provenance=history_provenance,
-        historical_backfill_symbols=historical_backfill_symbols,
+    completion = (
+        build_history_backfill_progress(
+            symbols,
+            price_frames,
+            failures,
+            resumed_symbols,
+            [],
+            base_start,
+            end,
+            history_budget,
+            status=history_backfill_completion_status(failures),
+        )
+        if history_budget
+        else None
     )
+    return commit_formal_fetch_then_progress(
+        lambda: write_fetch_outputs(
+            store,
+            stocks,
+            prices,
+            fundamentals,
+            benchmark,
+            symbols,
+            price_frames,
+            failures,
+            fallback_history_count,
+            fetch_starts,
+            incremental,
+            "complete",
+            history_provenance=history_provenance,
+            historical_backfill_symbols=historical_backfill_symbols,
+        ),
+        store,
+        progress_frame_name,
+        completion,
+    )
+
+
+def commit_formal_fetch_then_progress(
+    formal_writer: Callable[[], list[Path]],
+    store: DataStore,
+    progress_frame_name: str,
+    completion: pd.DataFrame | None,
+) -> list[Path]:
+    paths = list(formal_writer())
+    if completion is not None:
+        paths.append(store.write_frame(progress_frame_name, completion))
+    return paths
 
 
 def write_fetch_outputs(
@@ -1279,6 +1298,28 @@ def merge_cache_frame(existing: pd.DataFrame, fresh: pd.DataFrame, keys: list[st
     return merged.drop_duplicates(keys, keep="last").sort_values(sort_keys).reset_index(drop=True)
 
 
+def history_backfill_completion_status(
+    failures: list[dict[str, object]],
+) -> str:
+    return "complete" if not failures else "in_progress"
+
+
+def unfinished_history_symbols(
+    symbols: list[str],
+    price_frames: list[pd.DataFrame],
+) -> list[str]:
+    completed = {
+        normalize_symbol(frame["symbol"].iloc[0])
+        for frame in price_frames
+        if not frame.empty and "symbol" in frame
+    }
+    return [
+        normalize_symbol(symbol)
+        for symbol in symbols
+        if normalize_symbol(symbol) not in completed
+    ]
+
+
 def build_history_backfill_progress(
     symbols: list[str],
     price_frames: list[pd.DataFrame],
@@ -1292,11 +1333,7 @@ def build_history_backfill_progress(
     status: str,
 ) -> pd.DataFrame:
     requested = {normalize_symbol(symbol) for symbol in symbols}
-    completed = {
-        normalize_symbol(frame["symbol"].iloc[0])
-        for frame in price_frames
-        if not frame.empty and "symbol" in frame
-    }
+    completed = requested - set(unfinished_history_symbols(symbols, price_frames))
     return pd.DataFrame(
         [
             {

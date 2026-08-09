@@ -78,6 +78,7 @@ from .forward_selection import write_forward_candidate_selection
 from .fills import import_fills, write_fill_import_template
 from .huatai_certification import arm_huatai_desktop_canary, write_huatai_canary_arming_audit, write_huatai_execution_sandbox_summary
 from .huatai_client import request_huatai_client_window_wake, write_huatai_client_status
+from .history_validation import run_extended_history_validation
 from .io_utils import atomic_to_csv
 from .live_evidence import sync_live_strategy_evidence
 from .local_operator import _formal_candidate_observation_status, strategy_operating_mode, write_local_operator_status
@@ -151,6 +152,7 @@ def main(argv: list[str] | None = None) -> None:
     membership.add_argument("--refresh-all", action="store_true", help="Refetch all requested monthly snapshots")
 
     sub.add_parser("backtest", help="Run daily multi-factor backtest")
+    sub.add_parser("history-validate", help="Validate a completed research-only historical backfill with fixed strategy parameters")
     sub.add_parser("capital-sensitivity", help="Rerun isolated lot-aware backtests across configured capital levels")
 
     paper = sub.add_parser("paper", help="Generate paper-trading orders from latest cached data")
@@ -477,6 +479,8 @@ def run_command(args: argparse.Namespace, config: dict) -> None:
         print_paths(paths)
     elif args.command == "backtest":
         print_paths(run_backtest(config).values())
+    elif args.command == "history-validate":
+        print_paths(run_extended_history_validation(config).values())
     elif args.command == "capital-sensitivity":
         print_paths(run_capital_sensitivity(config).values())
     elif args.command == "metadata":
