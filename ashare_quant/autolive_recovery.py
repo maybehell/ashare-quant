@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import shutil
 import sqlite3
+import time
 from typing import Any
 
 import pandas as pd
@@ -29,6 +30,8 @@ RECOVERY_INDEX_FILE = "auto_live_recovery_points.csv"
 RECOVERY_AUDIT_FILE = "auto_live_recovery_audit.csv"
 MANIFEST_NAME = "manifest.json"
 SCHEMA_VERSION = 1
+DIRECTORY_COMMIT_ATTEMPTS = 5
+DIRECTORY_COMMIT_DELAY_SECONDS = 0.05
 
 
 def create_auto_live_recovery_point(
@@ -111,7 +114,7 @@ def create_auto_live_recovery_point(
             json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2),
             encoding="utf-8",
         )
-        os.replace(staging, final_dir)
+        _replace_directory_with_retry(staging, final_dir)
     except Exception:
         _safe_remove_tree(staging, root)
         raise
@@ -137,6 +140,32 @@ def create_auto_live_recovery_point(
     if audit.empty or not audit["passed"].astype(bool).all():
         raise RuntimeError("new auto-live recovery point failed post-write verification")
     return paths
+
+
+def _replace_directory_with_retry(
+    staging: Path,
+    final_dir: Path,
+    *,
+    attempts: int = DIRECTORY_COMMIT_ATTEMPTS,
+    delay_seconds: float = DIRECTORY_COMMIT_DELAY_SECONDS,
+) -> None:
+    attempts = max(int(attempts), 1)
+    for attempt in range(attempts):
+        if final_dir.exists():
+            raise FileExistsError(f"recovery destination already exists: {final_dir}")
+        if not staging.exists():
+            raise FileNotFoundError(f"recovery staging directory is missing: {staging}")
+        try:
+            os.replace(staging, final_dir)
+            return
+        except PermissionError as exc:
+            winerror = getattr(exc, "winerror", None)
+            transient_denied = winerror == 5 or (
+                winerror is None and exc.errno == 13
+            )
+            if not transient_denied or attempt + 1 >= attempts:
+                raise
+            time.sleep(max(float(delay_seconds), 0.0) * (attempt + 1))
 
 
 def write_auto_live_recovery_audit(

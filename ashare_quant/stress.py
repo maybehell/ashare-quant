@@ -8,7 +8,7 @@ import pandas as pd
 
 from .audit import backtest_config_sha256, effective_stocks_for_prices, frame_sha256
 from .backtest import run_backtest
-from .data import DataStore
+from .data import DataStore, scope_market_frames_to_committed_fetch
 from .report import read_csv
 from .validation import filter_complete_market_data
 
@@ -55,6 +55,9 @@ def stress_data_hashes(config: dict[str, Any]) -> dict[str, str]:
     store = DataStore.from_config(config)
     stocks, prices, fundamentals = store.load_market_data()
     benchmark = store.load_benchmark(required=False)
+    stocks, prices, fundamentals, _scope_passed, _scope_value = (
+        scope_market_frames_to_committed_fetch(store, stocks, prices, fundamentals)
+    )
     start = pd.to_datetime(config["backtest"]["start"]).date()
     end_value = config["backtest"].get("end")
     end = pd.to_datetime(end_value).date() if end_value else max(prices["date"])

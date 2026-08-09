@@ -51,7 +51,7 @@ from .account import (
 from .account_impact import write_account_exclusion_impact
 from .account_plan import build_account_path_decision, write_account_path_decision, write_account_readiness_plan
 from .backtest import run_backtest
-from .capital_sensitivity import run_capital_sensitivity
+from .capital_sensitivity import capital_sensitivity_needs_refresh, run_capital_sensitivity
 from .canary_capital import write_broker_canary_capital_feasibility
 from .broker_initialization import initialize_broker_account_from_snapshot
 from .broker_preview import (
@@ -1675,6 +1675,11 @@ def run_practical(config: dict, args: argparse.Namespace) -> dict[str, Path]:
         if stress_path is not None:
             paths["cost_stress.csv"] = stress_path
 
+    for name, path in ensure_capital_sensitivity_current(
+        config, guard_name="practical_guard"
+    ).items():
+        paths[name] = path
+
     paths["practical_readiness.csv"] = write_practical_readiness(config)
     paths["strategy_health.csv"] = write_strategy_health(config)
     if getattr(args, "continue_without_orders_when_blocked", False):
@@ -2719,19 +2724,54 @@ def remediation_next_action(frame: pd.DataFrame) -> str:
 
 def run_workflow(config: dict, skip_stress: bool = False) -> dict[str, Path]:
     paths: dict[str, Path] = {}
+    total_stages = 9 if skip_stress else 10
+    stage = 0
+
+    def progress(label: str) -> None:
+        nonlocal stage
+        stage += 1
+        print(f"workflow: [{stage}/{total_stages}] {label}", flush=True)
+
+    progress("research candidates")
     research_path = run_strategy_research(config)
     paths["strategy_research.csv"] = research_path
+    progress("factor baselines")
     baseline_path = run_strategy_baselines(config)
     paths["strategy_baselines.csv"] = baseline_path
-    paths.update(run_factor_robustness(config))
+    progress("main backtest")
     for name, path in run_backtest(config).items():
         paths[f"backtest:{name}"] = path
+    progress("factor robustness")
+    paths.update(run_factor_robustness(config))
     if not skip_stress:
+        progress("cost stress")
         paths["cost_stress.csv"] = write_cost_stress(config)
+    progress("capital sensitivity")
+    paths.update(ensure_capital_sensitivity_current(config))
+    progress("practical readiness")
+    paths["practical_readiness.csv"] = write_practical_readiness(config)
+    progress("strategy health")
+    paths["strategy_health.csv"] = write_strategy_health(config)
+    progress("strategy comparison")
     compare_path = compare_backtest_outputs(config)
     paths["strategy_backtest_compare.csv"] = compare_path
+    progress("HTML report")
     paths["report.html"] = regenerate_report(config)
     return paths
+
+
+def ensure_capital_sensitivity_current(
+    config: dict,
+    guard_name: str = "practical_guard",
+) -> dict[str, Path]:
+    guard = config.get(guard_name, {})
+    if not guard.get("require_capital_sensitivity", False):
+        return {}
+    if not capital_sensitivity_needs_refresh(config):
+        print("capital-sensitivity: current evidence reused", flush=True)
+        return {}
+    print("capital-sensitivity: stale evidence; refreshing isolated capital levels", flush=True)
+    return run_capital_sensitivity(config)
 
 
 def ensure_cost_stress_current(config: dict, guard_name: str = "live_guard") -> Path | None:

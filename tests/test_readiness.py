@@ -45,6 +45,22 @@ class ReadinessTests(unittest.TestCase):
             },
         }
 
+    def practical_capital_manifest(self, suffix: str = "") -> pd.DataFrame:
+        return pd.DataFrame(
+            [
+                {"item": "stocks_sha256", "value": f"stocks{suffix}"},
+                {"item": "prices_sha256", "value": f"prices{suffix}"},
+                {"item": "fundamentals_sha256", "value": f"fundamentals{suffix}"},
+                {"item": "benchmark_sha256", "value": f"benchmark{suffix}"},
+            ]
+        )
+
+    def practical_capital_data_hash(self, suffix: str = "") -> str:
+        manifest = self.practical_capital_manifest(suffix)
+        return mapping_sha256(
+            {str(row.item): str(row.value) for row in manifest.itertuples(index=False)}
+        )
+
     def practical_capital_readiness(self, config: dict, audit: pd.DataFrame) -> pd.DataFrame:
         quality = pd.DataFrame(
             [
@@ -63,6 +79,7 @@ class ReadinessTests(unittest.TestCase):
             quality,
             pd.DataFrame(),
             pd.DataFrame(),
+            run_manifest=self.practical_capital_manifest(),
             capital_sensitivity_audit=audit,
         )
 
@@ -83,6 +100,11 @@ class ReadinessTests(unittest.TestCase):
                     "value": capital_sensitivity_config_sha256(config),
                 },
                 {
+                    "check": "capital_sensitivity_reference_market_data_sha256",
+                    "passed": True,
+                    "value": self.practical_capital_data_hash(),
+                },
+                {
                     "check": "capital_sensitivity_ready",
                     "passed": True,
                     "value": "minimum_passing_capital=600000.00",
@@ -92,6 +114,35 @@ class ReadinessTests(unittest.TestCase):
         rows = self.practical_capital_readiness(config, audit).set_index("check")
 
         self.assertTrue(bool(rows.loc["capital_sensitivity_config_current", "passed"]))
+        self.assertTrue(bool(rows.loc["capital_sensitivity_data_current", "passed"]))
+        self.assertTrue(bool(rows.loc["capital_sensitivity_ready", "passed"]))
+
+    def test_practical_readiness_rejects_foreign_capital_market_data(self):
+        config = self.practical_capital_config()
+        audit = pd.DataFrame(
+            [
+                {
+                    "check": "capital_sensitivity_strategy_config_sha256",
+                    "passed": True,
+                    "value": capital_sensitivity_config_sha256(config),
+                },
+                {
+                    "check": "capital_sensitivity_reference_market_data_sha256",
+                    "passed": True,
+                    "value": self.practical_capital_data_hash("-old"),
+                },
+                {
+                    "check": "capital_sensitivity_ready",
+                    "passed": True,
+                    "value": "minimum_passing_capital=600000.00",
+                },
+            ]
+        )
+
+        rows = self.practical_capital_readiness(config, audit).set_index("check")
+
+        self.assertTrue(bool(rows.loc["capital_sensitivity_config_current", "passed"]))
+        self.assertFalse(bool(rows.loc["capital_sensitivity_data_current", "passed"]))
         self.assertTrue(bool(rows.loc["capital_sensitivity_ready", "passed"]))
 
     def test_practical_readiness_rejects_foreign_capital_sensitivity_config(self):

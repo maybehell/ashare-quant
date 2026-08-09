@@ -119,7 +119,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\gui.ps1
 # 正式回测并生成报告
 .\scripts\aq.ps1 backtest
 
-# 研究工作流：research -> backtest -> stress -> compare -> report
+# 研究工作流：候选研究 -> 主回测 -> 因子/成本/资金稳健性 -> 准备度/健康 -> 对比/报告
 .\scripts\aq.ps1 workflow
 
 # 冻结当前策略参数，开始前向验证观察期
@@ -293,6 +293,7 @@ shadow 门禁只统计当前冻结候选 `candidate_id` 和当前实盘相关配
 `priced_stock_coverage` 有两套解释口径：默认 `universe.scope=curated` 表示只验证精选股票池，低全市场覆盖率不会单独拦截，但报告结论只能解释为“当前精选子股票池策略”；如果改成 `universe.scope=full_market`，则 `priced_stock_coverage` 必须达到 `live_guard.min_full_market_priced_stock_coverage`，否则不能视为全市场回测证据。
 
 默认实盘门禁还要求最大回撤不超过 `25%`、年化换手不超过 `6` 倍、`high_cost` 成本压力场景超额收益不低于 `2%`、压力场景最大回撤不超过 `25%`。`cost_stress.csv` 会记录当前配置哈希和当前股票、行情、基本面、基准数据哈希；配置或数据变更后需要重新运行 `stress` / `workflow`。`observe` 和 `daily` 默认会检测压力测试证据是否过期，并在需要时自动补跑；只有显式传入 `--skip-stress` 时才跳过。
+`workflow` 和实用一键流程会在主回测之后检查 `capital_sensitivity_audit.csv`。只有策略配置与主 `run_manifest.csv` 的市场数据指纹都一致时才复用；否则自动刷新隔离资金档位。完整工作流会输出 `[阶段/总阶段]` 进度，首次刷新可能较慢，但重复运行不会无条件重算身份完全一致的资金实验。
 
 
 失败的策略实验可以保留配置与输出用于复核，但应设置 `validation.research_only=true` 和 `experiment_status=rejected`。研究专用配置仍可运行回测、报告和压力测试，`freeze-candidate` 即使带 `--force` 也会拒绝，防止“一键观察所有候选”后误冻结为正式候选。当前 `ensemble_factor_capped` 与 `ensemble_redundant_three_member` 均处于此状态。

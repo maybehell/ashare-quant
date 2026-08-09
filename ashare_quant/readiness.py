@@ -10,7 +10,7 @@ from pandas.errors import EmptyDataError
 from .audit import backtest_config_sha256, capital_sensitivity_config_sha256, effective_stocks_for_prices, frame_sha256, mapping_sha256
 from .candidate import candidate_evidence_identity_sha256, build_candidate_validation, live_strategy_hash, load_candidate_manifest
 from .config import project_path
-from .data import DataStore
+from .data import DataStore, scope_market_frames_to_committed_fetch
 from .industry_risk import industry_risk_ready
 from .validation import filter_complete_market_data
 
@@ -1150,6 +1150,21 @@ def build_practical_readiness(
             expected_hash,
             "Capital-sensitivity evidence must match the current strategy, universe, rules and execution assumptions.",
         )
+        reference_row = capital_row("capital_sensitivity_reference_market_data_sha256")
+        actual_reference_hash = "" if reference_row.empty else str(reference_row.get("value", ""))
+        expected_reference_hash = manifest_market_data_fingerprint(run_manifest)
+        add(
+            "capital_sensitivity_data_current",
+            (
+                not reference_row.empty
+                and parse_bool_like(reference_row.get("passed", False))
+                and bool(expected_reference_hash)
+                and actual_reference_hash == expected_reference_hash
+            ),
+            actual_reference_hash or "missing",
+            expected_reference_hash or "current main run_manifest market-data fingerprint",
+            "Capital-sensitivity evidence must use the exact market data from the current main backtest.",
+        )
         ready_row = capital_row("capital_sensitivity_ready")
         capital_ready = not ready_row.empty and parse_bool_like(ready_row.get("passed", False))
         add(
@@ -1476,6 +1491,9 @@ def current_manifest_frames(config: dict[str, Any]) -> dict[str, pd.DataFrame]:
     store = DataStore.from_config(config)
     stocks, prices, fundamentals = store.load_market_data()
     benchmark = store.load_benchmark(required=False)
+    stocks, prices, fundamentals, _scope_passed, _scope_value = (
+        scope_market_frames_to_committed_fetch(store, stocks, prices, fundamentals)
+    )
     start = pd.to_datetime(config["backtest"]["start"]).date()
     end_value = config["backtest"].get("end")
     end = pd.to_datetime(end_value).date() if end_value else max(prices["date"])
@@ -1489,6 +1507,23 @@ def current_manifest_frames(config: dict[str, Any]) -> dict[str, pd.DataFrame]:
         "fundamentals": fundamentals,
         "benchmark": benchmark,
     }
+
+
+def manifest_market_data_fingerprint(manifest: pd.DataFrame | None) -> str:
+    if manifest is None or manifest.empty or not {"item", "value"}.issubset(manifest.columns):
+        return ""
+    values = {
+        key: manifest_value(manifest, key)
+        for key in [
+            "stocks_sha256",
+            "prices_sha256",
+            "fundamentals_sha256",
+            "benchmark_sha256",
+        ]
+    }
+    if any(not value for value in values.values()):
+        return ""
+    return mapping_sha256(values)
 
 
 def manifest_value(manifest: pd.DataFrame, item: str) -> str:

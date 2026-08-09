@@ -297,6 +297,30 @@ def committed_fetch_market_scope(
     return scoped, not scoped.empty, value
 
 
+def scope_market_frames_to_committed_fetch(
+    store: DataStore,
+    stocks: pd.DataFrame,
+    prices: pd.DataFrame,
+    fundamentals: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, bool, str]:
+    scoped_prices, passed, value = committed_fetch_market_scope(store, prices)
+    if not passed:
+        return stocks.copy(), prices.copy(), fundamentals.copy(), False, value
+
+    symbols = set(scoped_prices["symbol"].astype(str))
+    scoped_stocks = stocks.copy()
+    if not scoped_stocks.empty and "symbol" in scoped_stocks.columns:
+        stock_symbols = scoped_stocks["symbol"].map(normalize_symbol)
+        scoped_stocks = scoped_stocks[stock_symbols.isin(symbols)].copy()
+    scoped_fundamentals = fundamentals.copy()
+    if not scoped_fundamentals.empty and "symbol" in scoped_fundamentals.columns:
+        fundamental_symbols = scoped_fundamentals["symbol"].map(normalize_symbol)
+        scoped_fundamentals = scoped_fundamentals[
+            fundamental_symbols.isin(symbols)
+        ].copy()
+    return scoped_stocks, scoped_prices, scoped_fundamentals, True, value
+
+
 def fetch_akshare(store: DataStore, config: dict[str, Any]) -> list[Path]:
     try:
         import akshare as ak  # type: ignore

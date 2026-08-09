@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 
 from ashare_quant.audit import backtest_config_sha256, mapping_sha256, orders_frame_sha256
-from ashare_quant.cli import build_candidate_market_freshness, candidate_observation_configs, cost_stress_needs_refresh, default_execution_drill_cash, ensure_cost_stress_current, execution_drill_config, fetch_account_prices, local_run_stale_cache_message, primary_challenger_backtest_issues, print_observe_summary, refresh_huatai_canary_read_only_evidence, report_render_issues, run_command, run_daily, run_execution_drill, run_forward_daily, run_forward_only_candidate_observations, run_huatai_read_only_refresh, run_local_system, refresh_live_deployment_evidence, run_observe, run_observe_candidates, run_one_click, run_candidate_audit, run_primary_challenger_observation, run_practical, run_research_candidate_observations, run_workflow, write_cost_stress, write_execution_readiness, write_one_click_summary
+from ashare_quant.cli import build_candidate_market_freshness, candidate_observation_configs, cost_stress_needs_refresh, default_execution_drill_cash, ensure_capital_sensitivity_current, ensure_cost_stress_current, execution_drill_config, fetch_account_prices, local_run_stale_cache_message, primary_challenger_backtest_issues, print_observe_summary, refresh_huatai_canary_read_only_evidence, report_render_issues, run_command, run_daily, run_execution_drill, run_forward_daily, run_forward_only_candidate_observations, run_huatai_read_only_refresh, run_local_system, refresh_live_deployment_evidence, run_observe, run_observe_candidates, run_one_click, run_candidate_audit, run_primary_challenger_observation, run_practical, run_research_candidate_observations, run_workflow, write_cost_stress, write_execution_readiness, write_one_click_summary
 
 
 class CliWorkflowTests(unittest.TestCase):
@@ -1680,22 +1680,62 @@ class CliWorkflowTests(unittest.TestCase):
         calls = []
         output = Path.cwd() / "test_outputs" / "cli_workflow_baselines"
         output.mkdir(parents=True, exist_ok=True)
-        config = {"paths": {"output_dir": str(output)}}
+        config = {
+            "paths": {"output_dir": str(output)},
+            "practical_guard": {"require_capital_sensitivity": True},
+        }
 
         with (
             patch("ashare_quant.cli.run_strategy_research", side_effect=lambda config: calls.append("research") or output / "strategy_research.csv"),
             patch("ashare_quant.cli.run_strategy_baselines", side_effect=lambda config: calls.append("baselines") or output / "strategy_baselines.csv"),
             patch("ashare_quant.cli.run_factor_robustness", side_effect=lambda config: calls.append("factor") or {"factor_robustness.csv": output / "factor_robustness.csv", "factor_robustness_summary.csv": output / "factor_robustness_summary.csv"}),
-            patch("ashare_quant.cli.run_backtest", side_effect=lambda config: calls.append("backtest") or {"orders.csv": output / "orders.csv"}),
+            patch("ashare_quant.cli.run_backtest", side_effect=lambda config: calls.append("backtest") or {"backtest_orders.csv": output / "backtest_orders.csv"}),
             patch("ashare_quant.cli.write_cost_stress", side_effect=lambda config: calls.append("stress") or output / "cost_stress.csv"),
+            patch("ashare_quant.cli.ensure_capital_sensitivity_current", side_effect=lambda config: calls.append("capital") or {"capital_sensitivity.csv": output / "capital_sensitivity.csv"}),
+            patch("ashare_quant.cli.write_practical_readiness", side_effect=lambda config: calls.append("ready") or output / "practical_readiness.csv"),
+            patch("ashare_quant.cli.write_strategy_health", side_effect=lambda config: calls.append("health") or output / "strategy_health.csv"),
             patch("ashare_quant.cli.compare_backtest_outputs", side_effect=lambda config: calls.append("compare") or output / "strategy_backtest_compare.csv"),
             patch("ashare_quant.cli.regenerate_report", side_effect=lambda config: calls.append("report") or output / "report.html"),
         ):
             paths = run_workflow(config)
 
-        self.assertEqual(calls, ["research", "baselines", "factor", "backtest", "stress", "compare", "report"])
+        self.assertEqual(
+            calls,
+            [
+                "research",
+                "baselines",
+                "backtest",
+                "factor",
+                "stress",
+                "capital",
+                "ready",
+                "health",
+                "compare",
+                "report",
+            ],
+        )
         self.assertEqual(paths["strategy_baselines.csv"], output / "strategy_baselines.csv")
         self.assertEqual(paths["factor_robustness.csv"], output / "factor_robustness.csv")
+
+    def test_capital_sensitivity_refresh_is_required_only_for_stale_evidence(self):
+        config = {
+            "paths": {"output_dir": "outputs"},
+            "practical_guard": {"require_capital_sensitivity": True},
+        }
+        expected = {"capital_sensitivity.csv": Path("outputs/capital_sensitivity.csv")}
+        with (
+            patch("ashare_quant.cli.capital_sensitivity_needs_refresh", return_value=False),
+            patch("ashare_quant.cli.run_capital_sensitivity") as run,
+        ):
+            self.assertEqual(ensure_capital_sensitivity_current(config), {})
+            run.assert_not_called()
+
+        with (
+            patch("ashare_quant.cli.capital_sensitivity_needs_refresh", return_value=True),
+            patch("ashare_quant.cli.run_capital_sensitivity", return_value=expected) as run,
+        ):
+            self.assertEqual(ensure_capital_sensitivity_current(config), expected)
+            run.assert_called_once_with(config)
 
     def test_report_render_issues_detects_mojibake(self):
         output = Path.cwd() / "test_outputs" / "cli_report_render"

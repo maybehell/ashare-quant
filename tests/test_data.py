@@ -8,6 +8,7 @@ import pandas as pd
 from ashare_quant.data import (
     DataStore,
     committed_fetch_market_scope,
+    scope_market_frames_to_committed_fetch,
 
     akshare_network_context,
     build_fetch_summary,
@@ -69,6 +70,43 @@ class CommittedFetchMarketScopeTests(unittest.TestCase):
         self.assertEqual(set(scoped["symbol"]), {"600000", "000001"})
         self.assertIn("bound_symbols=2", value)
 
+
+    def test_scopes_all_symbol_frames_to_one_committed_fetch_identity(self):
+        class Store:
+            def read_frame(self, name):
+                if name == "fetch_summary":
+                    return pd.DataFrame([{
+                        "requested_symbols": 2,
+                        "fetched_symbols": 2,
+                        "failed_items": 0,
+                        "stage": "complete",
+                    }])
+                return pd.DataFrame([{"symbol": "600000"}, {"symbol": "000001"}])
+
+        stocks = pd.DataFrame(
+            [{"symbol": "600000"}, {"symbol": "000001.SZ"}, {"symbol": "300001"}]
+        )
+        prices = pd.DataFrame(
+            [
+                {"symbol": "600000", "date": "2026-07-31", "close": 10},
+                {"symbol": "000001.SZ", "date": "2026-07-31", "close": 11},
+                {"symbol": "300001", "date": "2026-07-31", "close": 12},
+            ]
+        )
+        fundamentals = pd.DataFrame(
+            [{"symbol": "600000"}, {"symbol": "000001"}, {"symbol": "300001"}]
+        )
+
+        scoped_stocks, scoped_prices, scoped_fundamentals, passed, _ = (
+            scope_market_frames_to_committed_fetch(
+                Store(), stocks, prices, fundamentals
+            )
+        )
+
+        self.assertTrue(passed)
+        self.assertEqual(set(scoped_prices["symbol"]), {"600000", "000001"})
+        self.assertEqual(len(scoped_stocks), 2)
+        self.assertEqual(len(scoped_fundamentals), 2)
 
     def test_invalid_manifest_does_not_filter_prices(self):
         class Store:

@@ -35,6 +35,9 @@ def run_capital_sensitivity(config: dict[str, Any]) -> dict[str, Path]:
     output_dir = project_path(config["paths"]["output_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
     run_root = output_dir / "capital_sensitivity_runs"
+    reference_data_fingerprint = market_data_fingerprint(
+        read_csv(output_dir / "run_manifest.csv")
+    )
     settings = config.get("validation", {}).get("capital_sensitivity", {})
     if not isinstance(settings, dict):
         settings = {}
@@ -48,7 +51,10 @@ def run_capital_sensitivity(config: dict[str, Any]) -> dict[str, Path]:
     reused_levels: list[float] = []
     for level in levels:
         variant = capital_variant_config(config, level, run_root)
-        paths = reusable_backtest_paths(variant)
+        paths = reusable_backtest_paths(
+            variant,
+            expected_market_data_fingerprint=reference_data_fingerprint,
+        )
         if paths:
             reused_levels.append(level)
         else:
@@ -97,6 +103,11 @@ def run_capital_sensitivity(config: dict[str, Any]) -> dict[str, Path]:
     strategy_config_hash = capital_sensitivity_config_sha256(config)
     valid_fingerprints = [value for value in data_fingerprints if value]
     data_consistent = len(valid_fingerprints) == len(levels) and len(set(valid_fingerprints)) == 1
+    data_current = (
+        bool(reference_data_fingerprint)
+        and data_consistent
+        and valid_fingerprints[0] == reference_data_fingerprint
+    )
     audit_rows = [
         audit_row(
             "capital_sensitivity_levels_complete",
@@ -126,6 +137,13 @@ def run_capital_sensitivity(config: dict[str, Any]) -> dict[str, Path]:
             "Capital levels are comparable only when every run uses identical market data.",
         ),
         audit_row(
+            "capital_sensitivity_reference_market_data_sha256",
+            data_current,
+            valid_fingerprints[0] if data_consistent else "missing",
+            reference_data_fingerprint or "current main run_manifest market-data fingerprint",
+            "Capital-sensitivity runs must use the exact market-data identity from the current main backtest.",
+        ),
+        audit_row(
             "capital_sensitivity_reference",
             True,
             f"cash={max(levels):.2f};return={reference_return:.6f};cash_ratio={reference_cash_ratio:.6f}",
@@ -143,8 +161,10 @@ def run_capital_sensitivity(config: dict[str, Any]) -> dict[str, Path]:
     audit_rows.append(
         audit_row(
             "capital_sensitivity_ready",
-            minimum_passing is not None and data_consistent,
-            "blocked" if minimum_passing is None or not data_consistent else f"minimum_passing_capital={minimum_passing:.2f}",
+            minimum_passing is not None and data_consistent and data_current,
+            "blocked"
+            if minimum_passing is None or not data_consistent or not data_current
+            else f"minimum_passing_capital={minimum_passing:.2f}",
             "at least one tested capital level passes",
             "Live deployment must also pass fresh broker-capital and strategy-health gates.",
         )
@@ -182,7 +202,10 @@ def capital_variant_config(config: dict[str, Any], initial_cash: float, run_root
     return variant
 
 
-def reusable_backtest_paths(config: dict[str, Any]) -> dict[str, Path]:
+def reusable_backtest_paths(
+    config: dict[str, Any],
+    expected_market_data_fingerprint: str = "",
+) -> dict[str, Path]:
     output_dir = project_path(config["paths"]["output_dir"])
     required = [
         "performance_metrics.csv",
@@ -200,7 +223,48 @@ def reusable_backtest_paths(config: dict[str, Any]) -> dict[str, Path]:
     values = {str(row.item): str(row.value) for row in manifest.itertuples(index=False)}
     if values.get("backtest_config_sha256", "") != backtest_config_sha256(config):
         return {}
+    if (
+        expected_market_data_fingerprint
+        and market_data_fingerprint(manifest) != expected_market_data_fingerprint
+    ):
+        return {}
     return paths
+
+
+def capital_sensitivity_needs_refresh(config: dict[str, Any]) -> bool:
+    output_dir = project_path(config["paths"]["output_dir"])
+    summary = read_csv(output_dir / "capital_sensitivity.csv")
+    audit = read_csv(output_dir / "capital_sensitivity_audit.csv")
+    manifest = read_csv(output_dir / "run_manifest.csv")
+    if summary.empty or audit.empty or manifest.empty:
+        return True
+    if not {"check", "passed", "value"}.issubset(audit.columns):
+        return True
+
+    def audit_value(check: str) -> tuple[bool, str]:
+        selected = audit[audit["check"].astype(str) == check]
+        if selected.empty:
+            return False, ""
+        row = selected.iloc[-1]
+        return parse_bool(row.get("passed", False)), str(row.get("value", "") or "")
+
+    config_passed, config_hash = audit_value("capital_sensitivity_strategy_config_sha256")
+    if not config_passed or config_hash != capital_sensitivity_config_sha256(config):
+        return True
+    levels_passed, _ = audit_value("capital_sensitivity_levels_complete")
+    consistent_passed, _ = audit_value("capital_sensitivity_market_data_consistent")
+    reference_passed, reference_hash = audit_value(
+        "capital_sensitivity_reference_market_data_sha256"
+    )
+    expected_reference = market_data_fingerprint(manifest)
+    return not (
+        levels_passed
+        and consistent_passed
+        and reference_passed
+        and bool(expected_reference)
+        and reference_hash == expected_reference
+    )
+
 
 def average_cash_ratio(equity: pd.DataFrame) -> float:
     if equity.empty or not {"cash", "equity", "fills"}.issubset(equity.columns):
@@ -248,6 +312,12 @@ def read_csv(path: Path) -> pd.DataFrame:
 
 def audit_row(check: str, passed: bool, value: object, threshold: object, message: str) -> dict[str, object]:
     return {"check": check, "passed": bool(passed), "value": value, "threshold": threshold, "message": message}
+
+
+def parse_bool(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"true", "1", "yes"}
 
 
 def number(value: object) -> float:

@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pandas as pd
 
-from ashare_quant.stress import run_cost_stress
+from ashare_quant.stress import run_cost_stress, stress_data_hashes
 
 
 class StressTests(unittest.TestCase):
@@ -44,6 +44,57 @@ class StressTests(unittest.TestCase):
 
         self.assertEqual(result["total_return"].iloc[0], 0.1)
         self.assertTrue(captured[0]["runtime"]["skip_expensive_diagnostics"])
+
+
+    def test_stress_hashes_use_committed_fetch_scope(self):
+        stocks = pd.DataFrame([{"symbol": "600000"}, {"symbol": "300001"}])
+        prices = pd.DataFrame(
+            [
+                {"symbol": "600000", "date": pd.Timestamp("2026-01-02").date(), "close": 10},
+                {"symbol": "300001", "date": pd.Timestamp("2026-01-02").date(), "close": 12},
+            ]
+        )
+        fundamentals = pd.DataFrame([{"symbol": "600000"}, {"symbol": "300001"}])
+        benchmark = pd.DataFrame(
+            [{"date": pd.Timestamp("2026-01-02").date(), "close": 100}]
+        )
+
+        class Store:
+            def load_market_data(self):
+                return stocks, prices, fundamentals
+
+            def load_benchmark(self, required=False):
+                return benchmark
+
+        scoped = (
+            stocks.iloc[[0]].copy(),
+            prices.iloc[[0]].copy(),
+            fundamentals.iloc[[0]].copy(),
+            True,
+            "complete",
+        )
+        config = {
+            "paths": {"cache_dir": "unused"},
+            "backtest": {"start": "2026-01-01", "end": "2026-01-02"},
+        }
+        with (
+            patch("ashare_quant.stress.DataStore.from_config", return_value=Store()),
+            patch(
+                "ashare_quant.stress.scope_market_frames_to_committed_fetch",
+                return_value=scoped,
+            ) as scope,
+            patch(
+                "ashare_quant.stress.filter_complete_market_data",
+                side_effect=lambda price_frame, benchmark_frame, cfg: (
+                    price_frame,
+                    benchmark_frame,
+                ),
+            ),
+        ):
+            hashes = stress_data_hashes(config)
+
+        scope.assert_called_once()
+        self.assertTrue(all(hashes.values()))
 
 
 if __name__ == "__main__":

@@ -4,6 +4,41 @@ This is the chronological engineering record for the repository. New entries are
 added directly below this introduction, newest first. It records verified facts;
 it is not a release-marketing document and does not replace generated audit
 artifacts.
+## 2026-08-09 - Bind derived evidence and harden recovery commits
+
+**Objective**
+
+Make the one-click research workflow produce one coherent, current evidence set and remove a recurring Windows recovery-point commit failure without enabling trading.
+
+**Changes**
+
+- Added exact main-run market-data binding and stale-evidence detection to capital sensitivity; isolated capital runs are reused only when configuration and market fingerprints both match.
+- Added automatic capital-sensitivity refresh, dependency-ordered readiness/health generation, and visible stage progress to the research and practical workflows.
+- Centralized latest-completed-fetch scope filtering and applied it consistently to backtest, readiness, and cost-stress hashes.
+- Added bounded retry for transient Windows access-denied errors during recovery directory commit, while refusing to overwrite any existing destination.
+- Added ADR 0002, architecture rules, README guidance, and focused failure-path tests.
+
+**Architecture and safety**
+
+- Derived research evidence that can affect execution readiness now binds to the current main `run_manifest.csv`; historical capital audits without the new fingerprint remain readable but cannot pass the current practical gate.
+- Research workflows remain unable to generate generic execution orders or call the broker boundary.
+- Recovery retry applies only while staging exists and the final destination does not; unknown, exhausted, missing-source, or existing-destination states fail closed.
+- Broker submission remains disabled, emergency stop remains active, and no live ledger, strategy activation, Canary certificate, generic order, or RPA order artifact was created.
+
+**Verification**
+
+- Focused research, workflow, recovery, and documentation tests: `176 passed in 6.09s`; recovery-specific tests: `9 passed in 1.30s`.
+- The first full regression exposed two real Windows `WinError 5` directory-commit failures: `1025 passed, 2 failed, 3 skipped, 39 subtests passed`.
+- After bounded retry hardening, full regression passed: `1029 passed, 3 skipped, 39 subtests passed in 153.39s`.
+- Real four-level capital sensitivity used one current market fingerprint with zero reused stale levels. Only `1,000,000` yuan passed; `600,000` yuan had `-17.78%` return drag, and the lower levels failed diversification/cash-drag constraints.
+- The refreshed practical gate passed `26/26`; factor robustness passed. The high-cost scenario retained `72.99%` historical excess return with `-28.45%` maximum drawdown.
+- Current strategy health still blocks orders: reliability `54/70`, bootstrap lower 95% excess `-20.51%`, early forward degradation, and adverse effective factor weight `75%` after 24 monitored days.
+
+**Remaining work**
+
+- Keep paper and live orders paused. The current account is far below the audited full-strategy capital requirement; a one-lot Canary can validate execution mechanics only.
+- Continue untuned forward observation to 60 common trading days and reassess the frozen candidates; do not select the higher-backtest adaptive candidates from this cache.
+- Extend the independent historical sample beyond the current 750 trading days and resolve bootstrap uncertainty before promotion review.
 ## 2026-08-09 - Restore unattended observation and bind research to committed data scope
 
 **Objective**

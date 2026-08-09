@@ -80,6 +80,9 @@ Rules:
 - Network failure may preserve a clearly identified old cache, but cannot label
   it fresh.
 - Cache replacement and partial recovery are atomic and auditable.
+- Backtest, readiness, stress, and capital-feasibility evidence use the exact
+  symbol scope of the latest completed fetch. Derived evidence that can affect
+  execution readiness must bind to the current main run-manifest data identity.
 
 ### 3.3 Strategy research and portfolio construction
 
@@ -228,7 +231,8 @@ Additional constraints:
 
 1. Refresh and audit normalized data.
 2. Preregister candidate family and evaluation policy.
-3. Run backtest, walk-forward, benchmark, cost, factor, and selection-bias tests.
+3. Run the main backtest first, then bind walk-forward, benchmark, cost, factor,
+   capital-sensitivity, and selection-bias evidence to that run manifest.
 4. Freeze candidate parameters and input fingerprints.
 5. Accumulate new-date forward and shadow observations.
 6. Audit promotion against the preregistered policy.
@@ -266,6 +270,8 @@ The following are architectural requirements, not optional implementation detail
 - Buy quantities obey lot rules; sell availability obeys T+1 and broker truth.
 - A timed-out submit is an unknown outcome until queried; it is never assumed
   failed and automatically retried.
+- Recovery-point directory commits never overwrite an existing destination;
+  transient filesystem access-denied retries are bounded and fail closed.
 - No strategy result can promote itself or lower its own validation threshold.
 - Forward evidence is based only on dates later than the freeze/evidence date.
 - All live incidents remain visible even if alert delivery initially fails.

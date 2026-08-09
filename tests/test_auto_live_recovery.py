@@ -9,6 +9,7 @@ from unittest.mock import patch
 import pandas as pd
 
 from ashare_quant.autolive_recovery import (
+    _replace_directory_with_retry,
     auto_live_recovery_config_status,
     build_auto_live_recovery_audit,
     create_auto_live_recovery_point,
@@ -65,6 +66,44 @@ class AutoLiveRecoveryTests(unittest.TestCase):
         self.assertTrue(audit["passed"].astype(bool).all())
         self.assertTrue((point / "submission_tickets.csv").exists())
         self.assertTrue((point / "evidence" / "account_state_snapshot.csv").exists())
+
+    def test_directory_commit_retries_transient_windows_access_denied(self):
+        staging = self.root / "staging"
+        final_dir = self.root / "committed"
+        staging.mkdir()
+        (staging / "manifest.json").write_text("{}", encoding="utf-8")
+        real_replace = os.replace
+        calls = 0
+
+        def flaky_replace(source, destination):
+            nonlocal calls
+            calls += 1
+            if calls < 3:
+                raise PermissionError(13, "transient access denied")
+            return real_replace(source, destination)
+
+        with patch("ashare_quant.autolive_recovery.os.replace", side_effect=flaky_replace):
+            _replace_directory_with_retry(
+                staging, final_dir, attempts=3, delay_seconds=0
+            )
+
+        self.assertEqual(calls, 3)
+        self.assertFalse(staging.exists())
+        self.assertTrue((final_dir / "manifest.json").is_file())
+
+    def test_directory_commit_never_overwrites_existing_destination(self):
+        staging = self.root / "staging"
+        final_dir = self.root / "committed"
+        staging.mkdir()
+        final_dir.mkdir()
+
+        with patch("ashare_quant.autolive_recovery.os.replace") as replace:
+            with self.assertRaises(FileExistsError):
+                _replace_directory_with_retry(staging, final_dir, delay_seconds=0)
+
+        replace.assert_not_called()
+        self.assertTrue(staging.exists())
+        self.assertTrue(final_dir.exists())
 
     def test_backup_preserves_pre_mutation_database_state(self):
         with patch.dict(os.environ, {"TEST_RECOVERY_KEY": "s" * 40}, clear=False):

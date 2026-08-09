@@ -7,6 +7,7 @@ import pandas as pd
 
 from ashare_quant.audit import capital_sensitivity_config_sha256
 from ashare_quant.capital_sensitivity import (
+    capital_sensitivity_needs_refresh,
     capital_variant_config,
     deployed_cash_ratio,
     reusable_backtest_paths,
@@ -61,8 +62,78 @@ class CapitalSensitivityTests(unittest.TestCase):
         )
 
         self.assertTrue(reusable_backtest_paths(config))
+        self.assertFalse(
+            reusable_backtest_paths(
+                config, expected_market_data_fingerprint="foreign-market-data"
+            )
+        )
         config["strategy"]["top_n"] = 21
         self.assertFalse(reusable_backtest_paths(config))
+
+    def test_refresh_detects_missing_and_foreign_reference_market_data(self):
+        output = Path.cwd() / "test_outputs" / "capital_refresh"
+        output.mkdir(parents=True, exist_ok=True)
+        for filename in [
+            "run_manifest.csv",
+            "capital_sensitivity.csv",
+            "capital_sensitivity_audit.csv",
+        ]:
+            (output / filename).unlink(missing_ok=True)
+        config = {
+            "paths": {"output_dir": str(output)},
+            "backtest": {"initial_cash": 1_000_000},
+            "strategy": {"top_n": 20},
+        }
+        self.assertTrue(capital_sensitivity_needs_refresh(config))
+
+        manifest_values = {
+            "stocks_sha256": "stocks",
+            "prices_sha256": "prices",
+            "fundamentals_sha256": "fundamentals",
+            "benchmark_sha256": "benchmark",
+        }
+        pd.DataFrame(
+            [{"item": key, "value": value} for key, value in manifest_values.items()]
+        ).to_csv(output / "run_manifest.csv", index=False)
+        pd.DataFrame([{"initial_cash": 1_000_000}]).to_csv(
+            output / "capital_sensitivity.csv", index=False
+        )
+        from ashare_quant.capital_sensitivity import market_data_fingerprint
+
+        current_hash = market_data_fingerprint(pd.read_csv(output / "run_manifest.csv"))
+        audit = pd.DataFrame(
+            [
+                {
+                    "check": "capital_sensitivity_strategy_config_sha256",
+                    "passed": True,
+                    "value": capital_sensitivity_config_sha256(config),
+                },
+                {
+                    "check": "capital_sensitivity_levels_complete",
+                    "passed": True,
+                    "value": "completed=1",
+                },
+                {
+                    "check": "capital_sensitivity_market_data_consistent",
+                    "passed": True,
+                    "value": current_hash,
+                },
+                {
+                    "check": "capital_sensitivity_reference_market_data_sha256",
+                    "passed": True,
+                    "value": "foreign",
+                },
+            ]
+        )
+        audit.to_csv(output / "capital_sensitivity_audit.csv", index=False)
+        self.assertTrue(capital_sensitivity_needs_refresh(config))
+
+        audit.loc[
+            audit["check"] == "capital_sensitivity_reference_market_data_sha256", "value"
+        ] = current_hash
+        audit.to_csv(output / "capital_sensitivity_audit.csv", index=False)
+        self.assertFalse(capital_sensitivity_needs_refresh(config))
+
     def test_evidence_hash_ignores_initial_cash_but_tracks_sensitivity_criteria(self):
         config = {
             "backtest": {"initial_cash": 1_000_000},
@@ -135,6 +206,19 @@ class CapitalSensitivityTests(unittest.TestCase):
                 paths[name] = path
             return paths
 
+        main_manifest = pd.DataFrame(
+            [
+                {"item": key, "value": "same-data"}
+                for key in [
+                    "stocks_sha256",
+                    "prices_sha256",
+                    "fundamentals_sha256",
+                    "benchmark_sha256",
+                ]
+            ]
+        )
+        main_manifest.to_csv(output / "run_manifest.csv", index=False)
+
         with patch("ashare_quant.capital_sensitivity.run_backtest", side_effect=fake_backtest):
             paths = run_capital_sensitivity(config)
 
@@ -143,3 +227,7 @@ class CapitalSensitivityTests(unittest.TestCase):
         self.assertEqual(summary["initial_cash"].tolist(), [100000.0, 300000.0, 1000000.0])
         self.assertFalse(bool(summary.loc[summary["initial_cash"] == 100000, "passed"].iloc[0]))
         self.assertTrue(bool(summary.loc[summary["initial_cash"] == 300000, "passed"].iloc[0]))
+        self.assertTrue(
+            bool(audit.loc["capital_sensitivity_reference_market_data_sha256", "passed"])
+        )
+        self.assertTrue(bool(audit.loc["capital_sensitivity_ready", "passed"]))
