@@ -1,0 +1,7 @@
+huatai:
+  broker: huatai
+  simulate: false
+  live_backend: desktop_read_only
+  desktop_snapshot_path: outputs_live/huatai_account_snapshot.json
+  desktop_snapshot_max_age_seconds: 300
+  note: "Read-only official desktop snapshot. Order submission, order query and cancellation remain disabled."

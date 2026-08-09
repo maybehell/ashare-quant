@@ -1,0 +1,17 @@
+{
+  "extends": "small_capital_shadow.yaml",
+  "paths": {
+    "output_dir": "outputs_small_capital_quarterly_shadow",
+    "state_db": "data/state_small_capital_quarterly_shadow.sqlite3"
+  },
+  "backtest": {
+    "rebalance": "quarterly"
+  },
+  "strategy": {
+    "name": "small_capital_lot_aware_quarterly_shadow"
+  },
+  "validation": {
+    "experiment_status": "structural_shadow_only",
+    "experiment_reason": "Pre-specified quarterly low-turnover comparison for the lot-aware small-capital study; never activation eligible."
+  }
+}

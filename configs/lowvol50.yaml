@@ -1,0 +1,13 @@
+{
+  "strategy": {
+    "name": "lowvol50",
+    "top_n": 50,
+    "weights": {
+      "momentum": 0.10,
+      "valuation": 0.00,
+      "quality": 0.00,
+      "low_volatility": 0.70,
+      "liquidity": 0.20
+    }
+  }
+}

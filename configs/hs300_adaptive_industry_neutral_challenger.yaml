@@ -1,0 +1,81 @@
+{
+  "paths": {
+    "output_dir": "outputs_hs300_adaptive_industry_neutral_challenger",
+    "state_db": "data/state_hs300_adaptive_industry_neutral_challenger.sqlite3"
+  },
+  "validation": {
+    "candidate_path": "data/live_candidate_hs300_adaptive_industry_neutral_challenger.json",
+    "research_only": true,
+    "optimized_on_current_cache": true,
+    "experiment_status": "rejected",
+    "experiment_reason": "Isolated fixed-parameter diagnostic: replace the rejected liquidity-weighted pseudo-index anchor with active selection inside point-in-time CSI 300 membership.",
+    "rejection_reason": "Rejected without promotion: total excess -13.35%, last-30% excess -7.89%, and 0/3 positive fixed walk-forward folds.",
+    "research_rationale": "Uses the previously defined adaptive industry-neutral factor model without parameter search; only the universe is changed to contemporaneous CSI 300 constituents.",
+    "primary_challenger_config": "",
+    "primary_challenger_strict": false,
+    "require_frozen_input_evidence": false
+  },
+  "strategy": {
+    "name": "hs300_adaptive_industry_neutral_fixed",
+    "top_n": 100,
+    "max_stock_weight": 0.03,
+    "max_industry_weight": 0.30,
+    "weighting": "liquidity_sqrt",
+    "benchmark_membership": {
+      "enabled": true,
+      "index_symbol": "000300",
+      "max_staleness_days": 120
+    },
+    "reference_anchor": {
+      "enabled": false,
+      "weight": 0.00
+    },
+    "industry_neutralization": {
+      "enabled": true,
+      "min_group_size": 5
+    },
+    "lookbacks": {
+      "momentum": 60,
+      "long_momentum": 120,
+      "volatility": 60,
+      "drawdown": 60,
+      "short_reversal": 20,
+      "liquidity": 60
+    },
+    "weights": {
+      "momentum": 0.08,
+      "long_momentum": 0.08,
+      "valuation": 0.00,
+      "quality": 0.00,
+      "low_volatility": 0.24,
+      "low_drawdown": 0.10,
+      "trend_quality": 0.05,
+      "liquidity": 0.45
+    },
+    "adaptive_weights": {
+      "enabled": true,
+      "risk_on_condition": "bull_not_high_volatility",
+      "risk_on_blend": 0.50,
+      "benchmark_ma_days": 200,
+      "benchmark_vol_days": 60,
+      "high_volatility_threshold": 0.30,
+      "risk_on_weights": {
+        "momentum": 0.20,
+        "long_momentum": 0.10,
+        "trend_quality": 0.20,
+        "long_trend_quality": 0.05,
+        "low_volatility": 0.10,
+        "liquidity": 0.25,
+        "valuation": 0.00,
+        "quality": 0.00
+      }
+    }
+  },
+  "data": {
+    "fetch_benchmark_membership_only": true,
+    "immutable_before_candidate_freeze": true,
+    "history_source": "baostock",
+    "enrich_metadata": false,
+    "complete_market_min_symbol_count": 270
+  }
+}

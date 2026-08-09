@@ -1,0 +1,26 @@
+{
+  "paths": {
+    "output_dir": "outputs_micro_capital_feasibility",
+    "state_db": "data/state_micro_capital_feasibility.sqlite3"
+  },
+  "validation": {
+    "research_only": true,
+    "apply_active_execution": false,
+    "capital_sensitivity": {
+      "cash_levels": [2500, 5000, 10000, 30000, 50000, 100000, 600000],
+      "publish_output_dir": "outputs",
+      "publish_prefix": "micro_",
+      "max_abs_return_drag": 0.02,
+      "max_excess_cash_ratio_vs_reference": 0.06,
+      "min_final_positions": 20
+    }
+  },
+  "runtime": {
+    "skip_expensive_diagnostics": true
+  },
+  "auto_live": {
+    "enabled": false,
+    "allow_broker_submit": false,
+    "emergency_stop": true
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "strategy": {
+    "name": "steady_multifactor",
+    "top_n": 20,
+    "weights": {
+      "momentum": 0.30,
+      "valuation": 0.20,
+      "quality": 0.20,
+      "low_volatility": 0.15,
+      "liquidity": 0.15
+    }
+  }
+}

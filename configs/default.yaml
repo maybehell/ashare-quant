@@ -1,0 +1,636 @@
+{
+  "paths": {
+    "data_dir": "data",
+    "cache_dir": "data/cache",
+    "output_dir": "outputs",
+    "state_db": "data/state.sqlite3"
+  },
+  "observation_task": {
+    "required": true,
+    "max_age_hours": 36,
+    "max_runtime_hours": 6
+  },
+  "data": {
+    "max_symbols": 800,
+    "checkpoint_every": 25,
+    "metadata_checkpoint_every": 25,
+    "history_workers": 3,
+    "history_retries": 2,
+    "history_session_retries": 2,
+    "history_session_retry_delay_seconds": 1,
+    "history_source": "auto",
+    "history_fallback_to_baostock": true,
+    "benchmark_fallback_to_baostock": true,
+    "metadata_source": "baostock",
+    "metadata_fallback_to_akshare": true,
+    "metadata_priced_only": true,
+    "metadata_workers": 3,
+    "enrich_metadata": true,
+    "disable_requests_proxy": true,
+    "request_timeout_seconds": 20,
+    "same_day_close_available_after": "18:00",
+    "commit_price_checkpoint": true,
+    "max_cache_age_days": 10,
+    "min_daily_price_coverage_ratio": 0.90,
+    "require_benchmark_on_signal_date": true,
+    "min_fetch_success_ratio": 0.50,
+    "min_fetch_success_symbols": 20,
+    "spot_retries": 3,
+    "use_cached_universe_on_spot_failure": true,
+    "preserve_cached_history_on_fetch": true,
+    "incremental_fetch": true,
+    "incremental_overlap_days": 20,
+    "max_estimated_amount_source_ratio": 0.25
+  },
+  "fundamentals": {
+    "source": "price_proxy",
+    "point_in_time": false
+  },
+  "universe": {
+    "scope": "curated",
+    "boards": ["main", "gem", "star"],
+    "exclude_st": true,
+    "min_listing_days": 60,
+    "min_avg_amount": 20000000,
+    "liquidity_lookback": 20
+  },
+  "backtest": {
+    "start": "2023-01-01",
+    "end": null,
+    "initial_cash": 1000000,
+    "rebalance": "monthly"
+  },
+  "benchmark": {
+    "symbol": "000300",
+    "name": "沪深300"
+  },
+  "validation": {
+    "holdout_split_ratio": 0.70,
+    "min_backtest_trading_days": 756,
+    "min_in_sample_excess_return": 0.00,
+    "min_walk_forward_folds": 3,
+    "min_rolling_positive_ratio": 0.50,
+    "min_annual_positive_ratio": 0.50,
+    "min_regime_observations": 60,
+    "min_regime_positive_ratio": 0.50,
+    "min_worst_regime_excess_return": -0.15,
+    "max_recent_excess_concentration": 0.85,
+    "optimized_on_current_cache": true,
+    "active_execution_path": "data/active_execution_strategy.json",
+    "execution_epoch_path": "data/execution_strategy_epoch.json",
+    "candidate_path": "data/live_candidate.json",
+    "research_archive_configs": [
+      "configs/residual_reversal_balanced.yaml",
+      "configs/defensive_lowvol_reversal.yaml",
+      "configs/ensemble_factor_capped.yaml",
+      "configs/ensemble_redundant_three_member.yaml",
+      "configs/breadth_guarded_champion.yaml",
+      "configs/robust_neutralized.yaml",
+      "configs/reference_anchored_core.yaml",
+      "configs/residual_momentum_idvol.yaml",
+      "configs/industry_relative_robust.yaml",
+      "configs/volume_ma_distance.yaml",
+      "configs/balanced_mlv_breadth_research.yaml"
+    ],
+    "forward_only_candidate_configs": [
+      "configs/breadth_guarded_metadata_v2_forward.yaml",
+      "configs/breadth_guarded_minimum_overlay_forward.yaml",
+      "configs/hs300_point_in_time_core_v2_forward.yaml"
+    ],
+    "forward_selection": {
+      "min_common_trading_days": 60,
+      "block_days": 5,
+      "bootstrap_samples": 5000,
+      "bootstrap_seed": 20260731,
+      "min_superiority_probability": 0.95,
+      "min_cumulative_advantage": 0.0,
+      "evaluation_mode": "fixed_horizon"
+    },
+    "primary_challenger_config": "configs/robust_blend.yaml",
+    "primary_challenger_configs": [
+      "configs/robust_blend.yaml"
+    ],
+    "comparison_candidate_configs": [
+      "configs/robust_blend.yaml",
+      "configs/adaptive_trend.yaml",
+      "configs/adaptive_robust.yaml",
+      "configs/adaptive_redundant.yaml",
+      "configs/ensemble_redundant_balanced.yaml"
+    ],
+    "primary_challenger_strict": false,
+    "excess_bootstrap": {
+      "block_days": 20,
+      "samples": 2000,
+      "seed": 20260712,
+      "min_observations": 252
+    },
+    "research_min_new_trading_days": 60,
+    "research_governance_state_path": "data/research_governance.json",
+    "min_strategy_research_candidates": 5,
+    "min_anti_overfit_candidates": 2,
+    "min_candidate_oos_positive_ratio": 0.50,
+    "research_time_folds": 6,
+    "min_selection_bias_candidates": 5,
+    "min_selection_bias_folds": 4,
+    "min_selection_bias_splits": 6,
+    "max_selection_bias_probability": 0.50,
+    "min_selected_test_median_excess_return": 0.00,
+    "min_selected_test_positive_ratio": 0.50,
+    "max_selection_bias_splits": 1000,
+    "candidate_similarity_threshold": 0.95,
+    "min_candidate_family_clusters": 3,
+    "min_effective_candidate_count": 2.00,
+    "max_largest_candidate_cluster_share": 0.75,
+    "min_family_selection_clusters": 3,
+    "min_family_selection_folds": 4,
+    "min_family_selection_splits": 6,
+    "max_family_selection_bias_probability": 0.50,
+    "min_family_selected_test_median_excess_return": 0.00,
+    "min_family_selected_test_positive_ratio": 0.50,
+    "min_family_selection_consensus_ratio": 0.50,
+    "research_min_fold_trading_days": 60,
+    "min_time_fold_positive_ratio": 0.50,
+    "min_time_fold_top_half_ratio": 0.50,
+    "min_time_fold_worst_excess_return": -0.15,
+    "capital_sensitivity": {
+      "cash_levels": [100000, 300000, 600000, 1000000],
+      "max_abs_return_drag": 0.02,
+      "max_excess_cash_ratio_vs_reference": 0.06,
+      "min_final_positions": 20
+    },
+    "min_time_fold_stable_candidates": 2,
+    "max_candidate_score_margin_warning": 0.20,
+    "require_execution_model_reconciliation": true,
+    "min_execution_reconciliation_candidates": 4,
+    "max_execution_excess_gap": 0.10,
+    "min_execution_rank_correlation": 0.70,
+    "min_execution_sign_agreement_ratio": 1.00
+  },
+  "live_guard": {
+    "enabled": true,
+    "min_total_excess_return": 0.02,
+    "min_information_ratio": 0.30,
+    "max_tracking_error": 0.20,
+    "require_excess_bootstrap": true,
+    "min_bootstrap_probability_positive": 0.95,
+    "min_bootstrap_lower_95_excess_return": 0.00,
+    "max_strategy_drawdown": 0.25,
+    "max_annualized_turnover": 6.00,
+    "require_in_sample_excess": true,
+    "min_in_sample_excess_return": 0.00,
+    "min_out_of_sample_excess_return": 0.02,
+    "min_walk_forward_folds": 3,
+    "min_walk_forward_avg_excess_return": 0.02,
+    "min_walk_forward_positive_ratio": 0.60,
+    "min_price_symbol_count": 500,
+    "min_full_market_priced_stock_coverage": 0.70,
+    "require_fundamental_provenance": true,
+    "require_industry_metadata": true,
+    "max_unknown_industry_ratio": 0.20,
+    "require_listing_metadata": true,
+    "max_imputed_list_date_ratio": 0.20,
+    "min_forward_trading_days": 60,
+    "min_forward_excess_return": 0.00,
+    "max_forward_active_drawdown": 0.10,
+    "max_forward_tracking_error": 0.20,
+    "min_forward_information_ratio": 0.00,
+    "min_early_forward_trading_days": 5,
+    "min_early_forward_excess_return": -0.05,
+    "early_forward_warning_ratio": 0.60,
+    "require_candidate_stability": true,
+    "require_factor_robustness": true,
+    "require_shadow_observation": true,
+    "require_current_candidate_shadow": true,
+    "min_shadow_observed_signals": 20,
+    "min_shadow_observed_days_per_signal": 5,
+    "min_shadow_distinct_cohorts": 6,
+    "min_shadow_distinct_cohort_gap_days": 15,
+    "min_shadow_avg_excess_return": 0.00,
+    "min_shadow_positive_ratio": 0.55,
+    "min_shadow_covered_weight": 0.95,
+    "require_cost_stress": true,
+    "require_current_cost_stress": true,
+    "cost_stress_scenario": "high_cost",
+    "min_cost_stress_excess_return": 0.02,
+    "max_cost_stress_drawdown": 0.25,
+    "allow_optimized_on_current_cache": false
+  },
+  "practical_guard": {
+    "enabled": true,
+    "require_current_evidence": true,
+    "require_capital_sensitivity": true,
+    "min_total_excess_return": 0.02,
+    "min_information_ratio": 0.10,
+    "max_tracking_error": 0.25,
+    "max_strategy_drawdown": 0.30,
+    "max_annualized_turnover": 8.00,
+    "require_out_of_sample": true,
+    "min_out_of_sample_excess_return": 0.00,
+    "require_walk_forward": true,
+    "min_walk_forward_folds": 2,
+    "min_walk_forward_avg_excess_return": 0.02,
+    "min_walk_forward_positive_ratio": 0.60,
+    "min_price_symbol_count": 80,
+    "min_full_market_priced_stock_coverage": 0.70,
+    "max_cache_age_days": 10,
+    "require_fundamental_provenance": true,
+    "require_metadata": false,
+    "max_unknown_industry_ratio": 0.50,
+    "max_imputed_list_date_ratio": 0.50,
+    "allow_optimized_on_current_cache": true,
+    "require_cost_stress": true,
+    "require_current_cost_stress": true,
+    "cost_stress_scenario": "high_cost",
+    "min_cost_stress_excess_return": 0.00,
+    "max_cost_stress_drawdown": 0.30
+  },
+  "factor_robustness": {
+    "shock": 0.25,
+    "member_shock": 0.25,
+    "max_total_excess_loss": 0.10,
+    "max_oos_excess_loss": 0.08,
+    "max_drawdown_worsening": 0.08,
+    "min_pass_ratio": 0.75,
+    "max_fragile_scenario_ratio": 0.25,
+    "max_fragile_factor_ratio": 0.30,
+    "require_zero_fragile_member_scenarios": true
+  },
+  "ensemble_diversity": {
+    "lookback_rebalances": 12,
+    "min_rebalances": 6,
+    "max_mean_weight_overlap": 0.75,
+    "max_single_weight_overlap": 0.90,
+    "max_mean_holding_jaccard": 0.70,
+    "min_effective_holdings": 30.0
+  },
+  "strategy_health": {
+    "min_reliability_score": 70.0,
+    "min_latest_rolling_excess_return": -0.05,
+    "recent_rolling_windows": 6,
+    "min_recent_rolling_positive_ratio": 0.50,
+    "early_forward_warning_exposure": 0.50,
+    "paper_only_deployment_score_cap": 55.0,
+    "paused_deployment_score_cap": 30.0,
+    "forward_factor_adverse_weight_warning": 0.50,
+    "forward_factor_min_trading_days": 20,
+    "forward_factor_adverse_weight_blocker": 0.67
+  },
+  "walk_forward": {
+    "enabled": true,
+    "selection_mode": "fixed",
+    "train_days": 420,
+    "test_days": 126,
+    "step_days": 126,
+    "candidates": [
+      {
+        "name": "large_liquidity150",
+        "top_n": 150,
+        "max_stock_weight": 0.05,
+        "weighting": "liquidity_sqrt",
+        "lookbacks": {"momentum": 60, "long_momentum": 120, "volatility": 60, "drawdown": 60, "short_reversal": 20, "liquidity": 60},
+        "weights": {"momentum": 0.00, "long_momentum": 0.20, "trend_quality": 0.15, "low_drawdown": 0.10, "low_volatility": 0.10, "liquidity": 0.45, "valuation": 0.00, "quality": 0.00}
+      },
+      {
+        "name": "lowdd_liq120",
+        "top_n": 120,
+        "max_stock_weight": 0.05,
+        "weighting": "liquidity_sqrt",
+        "lookbacks": {"momentum": 60, "long_momentum": 120, "volatility": 60, "drawdown": 60, "short_reversal": 20, "liquidity": 60},
+        "weights": {"momentum": 0.00, "long_momentum": 0.15, "trend_quality": 0.00, "low_drawdown": 0.20, "low_volatility": 0.15, "liquidity": 0.50, "valuation": 0.00, "quality": 0.00}
+      },
+      {
+        "name": "benchmark_enhanced",
+        "top_n": 120,
+        "max_stock_weight": 0.05,
+        "weighting": "liquidity_sqrt",
+        "lookbacks": {"momentum": 60, "long_momentum": 120, "volatility": 60, "drawdown": 60, "short_reversal": 20, "liquidity": 60},
+        "weights": {"momentum": 0.15, "long_momentum": 0.20, "trend_quality": 0.25, "long_trend_quality": 0.15, "low_drawdown": 0.10, "liquidity": 0.15, "valuation": 0.00, "quality": 0.00, "low_volatility": 0.00}
+      },
+      {
+        "name": "trend_quality",
+        "top_n": 80,
+        "max_stock_weight": 0.05,
+        "weighting": "equal",
+        "lookbacks": {"momentum": 60, "long_momentum": 120, "volatility": 60, "drawdown": 60, "short_reversal": 20, "liquidity": 60},
+        "weights": {"momentum": 0.10, "long_momentum": 0.20, "trend_quality": 0.35, "long_trend_quality": 0.15, "low_drawdown": 0.10, "liquidity": 0.10, "valuation": 0.00, "quality": 0.00, "low_volatility": 0.00}
+      },
+      {
+        "name": "lowvol50",
+        "top_n": 50,
+        "weights": {"momentum": 0.10, "valuation": 0.00, "quality": 0.00, "low_volatility": 0.70, "liquidity": 0.20}
+      },
+      {
+        "name": "balanced100",
+        "top_n": 100,
+        "weights": {"momentum": 0.25, "valuation": 0.00, "quality": 0.00, "low_volatility": 0.45, "liquidity": 0.30}
+      },
+      {
+        "name": "liquidity100",
+        "top_n": 100,
+        "weights": {"momentum": 0.10, "valuation": 0.00, "quality": 0.00, "low_volatility": 0.30, "liquidity": 0.60}
+      },
+      {
+        "name": "liqrob100_m15_lv25_liq60",
+        "top_n": 100,
+        "max_stock_weight": 0.05,
+        "weighting": "liquidity_sqrt",
+        "weights": {"momentum": 0.15, "long_momentum": 0.00, "valuation": 0.00, "quality": 0.00, "low_volatility": 0.25, "low_drawdown": 0.00, "trend_quality": 0.00, "liquidity": 0.60}
+      },
+      {
+        "name": "liqrob100_adaptive_trend",
+        "top_n": 100,
+        "max_stock_weight": 0.05,
+        "weighting": "liquidity_sqrt",
+        "weights": {"momentum": 0.15, "long_momentum": 0.00, "valuation": 0.00, "quality": 0.00, "low_volatility": 0.25, "low_drawdown": 0.00, "trend_quality": 0.00, "liquidity": 0.60},
+        "adaptive_weights": {
+          "enabled": true,
+          "risk_on_condition": "bull_not_high_volatility",
+          "risk_on_blend": 0.50,
+          "benchmark_ma_days": 200,
+          "benchmark_vol_days": 60,
+          "high_volatility_threshold": 0.30,
+          "risk_on_weights": {"momentum": 0.25, "long_momentum": 0.10, "trend_quality": 0.20, "long_trend_quality": 0.05, "low_volatility": 0.10, "liquidity": 0.30, "valuation": 0.00, "quality": 0.00}
+        }
+      },
+      {
+        "name": "liqrob100_adaptive_robust",
+        "top_n": 100,
+        "max_stock_weight": 0.05,
+        "weighting": "liquidity_sqrt",
+        "weights": {"momentum": 0.15, "long_momentum": 0.00, "valuation": 0.00, "quality": 0.00, "low_volatility": 0.25, "low_drawdown": 0.00, "trend_quality": 0.00, "liquidity": 0.60},
+        "adaptive_weights": {
+          "enabled": true,
+          "risk_on_condition": "bull_not_high_volatility",
+          "risk_on_blend": 0.65,
+          "benchmark_ma_days": 200,
+          "benchmark_vol_days": 60,
+          "high_volatility_threshold": 0.30,
+          "risk_on_weights": {"momentum": 0.20, "long_momentum": 0.10, "trend_quality": 0.20, "long_trend_quality": 0.05, "low_volatility": 0.10, "liquidity": 0.25, "valuation": 0.00, "quality": 0.00}
+        }
+      },
+      {
+        "name": "liqrob100_adaptive_redundant",
+        "top_n": 100,
+        "max_stock_weight": 0.05,
+        "weighting": "liquidity_sqrt",
+        "lookbacks": {"momentum": 60, "long_momentum": 120, "volatility": 60, "drawdown": 60, "short_reversal": 20, "liquidity": 60},
+        "weights": {"momentum": 0.08, "long_momentum": 0.08, "valuation": 0.00, "quality": 0.00, "low_volatility": 0.24, "low_drawdown": 0.10, "trend_quality": 0.05, "liquidity": 0.45},
+        "adaptive_weights": {
+          "enabled": true,
+          "risk_on_condition": "bull_not_high_volatility",
+          "risk_on_blend": 0.50,
+          "benchmark_ma_days": 200,
+          "benchmark_vol_days": 60,
+          "high_volatility_threshold": 0.30,
+          "risk_on_weights": {"momentum": 0.20, "long_momentum": 0.10, "trend_quality": 0.20, "long_trend_quality": 0.05, "low_volatility": 0.10, "liquidity": 0.25, "valuation": 0.00, "quality": 0.00}
+        }
+      },
+      {
+        "name": "robust_liq45_lv25_m10_ld15_lm05",
+        "top_n": 120,
+        "max_stock_weight": 0.05,
+        "weighting": "liquidity_sqrt",
+        "lookbacks": {"momentum": 60, "long_momentum": 120, "volatility": 60, "drawdown": 60, "short_reversal": 20, "liquidity": 60},
+        "weights": {"momentum": 0.10, "long_momentum": 0.05, "valuation": 0.00, "quality": 0.00, "low_volatility": 0.25, "low_drawdown": 0.15, "trend_quality": 0.00, "liquidity": 0.45}
+      },
+      {
+        "name": "ensemble_redundant_balanced_50_50",
+        "top_n": 100,
+        "max_stock_weight": 0.05,
+        "max_industry_weight": 0.30,
+        "weighting": "liquidity_sqrt",
+        "lookbacks": {"momentum": 60, "long_momentum": 120, "volatility": 60, "drawdown": 60, "short_reversal": 20, "liquidity": 60},
+        "weights": {"momentum": 0.15, "long_momentum": 0.00, "valuation": 0.00, "quality": 0.00, "low_volatility": 0.25, "low_drawdown": 0.00, "trend_quality": 0.00, "liquidity": 0.60},
+        "ensemble_members": [
+          {
+            "name": "adaptive_redundant_member",
+            "blend_weight": 1.0,
+            "top_n": 100,
+            "max_stock_weight": 0.05,
+            "max_industry_weight": 0.30,
+            "weighting": "liquidity_sqrt",
+            "weights": {"momentum": 0.08, "long_momentum": 0.08, "valuation": 0.00, "quality": 0.00, "low_volatility": 0.24, "low_drawdown": 0.10, "trend_quality": 0.05, "liquidity": 0.45},
+            "adaptive_weights": {
+              "enabled": true,
+              "benchmark_ma_days": 200,
+              "benchmark_vol_days": 60,
+              "high_volatility_threshold": 0.30,
+              "risk_on_condition": "bull_not_high_volatility",
+              "risk_on_blend": 0.50,
+              "risk_on_weights": {"momentum": 0.20, "long_momentum": 0.10, "trend_quality": 0.20, "long_trend_quality": 0.05, "low_volatility": 0.10, "low_drawdown": 0.00, "liquidity": 0.25, "valuation": 0.00, "quality": 0.00}
+            }
+          },
+          {
+            "name": "balanced_member",
+            "blend_weight": 1.0,
+            "top_n": 100,
+            "max_stock_weight": 0.05,
+            "max_industry_weight": 0.30,
+            "weighting": "liquidity_sqrt",
+            "weights": {"momentum": 0.25, "long_momentum": 0.00, "valuation": 0.00, "quality": 0.00, "low_volatility": 0.45, "low_drawdown": 0.00, "trend_quality": 0.00, "liquidity": 0.30}
+          }
+        ]
+      },
+      {
+        "name": "robust_neutralized_liquidity",
+        "top_n": 120,
+        "max_stock_weight": 0.05,
+        "max_industry_weight": 0.30,
+        "weighting": "liquidity_sqrt",
+        "lookbacks": {"momentum": 60, "long_momentum": 120, "volatility": 60, "drawdown": 60, "short_reversal": 20, "liquidity": 60},
+        "weights": {"momentum": 0.10, "long_momentum": 0.05, "valuation": 0.00, "quality": 0.00, "low_volatility": 0.25, "low_drawdown": 0.15, "trend_quality": 0.00, "liquidity": 0.45},
+        "industry_neutralization": {"enabled": true, "min_group_size": 5},
+        "cross_sectional_neutralization": {
+          "enabled": true,
+          "exposures": ["liquidity"],
+          "targets": ["momentum", "long_momentum", "low_volatility", "low_drawdown"],
+          "min_observations": 100
+        }
+      },
+      {
+        "name": "liqrob120_m15_lv25_liq60",
+        "top_n": 120,
+        "max_stock_weight": 0.05,
+        "weighting": "liquidity_sqrt",
+        "weights": {"momentum": 0.15, "long_momentum": 0.00, "valuation": 0.00, "quality": 0.00, "low_volatility": 0.25, "low_drawdown": 0.00, "trend_quality": 0.00, "liquidity": 0.60}
+      },
+      {
+        "name": "liqrob120_m10_lv35_liq55",
+        "top_n": 120,
+        "max_stock_weight": 0.05,
+        "weighting": "liquidity_sqrt",
+        "weights": {"momentum": 0.10, "long_momentum": 0.00, "valuation": 0.00, "quality": 0.00, "low_volatility": 0.35, "low_drawdown": 0.00, "trend_quality": 0.00, "liquidity": 0.55}
+      },
+      {
+        "name": "liqrob120_m05_lv35_liq60",
+        "top_n": 120,
+        "max_stock_weight": 0.05,
+        "weighting": "liquidity_sqrt",
+        "weights": {"momentum": 0.05, "long_momentum": 0.00, "valuation": 0.00, "quality": 0.00, "low_volatility": 0.35, "low_drawdown": 0.00, "trend_quality": 0.00, "liquidity": 0.60}
+      },
+      {
+        "name": "liqrob150_m10_lv35_liq55",
+        "top_n": 150,
+        "max_stock_weight": 0.05,
+        "weighting": "liquidity_sqrt",
+        "weights": {"momentum": 0.10, "long_momentum": 0.00, "valuation": 0.00, "quality": 0.00, "low_volatility": 0.35, "low_drawdown": 0.00, "trend_quality": 0.00, "liquidity": 0.55}
+      }
+    ]
+  },
+  "risk_overlay": {
+    "enabled": true,
+    "benchmark_ma_days": 200,
+    "benchmark_vol_days": 60,
+    "max_exposure": 1.00,
+    "min_exposure": 0.35,
+    "bear_market_exposure": 0.65,
+    "high_volatility_threshold": 0.30,
+    "high_volatility_exposure": 0.75
+  },
+  "stress_test": {
+    "enabled": true,
+    "cost_scenarios": [
+      {"name": "base", "slippage_bps": 5, "commission_rate": 0.0003},
+      {"name": "high_cost", "slippage_bps": 20, "commission_rate": 0.0008}
+    ]
+  },
+  "strategy": {
+    "name": "liqrob100_m15_lv25_liq60",
+    "top_n": 100,
+    "max_stock_weight": 0.05,
+    "max_industry_weight": 0.30,
+    "weighting": "liquidity_sqrt",
+    "lookbacks": {
+      "momentum": 60,
+      "long_momentum": 120,
+      "volatility": 60,
+      "drawdown": 60,
+      "short_reversal": 20,
+      "liquidity": 60
+    },
+    "weights": {
+      "momentum": 0.15,
+      "long_momentum": 0.00,
+      "valuation": 0.00,
+      "quality": 0.00,
+      "low_volatility": 0.25,
+      "low_drawdown": 0.00,
+      "trend_quality": 0.00,
+      "liquidity": 0.60
+    }
+  },
+  "trading": {
+    "lot_size": 100,
+    "slippage_bps": 5,
+    "max_volume_participation": 0.10,
+    "commission_rate": 0.0003,
+    "min_commission": 5,
+    "stamp_tax_rate": 0.0005,
+    "transfer_fee_rate": 0.00001,
+    "reserve_cash_ratio": 0.01
+  },
+  "rpa": {
+    "max_single_order_amount": 100000,
+    "max_daily_order_amount": 500000,
+    "require_manual_final_confirm": true,
+    "never_click_submit": true,
+    "require_account_reconciliation": true,
+    "require_account_state_audit": true,
+    "require_strategy_health": true,
+    "require_order_provenance_hmac": false,
+    "order_provenance_hmac_key_env": "ASHARE_QUANT_ADAPTER_HMAC_KEY"
+  },
+  "account": {
+    "require_import_check_before_confirm": true,
+    "require_price_override_check_before_use": true
+  },
+  "reconciliation": {
+    "cash_tolerance": 1.0
+  },
+  "execution": {
+    "require_fill_order_match": true,
+    "require_rpa_click_dependency": false,
+    "require_order_liquidity_audit": true,
+    "order_liquidity_lookback_days": 20,
+    "max_order_avg_amount_participation": 0.05,
+    "max_fill_adverse_slippage_bps": 50
+  },
+  "auto_live": {
+    "enabled": false,
+    "emergency_stop": false,
+    "risk_limits": {
+      "enabled": true,
+      "max_orders_per_batch": 50,
+      "max_single_order_amount": 100000,
+      "max_batch_buy_amount": 500000,
+      "max_batch_gross_amount": 1000000,
+      "max_daily_buy_amount": 500000,
+      "max_daily_gross_amount": 1000000,
+      "allowed_sides": ["buy", "sell"]
+    },
+    "broker_adapter": "",
+    "allow_mock_adapter": false,
+    "allow_command_adapter": false,
+    "allow_broker_submit": false,
+    "action_confirmation": {
+      "required_before_submit": true,
+      "ttl_seconds": 600
+    },
+    "allow_account_sync": false,
+    "allow_simulated_account_snapshot": false,
+    "account_binding": {
+      "required": false,
+      "require_hmac": false,
+      "hmac_key_env": "ASHARE_QUANT_ADAPTER_HMAC_KEY"
+    },
+    "allow_outside_trading_window": false,
+    "allow_stale_tickets": false,
+    "max_ticket_age_days": 0,
+    "account_snapshot_max_age_seconds": 300,
+    "require_broker_clock_sync": false,
+    "max_broker_clock_skew_seconds": 5,
+    "submit_lock_stale_seconds": 900,
+    "rollout": {
+      "required_before_submit": false,
+      "stage": "disabled",
+      "approval_ttl_hours": 24,
+      "require_hmac": false,
+      "hmac_key_env": "ASHARE_QUANT_ADAPTER_HMAC_KEY",
+      "stages": {}
+    },
+    "alerting": {
+      "enabled": false,
+      "required_before_submit": false,
+      "require_live_environment": true,
+      "require_hmac": false,
+      "hmac_key_env": "ASHARE_QUANT_ADAPTER_HMAC_KEY",
+      "selftest_max_age_seconds": 86400,
+      "timeout_seconds": 15,
+      "pinned_files": [],
+      "command": []
+    },
+    "recovery": {
+      "enabled": false,
+      "required_before_submit": false,
+      "retention_points": 30,
+      "require_hmac": false,
+      "hmac_key_env": "ASHARE_QUANT_ADAPTER_HMAC_KEY",
+      "required_files": [],
+      "critical_files": []
+    },
+    "trading_window": {
+      "timezone": "Asia/Shanghai",
+      "weekdays": [0, 1, 2, 3, 4],
+      "windows": ["09:25-11:30", "13:00-14:57"]
+    },
+    "command_adapter": {
+      "command": [],
+      "timeout_seconds": 30,
+      "working_dir": ""
+    }
+  },
+  "rules": {
+    "effective_date": "2026-07-06",
+    "post_close_fixed_price_reserved": true
+  }
+}

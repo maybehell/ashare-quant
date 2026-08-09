@@ -1,0 +1,141 @@
+paths:
+  output_dir: outputs_live
+  state_db: data/huatai_live_state.sqlite3
+
+validation:
+  apply_active_execution: true
+
+desktop_client:
+  executable: C:/htzqzyb3/hexin.exe
+  executable_sha256: 23e1b9f91edee6509ec10485b09f22c493191696d31472111375c59a80f1cf60
+  auto_start: true
+  startup_wait_seconds: 5
+  wake_windowless_on_refresh: true
+  window_wake_wait_seconds: 3
+  window_ready_timeout_seconds: 30
+  window_ready_poll_seconds: 2
+  window_ready_max_attempts: 10
+
+security:
+  live_secret_file: data/secrets/live_credentials.dpapi
+  required: true
+  hmac_key_env: ASHARE_QUANT_ADAPTER_HMAC_KEY
+
+auto_live:
+  enabled: true
+  require_strategy_evidence_sync: true
+  strategy_evidence_sync_max_age_seconds: 7200
+  emergency_stop: true
+  broker_adapter: command
+  allow_command_adapter: true
+  allow_broker_submit: false
+  action_confirmation:
+    required_before_submit: true
+    ttl_seconds: 600
+  allow_account_sync: false
+  require_exact_fill_fees: true
+  allow_simulated_account_snapshot: false
+  account_snapshot_max_age_seconds: 300
+  capital_feasibility:
+    min_target_weight_coverage: 0.80
+    max_allocation_l1_error: 0.25
+    min_invested_ratio: 0.85
+  require_broker_clock_sync: false
+  max_broker_clock_skew_seconds: 5
+  require_adapter_replay_certification: true
+  account_binding:
+    required: true
+    require_hmac: true
+    hmac_key_env: ASHARE_QUANT_ADAPTER_HMAC_KEY
+  journal:
+    enabled: true
+    require_hmac: true
+    hmac_key_env: ASHARE_QUANT_ADAPTER_HMAC_KEY
+  alerting:
+    enabled: true
+    required_before_submit: true
+    require_live_environment: true
+    require_hmac: true
+    hmac_key_env: ASHARE_QUANT_ADAPTER_HMAC_KEY
+    selftest_max_age_seconds: 86400
+    timeout_seconds: 30
+    pinned_files:
+      - path: scripts/smtp_alert_bridge.py
+        sha256: a1454ff2efc82b8f06935b8cb6bc6233e4e06f1df44732095d8e3f9af9405a3a
+    command:
+      - .venv/Scripts/python.exe
+      - scripts/smtp_alert_bridge.py
+      - --secret-file
+      - data/secrets/live_credentials.dpapi
+  rollout:
+    required_before_submit: true
+    stage: canary
+    approval_ttl_hours: 24
+    require_hmac: true
+    hmac_key_env: ASHARE_QUANT_ADAPTER_HMAC_KEY
+    stages:
+      canary:
+        max_orders: 1
+        max_single_order_amount: 1000
+        max_buy_amount: 1000
+        max_gross_amount: 1000
+      limited:
+        max_orders: 3
+        max_single_order_amount: 5000
+        max_buy_amount: 10000
+        max_gross_amount: 10000
+      full:
+        max_orders: 20
+        max_single_order_amount: 50000
+        max_buy_amount: 200000
+        max_gross_amount: 200000
+  service:
+    enabled: false
+    allow_submit: false
+    interval_seconds: 60
+    max_cycles: 0
+  command_adapter:
+    require_hmac_integrity: true
+    integrity_key_env: ASHARE_QUANT_ADAPTER_HMAC_KEY
+    require_pinned_files: true
+    require_complete_pin_manifest: true
+    required_pinned_paths:
+      - scripts/huatai_command_bridge.py
+      - ashare_quant/__init__.py
+      - ashare_quant/autolive_integrity.py
+      - ashare_quant/config.py
+      - ashare_quant/io_utils.py
+      - ashare_quant/huatai_canary.py
+      - ashare_quant/huatai_desktop_live.py
+      - ashare_quant/huatai_desktop_rpa.py
+      - configs/huatai_bridge_desktop_read_only.yaml
+    pinned_files:
+      - path: scripts/huatai_command_bridge.py
+        sha256: 832f3e51ee2408deb9e9aa497b9224664fa1f270aa3adbb32a506c432b9a6e92
+      - path: ashare_quant/__init__.py
+        sha256: 0ce5156f37f5be81c4be9fdb845df16a41c50f8452f4d2a1a2223137e6d5677d
+      - path: ashare_quant/autolive_integrity.py
+        sha256: a42b70bfa0f3d236925c4472497e0487616b9f33fd6808c61d926ec6a9cc4614
+      - path: ashare_quant/config.py
+        sha256: 749825968adb9030d3bda2ef33805c08463f0255dff192134bfdb6e30174142b
+      - path: ashare_quant/io_utils.py
+        sha256: da4b9e1bb484e20148a2db58e02e78f2d34723859b44d9baad8dbbea00054483
+      - path: ashare_quant/huatai_canary.py
+        sha256: bf81524ee7fc52a4cdc3be5d765bb6f0b8f4a04e5b793ea3d9de3237d3c240d1
+      - path: ashare_quant/huatai_desktop_live.py
+        sha256: 0cbc50d073ce9752e297c0d19bd9c34bee263e22e5f3ad0f0071ea429259b7d5
+      - path: ashare_quant/huatai_desktop_rpa.py
+        sha256: 538ef357dfd24edcd5607290fe28c71cc70465a2df3dc36e71b167ec269aaedd
+      - path: configs/huatai_bridge_desktop_read_only.yaml
+        sha256: 1d08195a5963186babc27f8b300412ce3947f464953a2f85553878bff642a026
+    command:
+      - .venv/Scripts/python.exe
+      - scripts/huatai_command_bridge.py
+      - --config
+      - configs/huatai_bridge_desktop_read_only.yaml
+    timeout_seconds: 30
+    working_dir: ""
+
+rpa:
+  require_order_provenance_hmac: true
+  order_provenance_hmac_key_env: ASHARE_QUANT_ADAPTER_HMAC_KEY

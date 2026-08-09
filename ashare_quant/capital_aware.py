@@ -1,0 +1,130 @@
+from __future__ import annotations
+
+from typing import Any
+
+import pandas as pd
+
+from .rules import calc_fee
+
+
+def capital_aware_enabled(config: dict[str, Any]) -> bool:
+    strategy = config.get("strategy", {}) if isinstance(config.get("strategy"), dict) else {}
+    policy = strategy.get("capital_aware", {}) if isinstance(strategy.get("capital_aware"), dict) else {}
+    return bool(policy.get("enabled", False))
+
+
+def build_capital_aware_target_weights(
+    scores: pd.DataFrame,
+    close_prices: pd.Series | dict[str, float],
+    equity: float,
+    exposure: float,
+    config: dict[str, Any],
+) -> pd.Series:
+    """Build an integer-lot target while preserving cash, stock and industry caps."""
+    if scores.empty or equity <= 0 or exposure <= 0:
+        return pd.Series(dtype=float)
+
+    strategy = config.get("strategy", {}) if isinstance(config.get("strategy"), dict) else {}
+    policy = strategy.get("capital_aware", {}) if isinstance(strategy.get("capital_aware"), dict) else {}
+    trading = config.get("trading", {}) if isinstance(config.get("trading"), dict) else {}
+    min_positions = max(int(policy.get("min_positions", 3)), 1)
+    max_positions = max(int(policy.get("max_positions", min_positions)), min_positions)
+    max_candidate_rank = max(int(policy.get("max_candidate_rank", max_positions * 20)), max_positions)
+    lot_size = max(int(trading.get("lot_size", 100)), 1)
+    reserve = min(max(float(trading.get("reserve_cash_ratio", 0.0)), 0.0), 1.0)
+    exposure = min(max(float(exposure), 0.0), 1.0)
+    base_investable = float(equity) * (1.0 - reserve)
+    budget = base_investable * exposure
+    if budget <= 0 or base_investable <= 0:
+        return pd.Series(dtype=float)
+
+    max_stock_weight = min(max(float(strategy.get("max_stock_weight", 1.0)), 0.0), 1.0)
+    max_industry_weight = min(max(float(strategy.get("max_industry_weight", 1.0)), 0.0), 1.0)
+    stock_value_cap = base_investable * exposure * max_stock_weight
+    industry_value_cap = base_investable * exposure * max_industry_weight
+    require_industry = bool(policy.get("require_industry", True))
+    allow_additional_lots = bool(policy.get("allow_additional_lots", True))
+
+    frame = scores.copy()
+    if not {"symbol", "score"}.issubset(frame.columns):
+        return pd.Series(dtype=float)
+    frame["symbol"] = frame["symbol"].astype(str).str.split(".").str[0].str.zfill(6)
+    frame["score"] = pd.to_numeric(frame["score"], errors="coerce")
+    prices = pd.Series(close_prices, dtype=float)
+    prices.index = prices.index.astype(str).str.split(".").str[0].str.zfill(6)
+    frame["price"] = pd.to_numeric(frame["symbol"].map(prices), errors="coerce")
+    if "industry" not in frame:
+        frame["industry"] = ""
+    frame["industry"] = frame["industry"].fillna("").astype(str).str.strip()
+    frame = frame.dropna(subset=["score", "price"])
+    frame = frame[frame["price"] > 0]
+    frame = frame.sort_values(["score", "symbol"], ascending=[False, True]).drop_duplicates("symbol")
+    frame = frame.head(max_candidate_rank).reset_index(drop=True)
+
+    quantities: dict[str, int] = {}
+    selected_rows: dict[str, pd.Series] = {}
+    industry_values: dict[str, float] = {}
+    total_cost = 0.0
+
+    def order_cost(symbol: str, quantity: int, price: float) -> float:
+        amount = quantity * price
+        return amount + calc_fee("buy", amount, trading)
+
+    for _, row in frame.iterrows():
+        if len(quantities) >= max_positions:
+            break
+        symbol = str(row["symbol"])
+        price = float(row["price"])
+        industry = str(row["industry"] or "").strip()
+        if require_industry and not industry:
+            continue
+        industry_key = industry or f"unknown:{symbol}"
+        market_value = price * lot_size
+        cost = order_cost(symbol, lot_size, price)
+        if market_value > stock_value_cap + 1e-8:
+            continue
+        if industry_values.get(industry_key, 0.0) + market_value > industry_value_cap + 1e-8:
+            continue
+        if total_cost + cost > budget + 1e-8:
+            continue
+        quantities[symbol] = lot_size
+        selected_rows[symbol] = row
+        industry_values[industry_key] = industry_values.get(industry_key, 0.0) + market_value
+        total_cost += cost
+
+    if len(quantities) < min_positions:
+        return pd.Series(dtype=float)
+
+    if allow_additional_lots:
+        while True:
+            added = False
+            for symbol, row in selected_rows.items():
+                price = float(row["price"])
+                industry = str(row["industry"] or "").strip()
+                industry_key = industry or f"unknown:{symbol}"
+                old_quantity = quantities[symbol]
+                new_quantity = old_quantity + lot_size
+                old_value = old_quantity * price
+                new_value = new_quantity * price
+                incremental_cost = order_cost(symbol, new_quantity, price) - order_cost(symbol, old_quantity, price)
+                if new_value > stock_value_cap + 1e-8:
+                    continue
+                if industry_values[industry_key] - old_value + new_value > industry_value_cap + 1e-8:
+                    continue
+                if total_cost + incremental_cost > budget + 1e-8:
+                    continue
+                quantities[symbol] = new_quantity
+                industry_values[industry_key] += new_value - old_value
+                total_cost += incremental_cost
+                added = True
+            if not added:
+                break
+
+    weights = {
+        symbol: quantities[symbol] * float(selected_rows[symbol]["price"]) / base_investable
+        for symbol in quantities
+    }
+    result = pd.Series(weights, dtype=float).sort_index()
+    if float(result.sum()) > exposure + 1e-8:
+        return pd.Series(dtype=float)
+    return result

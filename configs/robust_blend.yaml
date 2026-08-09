@@ -1,0 +1,38 @@
+{
+  "paths": {
+    "output_dir": "outputs_robust_blend"
+  },
+  "validation": {
+    "candidate_path": "data/live_candidate_robust_blend.json",
+    "strategy_research_path": "outputs/strategy_research.csv",
+    "require_central_promotion_for_paper": true,
+    "promotion_decision_path": "outputs/strategy_promotion_decision.csv",
+    "primary_challenger_config": "",
+    "primary_challenger_strict": false
+  },
+  "strategy": {
+    "name": "robust_liq45_lv25_m10_ld15_lm05",
+    "top_n": 120,
+    "max_stock_weight": 0.05,
+    "max_industry_weight": 0.30,
+    "weighting": "liquidity_sqrt",
+    "lookbacks": {
+      "momentum": 60,
+      "long_momentum": 120,
+      "volatility": 60,
+      "drawdown": 60,
+      "short_reversal": 20,
+      "liquidity": 60
+    },
+    "weights": {
+      "momentum": 0.10,
+      "long_momentum": 0.05,
+      "valuation": 0.00,
+      "quality": 0.00,
+      "low_volatility": 0.25,
+      "low_drawdown": 0.15,
+      "trend_quality": 0.00,
+      "liquidity": 0.45
+    }
+  }
+}

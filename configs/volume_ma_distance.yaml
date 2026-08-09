@@ -1,0 +1,40 @@
+{
+  "paths": {
+    "output_dir": "outputs_volume_ma_distance"
+  },
+  "validation": {
+    "candidate_path": "data/live_candidate_volume_ma_distance.json",
+    "optimized_on_current_cache": true,
+    "research_only": true,
+    "experiment_status": "rejected",
+    "experiment_reason": "Rejected on the first pre-registered evaluation: execution-model total excess -10.30%, out-of-sample excess -8.38%, information ratio -0.357, annualized turnover 9.88, lot-aware fast-research excess -11.40%, and fast-research out-of-sample excess -9.55%.",
+    "research_rationale": "One-shot A-share volume moving-average-distance candidate: the 21-day versus 200-day volume distance is reversed according to published China-market evidence; remaining factors are fixed tradability and risk controls.",
+    "primary_challenger_config": "",
+    "primary_challenger_strict": false
+  },
+  "strategy": {
+    "name": "volume_ma_distance80_equal",
+    "top_n": 80,
+    "max_stock_weight": 0.025,
+    "max_industry_weight": 0.25,
+    "weighting": "equal",
+    "lookbacks": {
+      "volume_ma_short": 21,
+      "volume_ma_long": 200,
+      "volatility": 60,
+      "liquidity": 60
+    },
+    "weights": {
+      "low_volume_ma_distance": 0.50,
+      "low_volatility": 0.25,
+      "liquidity": 0.25
+    },
+    "required_factors": [
+      "low_volume_ma_distance"
+    ],
+    "industry_neutralization": {
+      "enabled": true,
+      "min_group_size": 5
+    }
+  }
+}

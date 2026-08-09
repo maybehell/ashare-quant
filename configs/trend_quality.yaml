@@ -1,0 +1,27 @@
+{
+  "strategy": {
+    "name": "trend_quality",
+    "top_n": 80,
+    "max_stock_weight": 0.06,
+    "weighting": "liquidity_sqrt",
+    "lookbacks": {
+      "momentum": 80,
+      "long_momentum": 160,
+      "volatility": 60,
+      "drawdown": 80,
+      "short_reversal": 20,
+      "liquidity": 60
+    },
+    "weights": {
+      "momentum": 0.20,
+      "long_momentum": 0.20,
+      "trend_quality": 0.25,
+      "long_trend_quality": 0.15,
+      "low_downside_volatility": 0.10,
+      "short_reversal": 0.05,
+      "liquidity": 0.05,
+      "valuation": 0.00,
+      "quality": 0.00
+    }
+  }
+}

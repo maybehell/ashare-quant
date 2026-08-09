@@ -1,0 +1,52 @@
+{
+  "paths": {
+    "output_dir": "outputs_adaptive_trend"
+  },
+  "validation": {
+    "candidate_path": "data/live_candidate_adaptive_trend.json",
+    "strategy_research_path": "outputs/strategy_research.csv"
+  },
+  "strategy": {
+    "name": "liqrob100_adaptive_trend",
+    "top_n": 100,
+    "max_stock_weight": 0.05,
+    "max_industry_weight": 0.30,
+    "weighting": "liquidity_sqrt",
+    "lookbacks": {
+      "momentum": 60,
+      "long_momentum": 120,
+      "volatility": 60,
+      "drawdown": 60,
+      "short_reversal": 20,
+      "liquidity": 60
+    },
+    "weights": {
+      "momentum": 0.15,
+      "long_momentum": 0.00,
+      "valuation": 0.00,
+      "quality": 0.00,
+      "low_volatility": 0.25,
+      "low_drawdown": 0.00,
+      "trend_quality": 0.00,
+      "liquidity": 0.60
+    },
+    "adaptive_weights": {
+      "enabled": true,
+      "risk_on_condition": "bull_not_high_volatility",
+      "risk_on_blend": 0.50,
+      "benchmark_ma_days": 200,
+      "benchmark_vol_days": 60,
+      "high_volatility_threshold": 0.30,
+      "risk_on_weights": {
+        "momentum": 0.25,
+        "long_momentum": 0.10,
+        "trend_quality": 0.20,
+        "long_trend_quality": 0.05,
+        "low_volatility": 0.10,
+        "liquidity": 0.30,
+        "valuation": 0.00,
+        "quality": 0.00
+      }
+    }
+  }
+}

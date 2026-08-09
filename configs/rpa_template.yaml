@@ -1,0 +1,18 @@
+{
+  "broker": {
+    "window_title": "券商交易软件标题关键字",
+    "coordinate_mode": "absolute_screen"
+  },
+  "fields": {
+    "buy_tab": {"x": 0, "y": 0},
+    "sell_tab": {"x": 0, "y": 0},
+    "symbol": {"x": 0, "y": 0},
+    "price": {"x": 0, "y": 0},
+    "quantity": {"x": 0, "y": 0}
+  },
+  "safety": {
+    "require_manual_final_confirm": true,
+    "never_click_submit": true,
+    "pause_seconds": 0.2
+  }
+}

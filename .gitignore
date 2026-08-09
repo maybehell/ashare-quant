@@ -1,0 +1,47 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+.python-packages/
+.pip-cache/
+.tmp/
+pip-cache/
+pip-tmp/
+python-packages/
+data/
+outputs/
+test_outputs/
+# Generated strategy, report, broker, and operator artifacts
+output/
+outputs*/
+Logger/
+experiments/
+*.log
+
+# Local state, market caches, account data, and credentials
+*.sqlite
+*.sqlite3
+*.db
+*.parquet
+*.feather
+*.pkl
+*.pickle
+*.joblib
+*.dpapi
+*.pem
+*.key
+*.p12
+*.pfx
+.env
+.env.*
+**/secrets/
+**/credentials.json
+
+# Local tools, temporary patches, and generated browser/runtime state
+.codex*
+.playwright-cli/
+pytest-cache-files-*/
+tmp*/
+*.tmp

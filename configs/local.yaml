@@ -1,0 +1,14 @@
+{
+  "paths": {
+    "data_dir": "data",
+    "cache_dir": "data/cache",
+    "output_dir": "outputs",
+    "state_db": "data/state.sqlite3"
+  },
+  "backtest": {
+    "start": "2023-01-01",
+    "end": null,
+    "initial_cash": 1000000,
+    "rebalance": "monthly"
+  }
+}

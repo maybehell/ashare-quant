@@ -1,0 +1,29 @@
+{
+  "strategy": {
+    "name": "large_liquidity150",
+    "top_n": 150,
+    "max_stock_weight": 0.05,
+    "weighting": "liquidity_sqrt",
+    "lookbacks": {
+      "momentum": 60,
+      "long_momentum": 120,
+      "volatility": 60,
+      "drawdown": 60,
+      "short_reversal": 20,
+      "liquidity": 60
+    },
+    "weights": {
+      "momentum": 0.00,
+      "long_momentum": 0.20,
+      "trend_quality": 0.15,
+      "low_drawdown": 0.10,
+      "low_volatility": 0.10,
+      "liquidity": 0.45,
+      "valuation": 0.00,
+      "quality": 0.00
+    }
+  },
+  "live_guard": {
+    "max_unknown_industry_ratio": 1.00
+  }
+}

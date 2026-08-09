@@ -1,0 +1,47 @@
+{
+  "paths": {
+    "output_dir": "outputs_reference_anchored_core"
+  },
+  "validation": {
+    "candidate_path": "data/live_candidate_reference_anchored_core.json",
+    "optimized_on_current_cache": true,
+    "research_only": true,
+    "experiment_status": "rejected",
+    "experiment_reason": "Rejected on first pre-registered evaluation: total excess -15.13% and out-of-sample excess -14.39%; the liquidity proxy did not track CSI 300 reliably.",
+    "research_rationale": "Pre-registered 70% diversified liquidity core plus 30% equal-prior multi-factor satellite; one structural candidate, not a parameter sweep",
+    "primary_challenger_config": "",
+    "primary_challenger_strict": false
+  },
+  "strategy": {
+    "name": "reference_anchored_core70_multifactor30",
+    "top_n": 100,
+    "max_stock_weight": 0.03,
+    "max_industry_weight": 0.30,
+    "weighting": "equal",
+    "reference_anchor": {
+      "enabled": true,
+      "weight": 0.70,
+      "top_n": 300,
+      "max_stock_weight": 0.02,
+      "weighting": "liquidity_sqrt"
+    },
+    "lookbacks": {
+      "momentum": 60,
+      "long_momentum": 120,
+      "volatility": 60,
+      "drawdown": 60,
+      "short_reversal": 20,
+      "liquidity": 60
+    },
+    "weights": {
+      "momentum": 0.20,
+      "long_momentum": 0.20,
+      "valuation": 0.00,
+      "quality": 0.00,
+      "low_volatility": 0.20,
+      "low_drawdown": 0.20,
+      "trend_quality": 0.00,
+      "liquidity": 0.20
+    }
+  }
+}

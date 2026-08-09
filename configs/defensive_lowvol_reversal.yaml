@@ -1,0 +1,80 @@
+{
+  "paths": {
+    "output_dir": "outputs_defensive_lowvol_reversal"
+  },
+  "validation": {
+    "candidate_path": "data/live_candidate_defensive_lowvol_reversal.json",
+    "optimized_on_current_cache": true,
+    "research_only": true,
+    "experiment_status": "rejected",
+    "rejection_reason": "failed_oos_walk_forward_and_regime_validation",
+    "primary_challenger_config": "",
+    "primary_challenger_strict": false
+  },
+  "strategy": {
+    "name": "defensive_lowvol_reversal_ensemble",
+    "top_n": 120,
+    "max_stock_weight": 0.03,
+    "max_industry_weight": 0.30,
+    "weighting": "liquidity_sqrt",
+    "lookbacks": {
+      "momentum": 60,
+      "long_momentum": 120,
+      "volatility": 252,
+      "drawdown": 120,
+      "short_reversal": 20,
+      "liquidity": 60
+    },
+    "weights": {
+      "momentum": 0.00,
+      "long_momentum": 0.00,
+      "valuation": 0.00,
+      "quality": 0.00,
+      "low_volatility": 0.45,
+      "low_downside_volatility": 0.15,
+      "low_drawdown": 0.10,
+      "short_reversal": 0.10,
+      "liquidity": 0.20
+    },
+    "ensemble_members": [
+      {
+        "name": "long_horizon_lowvol_member",
+        "blend_weight": 1.0,
+        "top_n": 120,
+        "max_stock_weight": 0.03,
+        "max_industry_weight": 0.30,
+        "weighting": "liquidity_sqrt",
+        "weights": {
+          "momentum": 0.00,
+          "long_momentum": 0.00,
+          "low_volatility": 0.55,
+          "low_downside_volatility": 0.00,
+          "low_drawdown": 0.10,
+          "short_reversal": 0.00,
+          "liquidity": 0.35,
+          "valuation": 0.00,
+          "quality": 0.00
+        }
+      },
+      {
+        "name": "downside_reversal_member",
+        "blend_weight": 1.0,
+        "top_n": 120,
+        "max_stock_weight": 0.03,
+        "max_industry_weight": 0.30,
+        "weighting": "liquidity_sqrt",
+        "weights": {
+          "momentum": 0.00,
+          "long_momentum": 0.00,
+          "low_volatility": 0.00,
+          "low_downside_volatility": 0.40,
+          "low_drawdown": 0.10,
+          "short_reversal": 0.25,
+          "liquidity": 0.25,
+          "valuation": 0.00,
+          "quality": 0.00
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "strategy": {
+    "name": "benchmark_enhanced",
+    "top_n": 120,
+    "max_stock_weight": 0.05,
+    "weighting": "liquidity_sqrt",
+    "lookbacks": {
+      "momentum": 60,
+      "long_momentum": 120,
+      "volatility": 60,
+      "drawdown": 60,
+      "short_reversal": 20,
+      "liquidity": 60
+    },
+    "weights": {
+      "momentum": 0.15,
+      "long_momentum": 0.20,
+      "trend_quality": 0.25,
+      "long_trend_quality": 0.15,
+      "low_drawdown": 0.10,
+      "liquidity": 0.15,
+      "valuation": 0.00,
+      "quality": 0.00,
+      "low_volatility": 0.00
+    }
+  }
+}

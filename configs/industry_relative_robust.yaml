@@ -1,0 +1,48 @@
+{
+  "paths": {
+    "output_dir": "outputs_industry_relative_robust"
+  },
+  "validation": {
+    "candidate_path": "data/live_candidate_industry_relative_robust.json",
+    "strategy_research_path": "outputs/strategy_research.csv",
+    "research_only": true,
+    "experiment_status": "evaluating",
+    "research_rationale": "Limit active industry concentration versus the contemporaneous investable-universe liquidity proxy without changing robust factor weights",
+    "primary_challenger_config": "",
+    "primary_challenger_strict": false
+  },
+  "strategy": {
+    "name": "robust_industry_relative_8pct",
+    "top_n": 120,
+    "max_stock_weight": 0.05,
+    "max_industry_weight": 0.30,
+    "weighting": "liquidity_sqrt",
+    "industry_relative_cap": {
+      "enabled": true,
+      "reference_weighting": "liquidity_sqrt",
+      "reference_stock_cap": 0.05,
+      "max_active_weight": 0.08,
+      "aggregate_unknown": true,
+      "max_unknown_weight": 0.10,
+      "drift_tolerance": 0.015
+    },
+    "lookbacks": {
+      "momentum": 60,
+      "long_momentum": 120,
+      "volatility": 60,
+      "drawdown": 60,
+      "short_reversal": 20,
+      "liquidity": 60
+    },
+    "weights": {
+      "momentum": 0.10,
+      "long_momentum": 0.05,
+      "valuation": 0.00,
+      "quality": 0.00,
+      "low_volatility": 0.25,
+      "low_drawdown": 0.15,
+      "trend_quality": 0.00,
+      "liquidity": 0.45
+    }
+  }
+}

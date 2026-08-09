@@ -1,0 +1,52 @@
+{
+  "paths": {
+    "output_dir": "outputs_adaptive_redundant"
+  },
+  "validation": {
+    "candidate_path": "data/live_candidate_adaptive_redundant.json",
+    "strategy_research_path": "outputs/strategy_research.csv"
+  },
+  "strategy": {
+    "name": "liqrob100_adaptive_redundant",
+    "top_n": 100,
+    "max_stock_weight": 0.05,
+    "max_industry_weight": 0.3,
+    "weighting": "liquidity_sqrt",
+    "lookbacks": {
+      "momentum": 60,
+      "long_momentum": 120,
+      "volatility": 60,
+      "drawdown": 60,
+      "short_reversal": 20,
+      "liquidity": 60
+    },
+    "weights": {
+      "momentum": 0.08,
+      "long_momentum": 0.08,
+      "valuation": 0.0,
+      "quality": 0.0,
+      "low_volatility": 0.24,
+      "low_drawdown": 0.1,
+      "trend_quality": 0.05,
+      "liquidity": 0.45
+    },
+    "adaptive_weights": {
+      "enabled": true,
+      "risk_on_condition": "bull_not_high_volatility",
+      "risk_on_blend": 0.5,
+      "benchmark_ma_days": 200,
+      "benchmark_vol_days": 60,
+      "high_volatility_threshold": 0.3,
+      "risk_on_weights": {
+        "momentum": 0.2,
+        "long_momentum": 0.1,
+        "trend_quality": 0.2,
+        "long_trend_quality": 0.05,
+        "low_volatility": 0.1,
+        "liquidity": 0.25,
+        "valuation": 0.0,
+        "quality": 0.0
+      }
+    }
+  }
+}

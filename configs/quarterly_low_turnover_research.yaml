@@ -1,0 +1,32 @@
+{
+  "paths": {
+    "output_dir": "outputs_quarterly_low_turnover_research",
+    "state_db": "data/state_quarterly_low_turnover_research.sqlite3"
+  },
+  "backtest": {
+    "initial_cash": 600000,
+    "rebalance": "quarterly"
+  },
+  "strategy": {
+    "name": "liqrob100_m15_lv25_liq60_quarterly_research"
+  },
+  "validation": {
+    "research_only": true,
+    "apply_active_execution": false,
+    "optimized_on_current_cache": true,
+    "experiment_status": "evaluating",
+    "experiment_reason": "Structural low-turnover frequency comparison; identical universe, factors and execution assumptions, with quarterly rather than monthly rebalancing.",
+    "research_archive_configs": [],
+    "comparison_candidate_configs": [],
+    "primary_challenger_configs": [],
+    "forward_only_candidate_configs": []
+  },
+  "runtime": {
+    "skip_expensive_diagnostics": true
+  },
+  "auto_live": {
+    "enabled": false,
+    "allow_broker_submit": false,
+    "emergency_stop": true
+  }
+}

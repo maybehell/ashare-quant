@@ -1,0 +1,83 @@
+{
+  "paths": {
+    "output_dir": "outputs_residual_reversal_balanced"
+  },
+  "validation": {
+    "candidate_path": "data/live_candidate_residual_reversal_balanced.json",
+    "optimized_on_current_cache": true,
+    "research_only": true,
+    "experiment_status": "rejected",
+    "rejection_reason": "negative_total_and_out_of_sample_excess_with_low_reliability",
+    "research_rationale": "China A-share residual reversal with defensive liquidity diversification",
+    "primary_challenger_config": "",
+    "primary_challenger_strict": false
+  },
+  "strategy": {
+    "name": "residual_reversal_balanced_ensemble",
+    "top_n": 100,
+    "max_stock_weight": 0.03,
+    "max_industry_weight": 0.30,
+    "weighting": "liquidity_sqrt",
+    "lookbacks": {
+      "momentum": 60,
+      "long_momentum": 120,
+      "volatility": 120,
+      "drawdown": 120,
+      "short_reversal": 20,
+      "residual_reversal": 20,
+      "residual_beta": 120,
+      "liquidity": 60
+    },
+    "weights": {
+      "momentum": 0.00,
+      "long_momentum": 0.00,
+      "valuation": 0.00,
+      "quality": 0.00,
+      "low_volatility": 0.20,
+      "low_downside_volatility": 0.15,
+      "low_drawdown": 0.05,
+      "residual_reversal": 0.20,
+      "liquidity": 0.40
+    },
+    "ensemble_members": [
+      {
+        "name": "market_residual_reversal_member",
+        "blend_weight": 1.0,
+        "top_n": 100,
+        "max_stock_weight": 0.03,
+        "max_industry_weight": 0.30,
+        "weighting": "liquidity_sqrt",
+        "weights": {
+          "momentum": 0.00,
+          "long_momentum": 0.00,
+          "low_volatility": 0.15,
+          "low_downside_volatility": 0.00,
+          "low_drawdown": 0.00,
+          "residual_reversal": 0.45,
+          "liquidity": 0.40,
+          "valuation": 0.00,
+          "quality": 0.00
+        }
+      },
+      {
+        "name": "defensive_liquidity_member",
+        "blend_weight": 1.0,
+        "top_n": 100,
+        "max_stock_weight": 0.03,
+        "max_industry_weight": 0.30,
+        "weighting": "liquidity_sqrt",
+        "weights": {
+          "momentum": 0.00,
+          "long_momentum": 0.00,
+          "low_volatility": 0.00,
+          "low_downside_volatility": 0.35,
+          "low_drawdown": 0.10,
+          "residual_reversal": 0.00,
+          "liquidity": 0.55,
+          "valuation": 0.00,
+          "quality": 0.00
+        }
+      }
+    ]
+  }
+}

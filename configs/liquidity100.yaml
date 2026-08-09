@@ -1,0 +1,27 @@
+{
+  "paths": {
+    "output_dir": "outputs_liquidity100"
+  },
+  "strategy": {
+    "name": "liquidity100",
+    "top_n": 100,
+    "max_stock_weight": 0.05,
+    "max_industry_weight": 0.30,
+    "weighting": "equal",
+    "lookbacks": {
+      "momentum": 60,
+      "long_momentum": 120,
+      "volatility": 60,
+      "drawdown": 60,
+      "short_reversal": 20,
+      "liquidity": 60
+    },
+    "weights": {
+      "momentum": 0.10,
+      "valuation": 0.00,
+      "quality": 0.00,
+      "low_volatility": 0.30,
+      "liquidity": 0.60
+    }
+  }
+}

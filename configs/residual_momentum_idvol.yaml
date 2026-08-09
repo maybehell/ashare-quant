@@ -1,0 +1,60 @@
+{
+  "paths": {
+    "output_dir": "outputs_residual_momentum_idvol"
+  },
+  "validation": {
+    "candidate_path": "data/live_candidate_residual_momentum_idvol.json",
+    "optimized_on_current_cache": true,
+    "research_only": true,
+    "experiment_status": "rejected",
+    "experiment_reason": "Rejected on first pre-registered evaluation after warmup and first-rebalance alignment: execution-model total excess -33.91%, out-of-sample excess -10.70%, information ratio -0.931, annualized turnover 13.08, and lot-aware fast-research excess -35.09%.",
+    "research_rationale": "Pre-registered independent candidate using benchmark-residual momentum and low idiosyncratic volatility; equal weighted and not derived from the quarantined liquidity-low-volatility family",
+    "primary_challenger_config": "",
+    "primary_challenger_strict": false
+  },
+  "strategy": {
+    "name": "residual_momentum_idvol80_equal",
+    "top_n": 80,
+    "max_stock_weight": 0.025,
+    "max_industry_weight": 0.25,
+    "weighting": "equal",
+    "lookbacks": {
+      "momentum": 60,
+      "long_momentum": 120,
+      "volatility": 60,
+      "drawdown": 60,
+      "short_reversal": 20,
+      "residual_beta": 252,
+      "residual_momentum": 120,
+      "residual_momentum_skip": 20,
+      "idiosyncratic_volatility": 60,
+      "liquidity": 60
+    },
+    "required_factors": [
+      "residual_momentum",
+      "low_idiosyncratic_volatility"
+    ],
+    "weights": {
+      "momentum": 0.00,
+      "long_momentum": 0.00,
+      "valuation": 0.00,
+      "quality": 0.00,
+      "low_volatility": 0.00,
+      "low_downside_volatility": 0.10,
+      "low_drawdown": 0.00,
+      "residual_momentum": 0.55,
+      "low_idiosyncratic_volatility": 0.25,
+      "liquidity": 0.10
+    },
+    "industry_neutralization": {
+      "enabled": true,
+      "min_group_size": 5
+    },
+    "cross_sectional_neutralization": {
+      "enabled": true,
+      "exposures": ["liquidity"],
+      "targets": ["residual_momentum", "low_idiosyncratic_volatility"],
+      "min_observations": 100
+    }
+  }
+}

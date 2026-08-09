@@ -1,0 +1,549 @@
+from __future__ import annotations
+
+import hashlib
+import os
+import sqlite3
+from contextlib import contextmanager
+from dataclasses import dataclass
+from datetime import date, datetime
+from pathlib import Path
+from typing import Any, Iterator
+
+import pandas as pd
+from pandas.errors import EmptyDataError
+
+from .account import clear_stale_execution_artifacts, export_account_state
+from .config import project_path
+from .data import DataStore, normalize_symbol
+from .execution_quality import build_execution_quality
+from .models import Position
+from .validation import latest_close_map_asof
+
+
+FILL_IMPORT_COLUMNS = ["date", "symbol", "side", "quantity", "price", "fee", "amount", "reason"]
+FILL_IMPORT_AUDIT_COLUMNS = ["check", "passed", "value", "threshold", "message"]
+FILL_IMPORT_POSITION_COLUMNS = ["symbol", "quantity", "sellable_quantity", "cost", "close", "market_value", "pnl"]
+FILL_IMPORT_SNAPSHOT_COLUMNS = ["date", "cash", "market_value", "equity"]
+FILL_ORDER_MATCH_COLUMNS = ["date", "symbol", "side", "fill_quantity", "order_quantity", "matched", "message"]
+
+
+@dataclass
+class AccountState:
+    cash: float
+    snapshot_date: date
+    positions: dict[str, Position]
+
+
+def write_fill_import_template(config: dict[str, Any]) -> Path:
+    output_dir = project_path(config["paths"]["output_dir"])
+    output_dir.mkdir(parents=True, exist_ok=True)
+    path = output_dir / "fill_import_template.csv"
+    pd.DataFrame(columns=FILL_IMPORT_COLUMNS).to_csv(path, index=False, encoding="utf-8-sig")
+    return path
+
+
+def import_fills(
+    config: dict[str, Any],
+    source_path: str | Path,
+    confirm: bool = False,
+) -> dict[str, Path]:
+    if not confirm:
+        raise RuntimeError("fill import updates local cash, positions, trades, and pending orders; rerun with --confirm after checking broker fills")
+    store = DataStore.from_config(config)
+    lock_path = store.state_db.with_name(store.state_db.name + ".fill-import.lock")
+    with execution_import_lock(lock_path):
+        return _import_fills_locked(config, source_path, confirm=True)
+
+
+def _import_fills_locked(
+    config: dict[str, Any],
+    source_path: str | Path,
+    confirm: bool = False,
+) -> dict[str, Path]:
+    if not confirm:
+        raise RuntimeError("fill import updates local cash, positions, trades, and pending orders; rerun with --confirm after checking broker fills")
+
+    output_dir = project_path(config["paths"]["output_dir"])
+    output_dir.mkdir(parents=True, exist_ok=True)
+    audit_path = output_dir / "fill_import_audit.csv"
+    trades_path = output_dir / "fill_import_trades.csv"
+    positions_path = output_dir / "fill_import_positions.csv"
+    snapshot_path = output_dir / "fill_import_snapshot.csv"
+    order_match_path = output_dir / "fill_order_match.csv"
+    execution_quality_path = output_dir / "execution_quality.csv"
+    execution_quality_detail_path = output_dir / "execution_quality_detail.csv"
+    audit_rows: list[dict[str, object]] = []
+
+    def add(check: str, passed: bool, value: object, threshold: object, message: str) -> None:
+        audit_rows.append({"check": check, "passed": bool(passed), "value": value, "threshold": threshold, "message": message})
+
+    try:
+        source = Path(source_path)
+        source_hash = file_sha256(source)
+        fills = normalize_fill_import(read_fill_import_csv(source))
+        add("import_file_readable", True, str(source), "readable CSV with required columns", "The fill import CSV was parsed.")
+        row_valid = validate_fill_rows(fills)
+        add("fill_rows_valid", row_valid["passed"], row_valid["value"], "valid date/side/quantity/price/fee/amount", "Fill rows must have valid sides, positive quantities/prices, and non-negative fees.")
+        amount_match = validate_fill_amounts(fills, tolerance=float(config.get("reconciliation", {}).get("cash_tolerance", 1.0)))
+        add("amount_matches_quantity_price", amount_match["passed"], amount_match["value"], f"<= {config.get('reconciliation', {}).get('cash_tolerance', 1.0)}", "Fill amount must match quantity times price within tolerance.")
+        if fills.empty or not row_valid["passed"] or not amount_match["passed"]:
+            raise ValueError(failed_audit_message(audit_rows))
+
+        order_match = build_fill_order_match(output_dir, fills)
+        require_order_match = bool(config.get("execution", {}).get("require_fill_order_match", False))
+        provenance = read_key_value_csv(output_dir / "orders_provenance.csv")
+        source_ok = provenance.get("source") == "paper"
+        strong_ok = parse_bool(provenance.get("allow_weak_strategy")) is False
+        match_summary = summarize_order_match(order_match)
+        add("fill_order_match_required", True, require_order_match, "configured", "Whether fill import must match current verified system orders.")
+        if require_order_match:
+            add("fill_order_source_is_paper", source_ok, provenance.get("source", "missing"), "paper", "Imported fills must correspond to paper orders generated by the system.")
+            add("fill_order_source_is_strong", strong_ok, provenance.get("allow_weak_strategy", "missing"), False, "Imported fills cannot come from weak-gate/research orders.")
+            add("fill_orders_matched", match_summary["passed"], match_summary["value"], 0, "Every imported fill must match an expected order by date, symbol, side, and quantity.")
+            if not source_ok or not strong_ok or not match_summary["passed"]:
+                order_match.to_csv(order_match_path, index=False, encoding="utf-8-sig")
+                raise ValueError(failed_audit_message(audit_rows))
+
+        store = DataStore.from_config(config)
+        store.init_db()
+        duplicate = source_hash_imported(store, source_hash)
+        add("source_not_previously_imported", not duplicate, source_hash, "new source_sha256", "The same fill file must not be imported twice.")
+        if duplicate:
+            raise RuntimeError(f"fill file already imported: {source_hash}")
+
+        event_keys = auto_live_fill_event_keys(fills)
+        duplicate_event_keys = existing_execution_fill_keys(store, event_keys)
+        add(
+            "auto_live_fill_events_not_previously_imported",
+            not duplicate_event_keys,
+            ";".join(duplicate_event_keys),
+            "no duplicate auto-live cumulative fill event keys",
+            "Each cumulative broker-fill event may update the account exactly once.",
+        )
+        if duplicate_event_keys:
+            raise RuntimeError(f"auto-live fill events already imported: {';'.join(duplicate_event_keys)}")
+
+        state = load_account_state(store)
+        add("account_state_present", True, state.snapshot_date.isoformat(), "account snapshot exists", "Fill import requires an existing local account snapshot.")
+        simulated_state = clone_state(state)
+        application = validate_and_apply_fills(simulated_state, fills, config)
+        add("cash_sufficient", application["cash_sufficient"], round(application["minimum_cash"], 4), ">= 0 after every fill", "Local cash must be sufficient for imported buys.")
+        add("sellable_quantity_sufficient", application["sellable_sufficient"], application["sellable_failures"], 0, "Imported sells cannot exceed local sellable quantity.")
+        if not application["cash_sufficient"] or not application["sellable_sufficient"]:
+            raise ValueError(failed_audit_message(audit_rows))
+
+        asof = max(pd.to_datetime(fills["date"]).dt.date)
+        price_map = close_prices_for_import(store, asof)
+        positions_snapshot = build_positions_snapshot(simulated_state.positions, price_map)
+        missing_prices = positions_snapshot[positions_snapshot["close"] <= 0]["symbol"].astype(str).tolist() if not positions_snapshot.empty else []
+        add("positions_priced", not missing_prices, len(positions_snapshot) - len(missing_prices), len(positions_snapshot), "All resulting positions need cached prices.")
+        if missing_prices:
+            raise ValueError(f"missing cached prices for resulting positions: {', '.join(missing_prices)}")
+
+        equity = simulated_state.cash + float(positions_snapshot["market_value"].sum()) if not positions_snapshot.empty else simulated_state.cash
+        execution_quality, execution_quality_detail = build_execution_quality(config, fills=fills, order_match=order_match)
+        cleared = clear_stale_execution_artifacts(output_dir)
+        write_fill_state(store, asof, simulated_state.cash, equity, simulated_state.positions, fills, source, source_hash)
+        add("state_written", True, asof.isoformat(), "sqlite account state updated", "Imported fills were written to SQLite state.")
+        add("old_execution_artifacts_cleared", True, cleared, "stale paper/RPA artifacts removed", "Old executable order artifacts were invalidated.")
+
+        snapshot = pd.DataFrame([{"date": asof.isoformat(), "cash": round(simulated_state.cash, 2), "market_value": round(equity - simulated_state.cash, 2), "equity": round(equity, 2)}])
+        fills.to_csv(trades_path, index=False, encoding="utf-8-sig")
+        order_match.to_csv(order_match_path, index=False, encoding="utf-8-sig")
+        execution_quality.to_csv(execution_quality_path, index=False, encoding="utf-8-sig")
+        execution_quality_detail.to_csv(execution_quality_detail_path, index=False, encoding="utf-8-sig")
+        positions_snapshot.to_csv(positions_path, index=False, encoding="utf-8-sig")
+        snapshot.to_csv(snapshot_path, index=False, encoding="utf-8-sig")
+        pd.DataFrame(audit_rows, columns=FILL_IMPORT_AUDIT_COLUMNS).to_csv(audit_path, index=False, encoding="utf-8-sig")
+        paths = {
+            "fill_import_audit.csv": audit_path,
+            "fill_import_trades.csv": trades_path,
+            "fill_order_match.csv": order_match_path,
+            "execution_quality.csv": execution_quality_path,
+            "execution_quality_detail.csv": execution_quality_detail_path,
+            "fill_import_positions.csv": positions_path,
+            "fill_import_snapshot.csv": snapshot_path,
+        }
+        paths.update(export_account_state(config, asof_date=asof))
+        return paths
+    except Exception:
+        audit = pd.DataFrame(audit_rows, columns=FILL_IMPORT_AUDIT_COLUMNS)
+        if audit.empty:
+            audit = pd.DataFrame(
+                [
+                    {
+                        "check": "import_file_readable",
+                        "passed": False,
+                        "value": str(source_path),
+                        "threshold": "readable CSV with required columns",
+                        "message": "The fill import file could not be parsed.",
+                    }
+                ],
+                columns=FILL_IMPORT_AUDIT_COLUMNS,
+            )
+        audit.to_csv(audit_path, index=False, encoding="utf-8-sig")
+        raise
+
+
+@contextmanager
+def execution_import_lock(path: Path) -> Iterator[Path]:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handle = path.open("a+b")
+    try:
+        if handle.seek(0, os.SEEK_END) == 0:
+            handle.write(b"0")
+            handle.flush()
+        handle.seek(0)
+        try:
+            if os.name == "nt":
+                import msvcrt
+
+                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as exc:
+            raise RuntimeError(f"fill import blocked: another account write is active ({path})") from exc
+        try:
+            yield path
+        finally:
+            handle.seek(0)
+            if os.name == "nt":
+                import msvcrt
+
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    finally:
+        handle.close()
+
+
+def read_fill_import_csv(path: Path) -> pd.DataFrame:
+    if not path.exists():
+        raise FileNotFoundError(path)
+    try:
+        frame = pd.read_csv(path, dtype={"symbol": str})
+    except EmptyDataError:
+        frame = pd.DataFrame(columns=FILL_IMPORT_COLUMNS)
+    missing = set(FILL_IMPORT_COLUMNS) - set(frame.columns)
+    if missing:
+        raise ValueError(f"fill import missing columns: {sorted(missing)}")
+    return frame[FILL_IMPORT_COLUMNS].copy()
+
+
+def normalize_fill_import(frame: pd.DataFrame) -> pd.DataFrame:
+    if frame.empty:
+        return pd.DataFrame(columns=FILL_IMPORT_COLUMNS)
+    out = frame.copy()
+    out["date"] = pd.to_datetime(out["date"], errors="coerce").dt.date
+    out["symbol"] = out["symbol"].map(normalize_symbol)
+    out["side"] = out["side"].astype(str).str.lower().str.strip()
+    out["quantity"] = pd.to_numeric(out["quantity"], errors="coerce")
+    out["price"] = pd.to_numeric(out["price"], errors="coerce")
+    out["fee"] = pd.to_numeric(out["fee"], errors="coerce").fillna(0.0)
+    out["amount"] = pd.to_numeric(out["amount"], errors="coerce")
+    computed_amount = out["quantity"] * out["price"]
+    out["amount"] = out["amount"].fillna(computed_amount)
+    out["reason"] = out["reason"].fillna("manual_fill").astype(str)
+    return out.sort_values(["date", "symbol", "side"]).reset_index(drop=True)
+
+
+def validate_fill_rows(fills: pd.DataFrame) -> dict[str, object]:
+    if fills.empty:
+        return {"passed": False, "value": "empty"}
+    invalid = fills["date"].isna()
+    invalid |= ~fills["side"].isin({"buy", "sell"})
+    invalid |= fills["symbol"].astype(str).str.len() != 6
+    invalid |= fills["quantity"].isna() | (fills["quantity"] <= 0) | (fills["quantity"] % 1 != 0)
+    invalid |= fills["price"].isna() | (fills["price"] <= 0)
+    invalid |= fills["fee"].isna() | (fills["fee"] < 0)
+    invalid |= fills["amount"].isna() | (fills["amount"] <= 0)
+    return {"passed": not bool(invalid.any()), "value": int(invalid.sum())}
+
+
+def validate_fill_amounts(fills: pd.DataFrame, tolerance: float) -> dict[str, object]:
+    if fills.empty:
+        return {"passed": False, "value": "empty"}
+    expected = pd.to_numeric(fills["quantity"], errors="coerce") * pd.to_numeric(fills["price"], errors="coerce")
+    amount = pd.to_numeric(fills["amount"], errors="coerce")
+    diffs = (amount - expected).abs()
+    max_diff = float(diffs.dropna().max()) if not diffs.dropna().empty else float("inf")
+    return {"passed": bool((diffs <= tolerance).all()), "value": round(max_diff, 4)}
+
+
+def build_fill_order_match(output_dir: Path, fills: pd.DataFrame) -> pd.DataFrame:
+    fill_groups = group_order_like_frame(fills, quantity_column="quantity")
+    orders = read_orders_csv(output_dir / "orders.csv")
+    order_groups = group_order_like_frame(orders, quantity_column="quantity")
+    rows = []
+    for fill in fill_groups.itertuples(index=False):
+        order_qty = expected_order_quantity(order_groups, fill.date, fill.symbol, fill.side)
+        matched = order_qty >= int(fill.quantity)
+        if order_groups.empty:
+            message = "missing_orders_csv"
+        elif order_qty <= 0:
+            message = "no_matching_order"
+        elif not matched:
+            message = "fill_quantity_exceeds_order"
+        else:
+            message = "matched"
+        rows.append(
+            {
+                "date": fill.date,
+                "symbol": fill.symbol,
+                "side": fill.side,
+                "fill_quantity": int(fill.quantity),
+                "order_quantity": int(order_qty),
+                "matched": bool(matched),
+                "message": message,
+            }
+        )
+    return pd.DataFrame(rows, columns=FILL_ORDER_MATCH_COLUMNS)
+
+
+def group_order_like_frame(frame: pd.DataFrame, quantity_column: str) -> pd.DataFrame:
+    if frame.empty:
+        return pd.DataFrame(columns=["date", "symbol", "side", "quantity"])
+    required = {"date", "symbol", "side", quantity_column}
+    if not required.issubset(frame.columns):
+        return pd.DataFrame(columns=["date", "symbol", "side", "quantity"])
+    out = frame.copy()
+    out["date"] = pd.to_datetime(out["date"], errors="coerce").dt.date.astype(str)
+    out["symbol"] = out["symbol"].map(normalize_symbol)
+    out["side"] = out["side"].astype(str).str.lower().str.strip()
+    out["quantity"] = pd.to_numeric(out[quantity_column], errors="coerce").fillna(0).astype(int)
+    return out.groupby(["date", "symbol", "side"], as_index=False)["quantity"].sum()
+
+
+def expected_order_quantity(order_groups: pd.DataFrame, trade_date: object, symbol: object, side: object) -> int:
+    if order_groups.empty:
+        return 0
+    mask = (
+        (order_groups["date"].astype(str) == str(pd.to_datetime(trade_date).date()))
+        & (order_groups["symbol"].astype(str) == normalize_symbol(symbol))
+        & (order_groups["side"].astype(str).str.lower() == str(side).lower())
+    )
+    matched = order_groups[mask]
+    return int(matched["quantity"].sum()) if not matched.empty else 0
+
+
+def summarize_order_match(match: pd.DataFrame) -> dict[str, object]:
+    if match.empty:
+        return {"passed": False, "value": "empty"}
+    unmatched = int((~match["matched"].astype(bool)).sum())
+    return {"passed": unmatched == 0, "value": unmatched}
+
+
+def read_orders_csv(path: Path) -> pd.DataFrame:
+    if not path.exists():
+        return pd.DataFrame(columns=["date", "symbol", "side", "quantity", "reason"])
+    try:
+        return pd.read_csv(path, dtype={"symbol": str})
+    except EmptyDataError:
+        return pd.DataFrame(columns=["date", "symbol", "side", "quantity", "reason"])
+
+
+def read_key_value_csv(path: Path) -> dict[str, str]:
+    if not path.exists():
+        return {}
+    try:
+        frame = pd.read_csv(path)
+    except EmptyDataError:
+        return {}
+    if frame.empty or not {"item", "value"}.issubset(frame.columns):
+        return {}
+    return {str(row.item): "" if pd.isna(row.value) else str(row.value) for row in frame.itertuples(index=False)}
+
+
+def parse_bool(value: object) -> bool | None:
+    text = str(value).strip().lower()
+    if text in {"false", "0", "no"}:
+        return False
+    if text in {"true", "1", "yes"}:
+        return True
+    return None
+
+
+def source_hash_imported(store: DataStore, source_hash: str) -> bool:
+    with sqlite3.connect(store.state_db) as conn:
+        row = conn.execute("select 1 from execution_imports where source_sha256 = ? limit 1", (source_hash,)).fetchone()
+    return row is not None
+
+
+def auto_live_fill_event_keys(fills: pd.DataFrame) -> list[str]:
+    if fills.empty or "reason" not in fills.columns:
+        return []
+    keys = [str(value).strip() for value in fills["reason"].tolist() if str(value).strip().startswith("auto_live:")]
+    if len(keys) != len(set(keys)):
+        raise ValueError("duplicate auto-live fill event keys in import file")
+    return keys
+
+
+def existing_execution_fill_keys(store: DataStore, event_keys: list[str]) -> list[str]:
+    if not event_keys:
+        return []
+    placeholders = ",".join("?" for _ in event_keys)
+    with sqlite3.connect(store.state_db) as conn:
+        rows = conn.execute(
+            f"select event_key from execution_fill_keys where event_key in ({placeholders})",
+            tuple(event_keys),
+        ).fetchall()
+    return sorted(str(row[0]) for row in rows)
+
+
+def load_account_state(store: DataStore) -> AccountState:
+    with sqlite3.connect(store.state_db) as conn:
+        snapshot = conn.execute("select date, cash from account_snapshots order by date desc limit 1").fetchone()
+        if snapshot is None:
+            raise RuntimeError("fill import requires an existing account snapshot; run account-import first")
+        rows = conn.execute("select symbol, quantity, cost, locked_quantity from positions").fetchall()
+    positions = {
+        str(row[0]).zfill(6): Position(symbol=str(row[0]).zfill(6), quantity=int(row[1]), cost=float(row[2]), locked_quantity=int(row[3]))
+        for row in rows
+        if int(row[1]) > 0
+    }
+    return AccountState(cash=float(snapshot[1]), snapshot_date=pd.to_datetime(snapshot[0]).date(), positions=positions)
+
+
+def clone_state(state: AccountState) -> AccountState:
+    return AccountState(
+        cash=float(state.cash),
+        snapshot_date=state.snapshot_date,
+        positions={symbol: Position(symbol=pos.symbol, quantity=pos.quantity, cost=pos.cost, locked_quantity=pos.locked_quantity) for symbol, pos in state.positions.items()},
+    )
+
+
+def validate_and_apply_fills(state: AccountState, fills: pd.DataFrame, config: dict[str, Any]) -> dict[str, object]:
+    tolerance = float(config.get("reconciliation", {}).get("cash_tolerance", 1.0))
+    minimum_cash = state.cash
+    sellable_failures = 0
+    last_applied_date = state.snapshot_date
+    for row in fills.itertuples(index=False):
+        fill_date = pd.to_datetime(row.date).date()
+        if fill_date > last_applied_date:
+            for position in state.positions.values():
+                position.locked_quantity = 0
+            last_applied_date = fill_date
+        quantity = int(row.quantity)
+        price = float(row.price)
+        fee = float(row.fee)
+        amount = float(row.amount)
+        symbol = str(row.symbol).zfill(6)
+        if row.side == "buy":
+            position = state.positions.setdefault(symbol, Position(symbol=symbol))
+            total_cost = position.cost * position.quantity + amount + fee
+            position.quantity += quantity
+            position.locked_quantity += quantity
+            position.cost = total_cost / position.quantity
+            state.cash -= amount + fee
+            minimum_cash = min(minimum_cash, state.cash)
+        else:
+            position = state.positions.get(symbol)
+            if position is None or quantity > position.sellable_quantity:
+                sellable_failures += 1
+                continue
+            position.quantity -= quantity
+            state.cash += amount - fee
+            if position.quantity <= 0:
+                state.positions.pop(symbol, None)
+            minimum_cash = min(minimum_cash, state.cash)
+    return {
+        "cash_sufficient": minimum_cash >= -tolerance,
+        "minimum_cash": minimum_cash,
+        "sellable_sufficient": sellable_failures == 0,
+        "sellable_failures": sellable_failures,
+    }
+
+
+def close_prices_for_import(store: DataStore, asof: date) -> dict[str, float]:
+    _, prices, _ = store.load_market_data()
+    if prices.empty:
+        raise RuntimeError("cached prices are empty; refresh market data before importing fills")
+    return latest_close_map_asof(prices, asof)
+
+
+def build_positions_snapshot(positions: dict[str, Position], price_map: dict[str, float]) -> pd.DataFrame:
+    rows = []
+    for symbol, position in sorted(positions.items()):
+        if position.quantity <= 0:
+            continue
+        close = float(price_map.get(symbol, 0.0))
+        rows.append(
+            {
+                "symbol": symbol,
+                "quantity": int(position.quantity),
+                "sellable_quantity": int(position.sellable_quantity),
+                "cost": round(float(position.cost), 4),
+                "close": round(close, 4),
+                "market_value": round(int(position.quantity) * close, 2),
+                "pnl": round(int(position.quantity) * (close - float(position.cost)), 2),
+            }
+        )
+    return pd.DataFrame(rows, columns=FILL_IMPORT_POSITION_COLUMNS)
+
+
+def write_fill_state(
+    store: DataStore,
+    asof: date,
+    cash: float,
+    equity: float,
+    positions: dict[str, Position],
+    fills: pd.DataFrame,
+    source: Path,
+    source_hash: str,
+) -> None:
+    with sqlite3.connect(store.state_db) as conn:
+        conn.execute("delete from positions")
+        conn.execute("delete from orders")
+        for position in positions.values():
+            if position.quantity > 0:
+                conn.execute(
+                    "insert into positions(symbol, quantity, cost, locked_quantity) values (?, ?, ?, ?)",
+                    (position.symbol, int(position.quantity), float(position.cost), int(position.locked_quantity)),
+                )
+        conn.execute(
+            "insert or replace into account_snapshots(date, cash, equity) values (?, ?, ?)",
+            (asof.isoformat(), float(cash), float(equity)),
+        )
+        for fill in fills.itertuples(index=False):
+            reason = str(fill.reason)
+            if reason.startswith("auto_live:"):
+                conn.execute(
+                    "insert into execution_fill_keys(event_key, imported_at, source_sha256) values (?, ?, ?)",
+                    (reason, datetime.now().isoformat(timespec="seconds"), source_hash),
+                )
+            conn.execute(
+                "insert into trades(date, symbol, side, quantity, price, fee, amount, reason) values (?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    pd.to_datetime(fill.date).date().isoformat(),
+                    str(fill.symbol).zfill(6),
+                    str(fill.side).lower(),
+                    int(fill.quantity),
+                    float(fill.price),
+                    float(fill.fee),
+                    float(fill.amount),
+                    str(fill.reason),
+                ),
+            )
+        conn.execute(
+            "insert into execution_imports(imported_at, source_file, source_sha256, trade_date, fill_count) values (?, ?, ?, ?, ?)",
+            (datetime.now().isoformat(timespec="seconds"), str(source), source_hash, asof.isoformat(), len(fills)),
+        )
+
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def failed_audit_message(rows: list[dict[str, object]]) -> str:
+    failed = [row for row in rows if not bool(row.get("passed"))]
+    if not failed:
+        return "fill import validation failed"
+    return "; ".join(f"{row['check']}: {row['message']} (value={row['value']}, threshold={row['threshold']})" for row in failed)

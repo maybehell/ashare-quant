@@ -1,0 +1,58 @@
+{
+  "paths": {
+    "output_dir": "outputs_breadth_guarded_forward",
+    "state_db": "data/state_breadth_guarded_forward.sqlite3"
+  },
+  "validation": {
+    "candidate_path": "data/live_candidate_breadth_guarded_forward.json",
+    "research_only": true,
+    "optimized_on_current_cache": true,
+    "experiment_status": "rejected",
+    "experiment_reason": "Retired because deterministic industry metadata decoding changed industry grouping semantics and invalidated the frozen stocks hash; no forward evidence may be migrated.",
+    "research_rationale": "Use a lagged 60-day broad-market breadth state to reduce exposure when market participation is weak while retaining the existing diversified stock-selection model.",
+    "primary_challenger_config": "",
+    "primary_challenger_strict": false,
+    "require_frozen_input_evidence": true
+  },
+  "breadth_overlay": {
+    "enabled": true,
+    "moving_average_days": 60,
+    "max_stale_trade_days": 5,
+    "min_history_ratio": 0.75,
+    "min_symbols": 80,
+    "weak_threshold": 0.35,
+    "critical_threshold": 0.20,
+    "weak_exposure": 0.70,
+    "critical_exposure": 0.40
+  },
+  "strategy": {
+    "name": "liqrob100_breadth_guarded_forward",
+    "top_n": 100,
+    "max_stock_weight": 0.05,
+    "max_industry_weight": 0.30,
+    "weighting": "liquidity_sqrt",
+    "lookbacks": {
+      "momentum": 60,
+      "long_momentum": 120,
+      "volatility": 60,
+      "drawdown": 60,
+      "short_reversal": 20,
+      "liquidity": 60
+    },
+    "weights": {
+      "momentum": 0.15,
+      "long_momentum": 0.00,
+      "valuation": 0.00,
+      "quality": 0.00,
+      "low_volatility": 0.25,
+      "low_drawdown": 0.00,
+      "trend_quality": 0.00,
+      "liquidity": 0.60
+    }
+  },
+  "data": {
+    "immutable_before_candidate_freeze": true,
+    "history_source": "baostock",
+    "enrich_metadata": false
+  }
+}

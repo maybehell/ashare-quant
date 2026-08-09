@@ -1,0 +1,37 @@
+[project]
+name = "ashare-quant"
+version = "0.1.0"
+description = "Local A-share daily multi-factor backtesting and paper trading system."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "pandas>=2.0",
+]
+
+[project.optional-dependencies]
+data = ["akshare>=1.13", "baostock>=0.9.3", "pyarrow>=14", "PyYAML>=6"]
+dev = ["pytest>=8"]
+rpa = ["pyautogui>=0.9.54", "pywinauto>=0.6.9,<0.7", "Pillow>=11,<12"]
+
+[project.scripts]
+aq = "ashare_quant.cli:main"
+aq-gui = "ashare_quant.gui:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+addopts = "-p no:cacheprovider"
+testpaths = ["tests"]
+norecursedirs = [
+  ".venv",
+  ".tmp",
+  ".pip-cache",
+  "pip-cache",
+  "pip-tmp",
+  "python-packages",
+  "data",
+  "outputs",
+  "test_outputs",
+]

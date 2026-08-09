@@ -1,0 +1,115 @@
+{
+  "paths": {
+    "output_dir": "outputs_ensemble_redundant_three_member"
+  },
+  "validation": {
+    "candidate_path": "data/live_candidate_ensemble_redundant_three_member.json",
+    "optimized_on_current_cache": true,
+    "research_only": true,
+    "experiment_status": "rejected",
+    "experiment_reason": "rejected: weak isolated historical and robustness results",
+    "primary_challenger_config": "",
+    "primary_challenger_strict": false,
+    "max_candidate_freeze_rank": 5
+  },
+  "strategy": {
+    "name": "ensemble_redundant_three_member_equal",
+    "top_n": 100,
+    "max_stock_weight": 0.05,
+    "max_industry_weight": 0.30,
+    "weighting": "equal",
+    "lookbacks": {
+      "momentum": 60,
+      "long_momentum": 120,
+      "volatility": 60,
+      "drawdown": 60,
+      "short_reversal": 20,
+      "liquidity": 60
+    },
+    "weights": {
+      "momentum": 0.00,
+      "long_momentum": 0.35,
+      "valuation": 0.00,
+      "quality": 0.00,
+      "low_volatility": 0.00,
+      "low_drawdown": 0.35,
+      "trend_quality": 0.30,
+      "liquidity": 0.00
+    },
+    "ensemble_members": [
+      {
+        "name": "adaptive_redundant_member",
+        "blend_weight": 1.0,
+        "top_n": 100,
+        "max_stock_weight": 0.05,
+        "max_industry_weight": 0.30,
+        "weighting": "liquidity_sqrt",
+        "weights": {
+          "momentum": 0.08,
+          "long_momentum": 0.08,
+          "valuation": 0.00,
+          "quality": 0.00,
+          "low_volatility": 0.24,
+          "low_drawdown": 0.10,
+          "trend_quality": 0.05,
+          "liquidity": 0.45
+        },
+        "adaptive_weights": {
+          "enabled": true,
+          "benchmark_ma_days": 200,
+          "benchmark_vol_days": 60,
+          "high_volatility_threshold": 0.30,
+          "risk_on_condition": "bull_not_high_volatility",
+          "risk_on_blend": 0.50,
+          "risk_on_weights": {
+            "momentum": 0.20,
+            "long_momentum": 0.10,
+            "trend_quality": 0.20,
+            "long_trend_quality": 0.05,
+            "low_volatility": 0.10,
+            "low_drawdown": 0.00,
+            "liquidity": 0.25,
+            "valuation": 0.00,
+            "quality": 0.00
+          }
+        }
+      },
+      {
+        "name": "balanced_member",
+        "blend_weight": 1.0,
+        "top_n": 100,
+        "max_stock_weight": 0.05,
+        "max_industry_weight": 0.30,
+        "weighting": "liquidity_sqrt",
+        "weights": {
+          "momentum": 0.25,
+          "long_momentum": 0.00,
+          "valuation": 0.00,
+          "quality": 0.00,
+          "low_volatility": 0.45,
+          "low_drawdown": 0.00,
+          "trend_quality": 0.00,
+          "liquidity": 0.30
+        }
+      },
+      {
+        "name": "long_trend_drawdown_member",
+        "blend_weight": 1.0,
+        "top_n": 100,
+        "max_stock_weight": 0.05,
+        "max_industry_weight": 0.30,
+        "weighting": "equal",
+        "weights": {
+          "momentum": 0.00,
+          "long_momentum": 0.35,
+          "valuation": 0.00,
+          "quality": 0.00,
+          "low_volatility": 0.00,
+          "low_drawdown": 0.35,
+          "trend_quality": 0.30,
+          "liquidity": 0.00
+        }
+      }
+    ]
+  }
+}

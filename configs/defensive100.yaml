@@ -1,0 +1,13 @@
+{
+  "strategy": {
+    "name": "defensive100",
+    "top_n": 100,
+    "weights": {
+      "momentum": 0.00,
+      "valuation": 0.00,
+      "quality": 0.00,
+      "low_volatility": 0.80,
+      "liquidity": 0.20
+    }
+  }
+}

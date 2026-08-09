@@ -1,0 +1,96 @@
+{
+  "paths": {
+    "output_dir": "outputs_ensemble_factor_capped"
+  },
+  "validation": {
+    "candidate_path": "data/live_candidate_ensemble_factor_capped.json",
+    "optimized_on_current_cache": true,
+    "research_only": true,
+    "experiment_status": "rejected",
+    "experiment_reason": "rejected: weak walk-forward and factor/member stress results",
+    "primary_challenger_strict": false,
+    "max_candidate_freeze_rank": 5
+  },
+  "strategy": {
+    "name": "ensemble_factor_capped_50_50",
+    "top_n": 100,
+    "max_stock_weight": 0.05,
+    "max_industry_weight": 0.30,
+    "weighting": "liquidity_sqrt",
+    "lookbacks": {
+      "momentum": 60,
+      "long_momentum": 120,
+      "volatility": 60,
+      "drawdown": 60,
+      "short_reversal": 20,
+      "liquidity": 60
+    },
+    "weights": {
+      "momentum": 0.15,
+      "long_momentum": 0.10,
+      "valuation": 0.00,
+      "quality": 0.00,
+      "low_volatility": 0.25,
+      "low_drawdown": 0.10,
+      "trend_quality": 0.05,
+      "liquidity": 0.35
+    },
+    "ensemble_members": [
+      {
+        "name": "capped_adaptive_member",
+        "blend_weight": 1.0,
+        "top_n": 100,
+        "max_stock_weight": 0.05,
+        "max_industry_weight": 0.30,
+        "weighting": "liquidity_sqrt",
+        "weights": {
+          "momentum": 0.10,
+          "long_momentum": 0.10,
+          "valuation": 0.00,
+          "quality": 0.00,
+          "low_volatility": 0.25,
+          "low_drawdown": 0.15,
+          "trend_quality": 0.05,
+          "liquidity": 0.35
+        },
+        "adaptive_weights": {
+          "enabled": true,
+          "benchmark_ma_days": 200,
+          "benchmark_vol_days": 60,
+          "high_volatility_threshold": 0.30,
+          "risk_on_condition": "bull_not_high_volatility",
+          "risk_on_blend": 0.50,
+          "risk_on_weights": {
+            "momentum": 0.25,
+            "long_momentum": 0.15,
+            "trend_quality": 0.20,
+            "long_trend_quality": 0.00,
+            "low_volatility": 0.10,
+            "low_drawdown": 0.10,
+            "liquidity": 0.20,
+            "valuation": 0.00,
+            "quality": 0.00
+          }
+        }
+      },
+      {
+        "name": "equal_weight_defensive_member",
+        "blend_weight": 1.0,
+        "top_n": 100,
+        "max_stock_weight": 0.05,
+        "max_industry_weight": 0.30,
+        "weighting": "equal",
+        "weights": {
+          "momentum": 0.15,
+          "long_momentum": 0.10,
+          "valuation": 0.00,
+          "quality": 0.00,
+          "low_volatility": 0.35,
+          "low_drawdown": 0.15,
+          "trend_quality": 0.00,
+          "liquidity": 0.25
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,9 @@
+# Required command capabilities before live: account_snapshot, submit_orders, query_orders, cancel_orders.
+# Huatai bridge scaffold config. This template is intentionally not live-enabled.
+huatai:
+  broker: huatai
+  simulate: false
+  account_id: ""
+  client: ""
+  live_backend: ""
+  note: "Fill this only after obtaining an audited Huatai execution backend. Do not store passwords here."

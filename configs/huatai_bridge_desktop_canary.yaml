@@ -1,0 +1,18 @@
+# Experimental live desktop backend. Both switches must remain false until a
+# non-empty order/query/cancel lifecycle has been certified on this client.
+huatai:
+  broker: huatai
+  simulate: false
+  live_backend: desktop_canary
+  desktop_snapshot_path: outputs_live/huatai_account_snapshot.json
+  desktop_snapshot_max_age_seconds: 300
+  desktop_canary:
+    enabled: true
+    allow_submit: true
+    max_orders: 1
+    max_order_amount: 1000
+    certification_path: outputs_live/huatai_desktop_canary_certification.json
+    required_certification_stage: armed
+    require_hmac: true
+    hmac_key_env: ASHARE_QUANT_ADAPTER_HMAC_KEY
+  note: "Fail-closed Huatai desktop Canary backend; not authorized for submission."

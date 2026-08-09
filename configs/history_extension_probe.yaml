@@ -1,0 +1,26 @@
+{
+  "paths": {
+    "data_dir": "test_outputs/history_extension/data",
+    "cache_dir": "test_outputs/history_extension/cache",
+    "output_dir": "test_outputs/history_extension/outputs",
+    "state_db": "test_outputs/history_extension/state.sqlite3"
+  },
+  "data": {
+    "max_symbols": 10,
+    "checkpoint_every": 5,
+    "enrich_metadata": false,
+    "incremental_fetch": false,
+    "preserve_cached_history_on_fetch": true,
+    "min_fetch_success_ratio": 0.8,
+    "min_fetch_success_symbols": 5,
+    "min_daily_price_coverage_ratio": 0.08,
+    "required_symbols": ["600188", "601225", "600096", "601126", "601088"]
+  },
+  "backtest": {
+    "start": "2018-01-01",
+    "end": null
+  },
+  "validation": {
+    "research_governance_state_path": "test_outputs/history_extension/research_governance.json"
+  }
+}

@@ -1,0 +1,98 @@
+{
+  "paths": {
+    "output_dir": "outputs_ensemble_redundant_balanced"
+  },
+  "validation": {
+    "candidate_path": "data/live_candidate_ensemble_redundant_balanced.json",
+    "strategy_research_path": "outputs/strategy_research.csv",
+    "experiment_status": "evaluating",
+    "research_rationale": "Equal blend of independently ranked adaptive and defensive members; requires fresh unified research and forward evidence",
+    "primary_challenger_config": "",
+    "primary_challenger_configs": [],
+    "optimized_on_current_cache": true,
+    "primary_challenger_strict": false,
+    "max_candidate_freeze_rank": 5
+  },
+  "strategy": {
+    "name": "ensemble_redundant_balanced_50_50",
+    "top_n": 100,
+    "max_stock_weight": 0.05,
+    "max_industry_weight": 0.30,
+    "weighting": "liquidity_sqrt",
+    "lookbacks": {
+      "momentum": 60,
+      "long_momentum": 120,
+      "volatility": 60,
+      "drawdown": 60,
+      "short_reversal": 20,
+      "liquidity": 60
+    },
+    "weights": {
+      "momentum": 0.15,
+      "long_momentum": 0.00,
+      "valuation": 0.00,
+      "quality": 0.00,
+      "low_volatility": 0.25,
+      "low_drawdown": 0.00,
+      "trend_quality": 0.00,
+      "liquidity": 0.60
+    },
+    "ensemble_members": [
+      {
+        "name": "adaptive_redundant_member",
+        "blend_weight": 1.0,
+        "top_n": 100,
+        "max_stock_weight": 0.05,
+        "max_industry_weight": 0.30,
+        "weighting": "liquidity_sqrt",
+        "weights": {
+          "momentum": 0.08,
+          "long_momentum": 0.08,
+          "valuation": 0.00,
+          "quality": 0.00,
+          "low_volatility": 0.24,
+          "low_drawdown": 0.10,
+          "trend_quality": 0.05,
+          "liquidity": 0.45
+        },
+        "adaptive_weights": {
+          "enabled": true,
+          "benchmark_ma_days": 200,
+          "benchmark_vol_days": 60,
+          "high_volatility_threshold": 0.30,
+          "risk_on_condition": "bull_not_high_volatility",
+          "risk_on_blend": 0.50,
+          "risk_on_weights": {
+            "momentum": 0.20,
+            "long_momentum": 0.10,
+            "trend_quality": 0.20,
+            "long_trend_quality": 0.05,
+            "low_volatility": 0.10,
+            "low_drawdown": 0.00,
+            "liquidity": 0.25,
+            "valuation": 0.00,
+            "quality": 0.00
+          }
+        }
+      },
+      {
+        "name": "balanced_member",
+        "blend_weight": 1.0,
+        "top_n": 100,
+        "max_stock_weight": 0.05,
+        "max_industry_weight": 0.30,
+        "weighting": "liquidity_sqrt",
+        "weights": {
+          "momentum": 0.25,
+          "long_momentum": 0.00,
+          "valuation": 0.00,
+          "quality": 0.00,
+          "low_volatility": 0.45,
+          "low_drawdown": 0.00,
+          "trend_quality": 0.00,
+          "liquidity": 0.30
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,32 @@
+extends: breadth_guarded_minimum_overlay_research.yaml
+
+paths:
+  output_dir: outputs_turnover_buffered_minimum_overlay_research
+  state_db: data/state_turnover_buffered_minimum_overlay_research.sqlite3
+
+validation:
+  candidate_path: ""
+  research_only: true
+  optimized_on_current_cache: true
+  experiment_status: rejected
+  experiment_reason: >-
+    Rejected on the first pre-specified evaluation. Annualized turnover fell from
+    3.25 to 2.71, but full-period excess fell from 6.11% to 4.94% and the
+    last-30% out-of-sample excess changed from +0.92% to -1.00%.
+  rejection_reason: >-
+    Execution efficiency improved, but the negative held-out excess indicates that
+    the buffer delayed useful signal changes. No exit-rank parameter sweep is allowed.
+  research_rationale: >-
+    Reduce boundary-rank churn without searching factor weights, lookbacks,
+    rebalance frequency, or market-risk thresholds. This isolated historical
+    result has no promotion authority and is excluded from frozen candidates.
+  research_governance_state_path: data/research_governance_turnover_buffered_minimum_overlay_research.json
+
+strategy:
+  name: liqrob100_minimum_overlay_rank_buffer_125_research
+  turnover_control:
+    enabled: true
+    exit_rank_multiplier: 1.25
+
+data:
+  immutable_before_candidate_freeze: false

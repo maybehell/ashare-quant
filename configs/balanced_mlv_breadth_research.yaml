@@ -1,0 +1,90 @@
+{
+  "paths": {
+    "cache_dir": "data/cache_balanced_mlv_breadth_research",
+    "output_dir": "outputs_balanced_mlv_breadth_research",
+    "state_db": "data/state_balanced_mlv_breadth_research.sqlite3"
+  },
+  "validation": {
+    "candidate_path": "data/live_candidate_balanced_mlv_breadth_research.json",
+    "research_only": true,
+    "optimized_on_current_cache": true,
+    "experiment_status": "research_hypothesis",
+    "experiment_reason": "Independent validation of the pre-defined balanced momentum, low-volatility, and liquidity baseline under the frozen candidate breadth and metadata rules.",
+    "research_rationale": "Use the common balanced MLV baseline rather than a cache-searched optimum; preserve breadth and industry controls, and require isolated out-of-sample, cost, and forward evidence before any preregistration.",
+    "primary_challenger_config": "",
+    "primary_challenger_configs": [],
+    "primary_challenger_strict": false,
+    "forward_only_candidate_configs": [],
+    "comparison_candidate_configs": [],
+    "research_archive_configs": [],
+    "research_governance_state_path": "data/research_governance_balanced_mlv_breadth_research.json",
+    "research_time_folds": 3
+  },
+  "breadth_overlay": {
+    "enabled": true,
+    "moving_average_days": 60,
+    "max_stale_trade_days": 5,
+    "min_history_ratio": 0.75,
+    "min_symbols": 80,
+    "weak_threshold": 0.35,
+    "critical_threshold": 0.20,
+    "weak_exposure": 0.70,
+    "critical_exposure": 0.40
+  },
+  "strategy": {
+    "name": "balanced_mlv_breadth_research",
+    "top_n": 100,
+    "max_stock_weight": 0.05,
+    "max_industry_weight": 0.30,
+    "post_trade_industry_cap": {
+      "enabled": true,
+      "drift_tolerance": 0.015
+    },
+    "weighting": "liquidity_sqrt",
+    "lookbacks": {
+      "momentum": 60,
+      "long_momentum": 120,
+      "volatility": 60,
+      "drawdown": 60,
+      "short_reversal": 20,
+      "liquidity": 60
+    },
+    "weights": {
+      "momentum": 0.33,
+      "long_momentum": 0.00,
+      "valuation": 0.00,
+      "quality": 0.00,
+      "low_volatility": 0.34,
+      "low_drawdown": 0.00,
+      "trend_quality": 0.00,
+      "liquidity": 0.33
+    }
+  },
+  "walk_forward": {
+    "enabled": true,
+    "selection_mode": "fixed",
+    "train_days": 420,
+    "test_days": 126,
+    "step_days": 126,
+    "candidates": [
+      {
+        "name": "balanced_mlv_fixed",
+        "top_n": 100,
+        "weights": {
+          "momentum": 0.33,
+          "long_momentum": 0.00,
+          "valuation": 0.00,
+          "quality": 0.00,
+          "low_volatility": 0.34,
+          "low_drawdown": 0.00,
+          "trend_quality": 0.00,
+          "liquidity": 0.33
+        }
+      }
+    ]
+  },
+  "data": {
+    "history_source": "baostock",
+    "enrich_metadata": false
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "paths": {
+    "cache_dir": "data/cache_breadth_guarded_metadata_v2_forward",
+    "output_dir": "outputs_breadth_guarded_metadata_v2_forward",
+    "state_db": "data/state_breadth_guarded_metadata_v2_forward.sqlite3"
+  },
+  "validation": {
+    "candidate_path": "data/live_candidate_breadth_guarded_metadata_v2_forward.json",
+    "research_only": true,
+    "optimized_on_current_cache": true,
+    "experiment_status": "preregistered_forward_only",
+    "experiment_reason": "Forward-only replacement after deterministic GB18030 industry metadata repair and industry-code alias consolidation.",
+    "research_rationale": "Retain the fixed breadth-risk overlay and stock-selection logic while correcting industry grouping semantics; no prior forward days or promotion evidence are inherited.",
+    "primary_challenger_config": "",
+    "primary_challenger_strict": false,
+    "require_frozen_input_evidence": true,
+    "research_archive_configs": [],
+    "research_governance_state_path": "data/research_governance_breadth_guarded_metadata_v2_forward.json",
+    "research_time_folds": 3
+  },
+  "live_guard": {
+    "max_forward_active_drawdown": 0.10,
+    "max_forward_tracking_error": 0.20,
+    "min_forward_information_ratio": 0.00
+  },
+  "breadth_overlay": {
+    "enabled": true,
+    "moving_average_days": 60,
+    "max_stale_trade_days": 5,
+    "min_history_ratio": 0.75,
+    "min_symbols": 80,
+    "weak_threshold": 0.35,
+    "critical_threshold": 0.20,
+    "weak_exposure": 0.70,
+    "critical_exposure": 0.40
+  },
+  "strategy": {
+    "name": "liqrob100_breadth_guarded_metadata_v2_forward",
+    "top_n": 100,
+    "max_stock_weight": 0.05,
+    "max_industry_weight": 0.30,
+    "post_trade_industry_cap": {
+      "enabled": true,
+      "drift_tolerance": 0.015
+    },
+    "weighting": "liquidity_sqrt",
+    "lookbacks": {
+      "momentum": 60,
+      "long_momentum": 120,
+      "volatility": 60,
+      "drawdown": 60,
+      "short_reversal": 20,
+      "liquidity": 60
+    },
+    "weights": {
+      "momentum": 0.15,
+      "long_momentum": 0.00,
+      "valuation": 0.00,
+      "quality": 0.00,
+      "low_volatility": 0.25,
+      "low_drawdown": 0.00,
+      "trend_quality": 0.00,
+      "liquidity": 0.60
+    }
+  },
+  "walk_forward": {
+    "enabled": true,
+    "selection_mode": "fixed",
+    "train_days": 420,
+    "test_days": 126,
+    "step_days": 126,
+    "candidates": [
+      {"name": "local_top80", "top_n": 80, "weights": {"momentum": 0.15, "long_momentum": 0.00, "valuation": 0.00, "quality": 0.00, "low_volatility": 0.25, "low_drawdown": 0.00, "trend_quality": 0.00, "liquidity": 0.60}},
+      {"name": "local_top120", "top_n": 120, "weights": {"momentum": 0.15, "long_momentum": 0.00, "valuation": 0.00, "quality": 0.00, "low_volatility": 0.25, "low_drawdown": 0.00, "trend_quality": 0.00, "liquidity": 0.60}},
+      {"name": "local_momentum_low", "weights": {"momentum": 0.10, "long_momentum": 0.00, "valuation": 0.00, "quality": 0.00, "low_volatility": 0.30, "low_drawdown": 0.00, "trend_quality": 0.00, "liquidity": 0.60}},
+      {"name": "local_momentum_high", "weights": {"momentum": 0.20, "long_momentum": 0.00, "valuation": 0.00, "quality": 0.00, "low_volatility": 0.20, "low_drawdown": 0.00, "trend_quality": 0.00, "liquidity": 0.60}},
+      {"name": "local_lookback_short", "lookbacks": {"momentum": 48, "long_momentum": 96, "volatility": 48, "drawdown": 48, "short_reversal": 16, "liquidity": 48}, "weights": {"momentum": 0.15, "long_momentum": 0.00, "valuation": 0.00, "quality": 0.00, "low_volatility": 0.25, "low_drawdown": 0.00, "trend_quality": 0.00, "liquidity": 0.60}},
+      {"name": "local_lookback_long", "lookbacks": {"momentum": 72, "long_momentum": 144, "volatility": 72, "drawdown": 72, "short_reversal": 24, "liquidity": 72}, "weights": {"momentum": 0.15, "long_momentum": 0.00, "valuation": 0.00, "quality": 0.00, "low_volatility": 0.25, "low_drawdown": 0.00, "trend_quality": 0.00, "liquidity": 0.60}}
+    ]
+  },
+  "data": {
+    "immutable_before_candidate_freeze": true,
+    "history_source": "baostock",
+    "enrich_metadata": false
+  }
+}
