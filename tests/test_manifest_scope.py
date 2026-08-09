@@ -60,6 +60,11 @@ def test_fetch_operations_do_not_change_strategy_hash_but_coverage_rules_do():
             "history_workers": 1,
             "history_backfill_tolerance_days": 31,
             "resume_partial_history": True,
+            "history_allow_estimated_amount_fallback": False,
+            "history_resume_require_trusted_provenance": True,
+            "history_overlap_tail_rows": 10,
+            "history_overlap_min_rows": 10,
+            "history_overlap_max_amount_median_relative_error": 0.08,
         }
     }
     behavioral = {"data": {**base["data"], "min_daily_price_coverage_ratio": 0.8}}

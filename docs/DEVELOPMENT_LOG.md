@@ -5,6 +5,79 @@ added directly below this introduction, newest first. It records verified facts;
 it is not a release-marketing document and does not replace generated audit
 artifacts.
 
+## 2026-08-10 - Add trust-gated historical source failover
+
+**Objective**
+
+Resume independent long-history evidence collection with a healthy reported-
+amount source while removing untrusted staging and preserving every strategy and
+live-execution boundary.
+
+**Changes**
+
+- Added Sina `stock_zh_a_daily` between Eastmoney and Tencent in the AkShare
+  history chain, preserving reported volume and amount provenance.
+- Added configurable recent-overlap validation for close, volume, and amount;
+  accepted source metrics are persisted per symbol in the provenance schema.
+- Made partial checkpoints write provenance before prices and extended the
+  BaoStock callback to checkpoint matching provenance rows.
+- Bound persisted source-outage backoff to the combined default/override source
+  plan identity, so a changed provider plan does not inherit an obsolete delay.
+- Changed only the isolated extended-history configuration to automatic AkShare
+  failover, disabled its currently unavailable BaoStock second fallback,
+  rejected estimated amount, and required trusted provenance for resume.
+- Added ADR 0008, architecture rules, and runbook guidance. Acquisition trust
+  controls remain outside strategy identity; accepted data remains manifest
+  bound.
+
+**Architecture and safety**
+
+- Audit found 97 structurally valid rows with unknown resumed source and one
+  Tencent estimated-amount row. They were removed from trusted completion and
+  must be reacquired; the lower count is an evidence correction.
+- The formal `data/cache/prices.parquet` remained unchanged with timestamp
+  2026-08-09 20:40:03 throughout incomplete staging runs.
+- Default strategy hash remains exactly
+  `2385b5894c33875d0afc519d3dc0f3027472ad42cd64d07438d8e2a34822b707`
+  and matches the current main run manifest. No strategy parameters, frozen
+  candidates, promotion thresholds, or execution authority changed.
+- Broker submission and service submission remain disabled, emergency stop is
+  active, and live ledger, certification, active-strategy, generic-order, and
+  RPA-order artifacts remain absent.
+
+**Verification**
+
+- Isolated probe for `000001` returned 2,086 rows from 2018-01-02 through
+  2026-08-07 using Sina reported amount. Its latest 60-date overlap had close
+  median error 0, volume median error below 0.000001, and amount median error
+  0.56%.
+- A deliberately bounded 10-minute run exposed the old provenance checkpoint
+  gap and timed out safely with audit exit 124; no formal cache replacement
+  occurred. The corrected no-BaoStock batch then finished with 25/25 success.
+- After strict provenance filtering, trusted progress intentionally reset from
+  the apparent 139 to 52 symbols. Two successful bounded batches advanced it to
+  100/800 with zero current failures: 23 BaoStock and 77 Sina rows, all
+  `amount_quality=reported`; all 77 Sina rows passed overlap validation.
+- Focused final regression: `62 passed in 5.68s`. Full regression:
+  `1067 passed, 39 subtests passed in 160.66s`.
+- Current-user history daemon PID 3952 is waiting for 04:16 with source status
+  `ok`; observation supervisor PID 23068 and Git sync PID 21848 remain healthy.
+- Chinese local status and report were refreshed. Strategy remains
+  `pause_paper_orders`, strict live is false, and Huatai read-only refresh still
+  reports `broker_authentication_required`.
+
+**Remaining work**
+
+- Continue the trusted 100/800 acquisition and run fixed isolated validation
+  only after authoritative 800/800, zero-failure completion.
+- Investigate historical provider-era volume/amount discontinuities found in the
+  current mixed cache; do not rely on current historical liquidity results as
+  independent validation before the trusted cache completes.
+- Continue the frozen 60-day common forward window without tuning. Broker
+  authentication, live-ledger initialization, certification, and any Canary
+  submission remain separate operator-authorized future steps.
+
+
 ## 2026-08-10 - Bind daily signals to committed data and back off source outages
 
 **Objective**

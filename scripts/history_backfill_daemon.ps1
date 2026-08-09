@@ -33,6 +33,11 @@ $quietEndTime = [datetime]::ParseExact($QuietEnd, "HH:mm", [Globalization.Cultur
 $resolvedConfig = Resolve-ProjectPath $Config
 $resolvedOutput = Resolve-ProjectPath $OutputDir
 if (-not (Test-Path -LiteralPath $resolvedConfig)) { throw "Missing config: $resolvedConfig" }
+$defaultConfig = Join-Path $projectRoot "configs\default.yaml"
+if (-not (Test-Path -LiteralPath $defaultConfig)) { throw "Missing default config: $defaultConfig" }
+$defaultConfigHash = (Get-FileHash -LiteralPath $defaultConfig -Algorithm SHA256).Hash.ToLowerInvariant()
+$overrideConfigHash = (Get-FileHash -LiteralPath $resolvedConfig -Algorithm SHA256).Hash.ToLowerInvariant()
+$sourcePlanIdentity = "${defaultConfigHash}:${overrideConfigHash}"
 New-Item -ItemType Directory -Path $resolvedOutput -Force | Out-Null
 
 $progressPath = Join-Path $projectRoot "data\cache\history_backfill_progress_extended_history_validation.parquet"
@@ -52,6 +57,7 @@ if (Test-Path -LiteralPath $statusPath) {
         $previousNextRun = [string]$previousStatus.next_run_at
         if (
             [string]$previousStatus.state -eq "source_unavailable" -and
+            [string]$previousStatus.source_plan_identity -eq $sourcePlanIdentity -and
             $previousNextRun -and
             [DateTimeOffset]::Parse($previousNextRun).LocalDateTime -gt (Get-Date)
         ) {
@@ -68,11 +74,12 @@ if (Test-Path -LiteralPath $statusPath) {
 
 function Write-Status([string]$State, [string]$Message, [object]$Progress, [object]$ExitCode, [object]$NextRunAt) {
     $payload = [ordered]@{
-        schema_version = 1
+        schema_version = 2
         state = $State
         mode = "research_history_backfill"
         pid = $PID
         config = $resolvedConfig
+        source_plan_identity = $sourcePlanIdentity
         updated_at = (Get-Date).ToString("o")
         last_exit_code = $ExitCode
         next_run_at = if ($null -eq $NextRunAt) { $null } else { ([datetime]$NextRunAt).ToString("o") }

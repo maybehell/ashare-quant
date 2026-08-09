@@ -4,6 +4,12 @@
     "state_db": "data/state_extended_history_validation.sqlite3"
   },
   "data": {
+    "history_source": "auto",
+    "history_fallback_to_baostock": false,
+    "history_allow_estimated_amount_fallback": false,
+    "history_resume_require_trusted_provenance": true,
+    "history_overlap_tail_rows": 10,
+    "history_overlap_min_rows": 10,
     "history_request_budget": 25,
     "history_staging_namespace": "extended_history_validation"
   },

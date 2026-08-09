@@ -32,6 +32,13 @@ STOCK_COLUMNS = ["symbol", "name", "board", "industry", "list_date", "is_st"]
 FUNDAMENTAL_COLUMNS = ["date", "symbol", "pe", "pb", "roe"]
 BENCHMARK_COLUMNS = ["date", "symbol", "name", "close"]
 TRADE_CALENDAR_COLUMNS = ["date", "is_trading_day", "source", "retrieved_at"]
+HISTORY_PROVENANCE_COLUMNS = [
+    "symbol", "source", "first_date", "last_date", "rows", "amount_quality",
+    "overlap_status", "overlap_rows",
+    "overlap_close_median_relative_error",
+    "overlap_volume_median_relative_error",
+    "overlap_amount_median_relative_error",
+]
 
 
 @dataclass
@@ -429,6 +436,9 @@ def fetch_akshare(store: DataStore, config: dict[str, Any]) -> list[Path]:
         price_frames = []
         failures = []
         history_provenance: list[dict[str, object]] = []
+        history_overlap_reference = normalize_prices(
+            store.read_frame("prices", required=False)
+        )
         partial_frame_name = history_staging_frame_name(config, "prices_partial")
         provenance_frame_name = history_staging_frame_name(
             config,
@@ -510,13 +520,44 @@ def fetch_akshare(store: DataStore, config: dict[str, Any]) -> list[Path]:
                 failures.append({"symbol": symbol, "stage": "history", "error": str(error or "empty result")})
             else:
                 normalized, provenance = result
-                price_frames.append(normalized)
-                history_provenance.append(provenance)
-                if provenance["source"] != "stock_zh_a_hist":
-                    fallback_history_count += 1
+                overlap, overlap_issues = history_overlap_quality(
+                    normalized,
+                    history_overlap_reference,
+                    config,
+                )
+                provenance.update(overlap)
+                allow_estimated = bool(
+                    config.get("data", {}).get(
+                        "history_allow_estimated_amount_fallback",
+                        True,
+                    )
+                )
+                trust_issues = list(overlap_issues)
+                if provenance.get("amount_quality") != "reported" and not allow_estimated:
+                    trust_issues.append(
+                        f"amount quality {provenance.get('amount_quality')} is not allowed"
+                    )
+                if trust_issues and provenance["source"] != "stock_zh_a_hist":
+                    failures.append(
+                        {
+                            "symbol": symbol,
+                            "stage": "history",
+                            "error": f"{provenance['source']} trust validation: "
+                            + "; ".join(trust_issues),
+                        }
+                    )
+                else:
+                    price_frames.append(normalized)
+                    history_provenance.append(provenance)
+                    if provenance["source"] != "stock_zh_a_hist":
+                        fallback_history_count += 1
             if checkpoint_every > 0 and idx % checkpoint_every == 0:
                 if price_frames:
                     partial = normalize_prices(pd.concat(price_frames, ignore_index=True))
+                    store.write_frame(
+                        provenance_frame_name,
+                        pd.DataFrame(history_provenance, columns=HISTORY_PROVENANCE_COLUMNS),
+                    )
                     store.write_frame(partial_frame_name, partial)
                     partial_rows = len(partial)
                 else:
@@ -567,12 +608,24 @@ def fetch_akshare(store: DataStore, config: dict[str, Any]) -> list[Path]:
                 for row in failures
                 if row.get("stage") != "history" or str(row.get("symbol", "")) not in target_set
             ]
-            def baostock_checkpoint(request_count: int, batch_frames: list[pd.DataFrame], error_count: int) -> None:
+            def baostock_checkpoint(
+                request_count: int,
+                batch_frames: list[pd.DataFrame],
+                batch_provenance_rows: list[dict[str, object]],
+                error_count: int,
+            ) -> None:
                 if checkpoint_every <= 0 or request_count % checkpoint_every != 0:
                     return
                 combined = price_frames + batch_frames
                 partial = normalize_prices(pd.concat(combined, ignore_index=True)) if combined else pd.DataFrame(columns=PRICE_COLUMNS)
                 if not partial.empty:
+                    store.write_frame(
+                        provenance_frame_name,
+                        pd.DataFrame(
+                            history_provenance + batch_provenance_rows,
+                            columns=HISTORY_PROVENANCE_COLUMNS,
+                        ),
+                    )
                     store.write_frame(partial_frame_name, partial)
                 print(
                     f"BaoStock requests={request_count}; completed={len(batch_frames)}/{len(baostock_targets)}; "
@@ -856,7 +909,7 @@ def write_fetch_outputs(
         store.write_frame("fundamentals", normalize_fundamentals(fundamentals)),
         store.write_frame("benchmark", normalize_benchmark(benchmark)),
         store.write_frame("fetch_summary", fetch_summary),
-        store.write_frame("fetch_history_provenance", pd.DataFrame(history_provenance or [], columns=["symbol", "source", "first_date", "last_date", "rows", "amount_quality"])),
+        store.write_frame("fetch_history_provenance", pd.DataFrame(history_provenance or [], columns=HISTORY_PROVENANCE_COLUMNS)),
     ]
     if failures:
         paths.append(store.write_frame("fetch_failures", pd.DataFrame(failures)))
@@ -1047,9 +1100,19 @@ def resumable_partial_history(
         end_covered = last_date >= end
         if not start_covered or not end_covered or price_frame_issues(candidate):
             continue
+        restored = dict(provenance_by_symbol.get(clean_symbol, {}))
+        restored.setdefault("source", "resumed_partial_unknown_source")
+        restored.setdefault("amount_quality", "preserved_normalized")
+        require_trusted_provenance = bool(
+            config.get("data", {}).get(
+                "history_resume_require_trusted_provenance",
+                False,
+            )
+        )
+        if require_trusted_provenance and restored.get("amount_quality") != "reported":
+            continue
         frames.append(candidate)
         resumed.add(clean_symbol)
-        restored = dict(provenance_by_symbol.get(clean_symbol, {}))
         restored.update(
             {
                 "symbol": clean_symbol,
@@ -1058,8 +1121,6 @@ def resumable_partial_history(
                 "rows": len(candidate),
             }
         )
-        restored.setdefault("source", "resumed_partial_unknown_source")
-        restored.setdefault("amount_quality", "preserved_normalized")
         provenance.append(restored)
     return frames, provenance, resumed
 
@@ -1106,7 +1167,7 @@ def fetch_baostock_history_batch(
                     except Exception as exc:
                         errors[symbol] = f"baostock: {exc}"
                     if on_progress is not None:
-                        on_progress(request_count, frames, len(errors))
+                        on_progress(request_count, frames, provenance_rows, len(errors))
         except Exception as exc:
             for symbol in pending:
                 if symbol not in completed:
@@ -1485,6 +1546,18 @@ def fetch_history_frame(ak: Any, symbol: str, start: date, end: date) -> tuple[p
     except Exception as exc:
         errors.append(f"stock_zh_a_hist: {exc}")
     try:
+        hist = ak.stock_zh_a_daily(
+            symbol=tx_symbol(symbol),
+            start_date=start_text,
+            end_date=end_text,
+            adjust="qfq",
+        )
+        if not hist.empty:
+            return hist, "stock_zh_a_daily"
+        errors.append("stock_zh_a_daily: empty")
+    except Exception as exc:
+        errors.append(f"stock_zh_a_daily: {exc}")
+    try:
         hist = ak.stock_zh_a_hist_tx(symbol=tx_symbol(symbol), start_date=start_text, end_date=end_text, adjust="qfq")
         if not hist.empty:
             return hist, "stock_zh_a_hist_tx"
@@ -1507,7 +1580,12 @@ def fetch_symbol_history(
             hist, source = fetch_history_frame(ak, symbol, start, end)
             if hist.empty:
                 raise ValueError("empty history")
-            normalized = history_from_akshare(hist, symbol) if source == "stock_zh_a_hist" else history_from_tx(hist, symbol)
+            reported_amount_sources = {"stock_zh_a_hist", "stock_zh_a_daily"}
+            normalized = (
+                history_from_akshare(hist, symbol)
+                if source in reported_amount_sources
+                else history_from_tx(hist, symbol)
+            )
             issues = price_frame_issues(normalized)
             if issues and source == "stock_zh_a_hist_tx":
                 normalized = repair_tx_history_with_hfq(ak, symbol, start, end, normalized)
@@ -1521,7 +1599,7 @@ def fetch_symbol_history(
                 "first_date": normalized["date"].min(),
                 "last_date": normalized["date"].max(),
                 "rows": len(normalized),
-                "amount_quality": "reported" if source == "stock_zh_a_hist" else "estimated_close_x_volume",
+                "amount_quality": "reported" if source in reported_amount_sources else "estimated_close_x_volume",
             }
         except Exception as exc:
             errors.append(f"attempt {attempt}: {exc}")
@@ -1731,6 +1809,63 @@ def history_from_tx(hist: pd.DataFrame, symbol: str) -> pd.DataFrame:
     out["symbol"] = symbol
     return out[PRICE_COLUMNS]
 
+
+def history_overlap_quality(
+    candidate: pd.DataFrame,
+    reference: pd.DataFrame,
+    config: dict[str, Any],
+) -> tuple[dict[str, object], list[str]]:
+    metrics: dict[str, object] = {
+        "overlap_status": "not_available",
+        "overlap_rows": 0,
+        "overlap_close_median_relative_error": None,
+        "overlap_volume_median_relative_error": None,
+        "overlap_amount_median_relative_error": None,
+    }
+    if candidate.empty or reference.empty:
+        return metrics, []
+    symbols = candidate["symbol"].map(normalize_symbol).dropna().unique()
+    if len(symbols) != 1:
+        return {**metrics, "overlap_status": "invalid_candidate_scope"}, [
+            "candidate history must contain exactly one symbol"
+        ]
+    symbol = str(symbols[0])
+    baseline = reference[reference["symbol"].map(normalize_symbol).eq(symbol)].copy()
+    if baseline.empty:
+        return metrics, []
+    left = normalize_prices(candidate)
+    right = normalize_prices(baseline)
+    joined = left.merge(right, on=["date", "symbol"], suffixes=("_new", "_reference"))
+    tail_rows = max(1, int(config.get("data", {}).get("history_overlap_tail_rows", 60)))
+    joined = joined.sort_values("date").tail(tail_rows)
+    metrics["overlap_rows"] = len(joined)
+    minimum_rows = max(1, int(config.get("data", {}).get("history_overlap_min_rows", 20)))
+    if len(joined) < minimum_rows:
+        metrics["overlap_status"] = "insufficient"
+        return metrics, [f"overlap rows={len(joined)} below {minimum_rows}"]
+
+    thresholds = {
+        "close": float(config.get("data", {}).get("history_overlap_max_close_median_relative_error", 0.01)),
+        "volume": float(config.get("data", {}).get("history_overlap_max_volume_median_relative_error", 0.01)),
+        "amount": float(config.get("data", {}).get("history_overlap_max_amount_median_relative_error", 0.10)),
+    }
+    issues: list[str] = []
+    for column, threshold in thresholds.items():
+        incoming = pd.to_numeric(joined[f"{column}_new"], errors="coerce")
+        existing = pd.to_numeric(joined[f"{column}_reference"], errors="coerce")
+        usable = incoming.notna() & existing.notna() & (existing.abs() > 1e-12)
+        if not usable.any():
+            issues.append(f"{column} overlap has no comparable rows")
+            continue
+        relative = (incoming[usable] - existing[usable]).abs() / existing[usable].abs()
+        median_error = float(relative.median())
+        metrics[f"overlap_{column}_median_relative_error"] = median_error
+        if median_error > threshold:
+            issues.append(
+                f"{column} median relative error={median_error:.6f} exceeds {threshold:.6f}"
+            )
+    metrics["overlap_status"] = "failed" if issues else "passed"
+    return metrics, issues
 
 def price_frame_issues(frame: pd.DataFrame) -> list[str]:
     issues: list[str] = []

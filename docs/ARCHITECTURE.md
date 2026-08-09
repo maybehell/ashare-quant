@@ -97,6 +97,14 @@ Rules:
   symbol-level failures. A source-wide outage returns a non-success audit code
   and enters a persisted restart-safe backoff; it never advances completion or
   replaces the formal cache.
+- Historical source failover is ordered and provenance preserving. The isolated
+  extended-history job may use Eastmoney, Sina, and Tencent through AkShare;
+  Sina rows are accepted only after recent overlap validation, and the fixed
+  validation job rejects estimated amount and untrusted resumed provenance.
+- Partial checkpoints write source provenance before corresponding prices so a
+  crash can lose recoverable work but cannot leave unproven prices eligible for
+  resume. Persisted source-outage backoff is reused only when the effective
+  default/override source-plan identity is unchanged.
 - Backtest, readiness, stress, capital-feasibility, paper/shadow signal, and
   broker-preview calculations use the exact symbol scope of the latest
   completed fetch. Account valuation may retain prices for held symbols outside
@@ -253,7 +261,7 @@ Additional constraints:
 | State/artifact | Authoritative writer | Consumers | Mutation policy |
 |---|---|---|---|
 | Parquet market cache and provenance | data layer | research, valuation | atomic refresh, source/date audit |
-| Namespaced historical backfill staging and progress | data layer and research-only daemon | data refresh, operator | resumable and replaceable; source status and restart-safe backoff are audited; never authoritative until complete formal-cache commit |
+| Namespaced historical backfill staging and progress | data layer and research-only daemon | data refresh, operator | resumable and replaceable; provenance precedes price checkpoints; source status, trust metrics, source-plan identity, and restart-safe backoff are audited; never authoritative until complete formal-cache commit |
 | Extended-history validation status | history validation workflow | operator, later research review | bind completed progress, fixed backtest config, and formal-price hash; never promotes or authorizes execution |
 | Research/backtest outputs | research workflow | governance, reports | replace by run; bind manifest; simulated orders use `backtest_orders.csv` only |
 | Frozen candidate and sealed inputs | candidate governance | forward observer, activation | immutable identity |

@@ -1,3 +1,6 @@
+from datetime import datetime, timedelta, timezone
+import hashlib
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -21,11 +24,90 @@ def test_history_daemon_has_audited_source_outage_backoff():
     assert "source_backoff_minutes" in text
     assert "Persisted historical source outage backoff is still active." in text
     assert "$sourceResumeAt" in text
+    assert "source_plan_identity" in text
+    assert "Get-FileHash" in text
     assert "validated partial data is preserved" in text
     assert '"history-validate"' in text
     assert '"auto-live-run"' not in text
     assert '"submit"' not in text.lower()
 
+
+def source_plan_identity() -> str:
+    default_hash = hashlib.sha256((ROOT / "configs" / "default.yaml").read_bytes()).hexdigest()
+    override_hash = hashlib.sha256(
+        (ROOT / "configs" / "extended_history_validation.yaml").read_bytes()
+    ).hexdigest()
+    return f"{default_hash}:{override_hash}"
+
+
+def run_dry_daemon(output_dir: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            "powershell.exe",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(DAEMON),
+            "-Config",
+            "configs/extended_history_validation.yaml",
+            "-OutputDir",
+            str(output_dir),
+            "-RunOnce",
+            "-DryRun",
+            "-QuietStart",
+            "00:00",
+            "-QuietEnd",
+            "00:00",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=20,
+        check=False,
+    )
+
+
+def write_future_source_backoff(output_dir: Path, identity: str) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "schema_version": 2,
+        "state": "source_unavailable",
+        "source_plan_identity": identity,
+        "next_run_at": (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
+        "source_failure_streak": 2,
+        "source_backoff_minutes": 240,
+    }
+    (output_dir / "history_backfill_daemon_status.json").write_text(
+        json.dumps(payload), encoding="utf-8"
+    )
+
+
+def test_history_daemon_discards_backoff_from_changed_source_plan(tmp_path):
+    output_dir = tmp_path / "changed-plan"
+    write_future_source_backoff(output_dir, "obsolete")
+
+    completed = run_dry_daemon(output_dir)
+
+    assert completed.returncode == 0, completed.stderr
+    status = json.loads((output_dir / "history_backfill_daemon_status.json").read_text(encoding="utf-8-sig"))
+    assert status["state"] == "dry_run"
+    assert status["source_plan_identity"] == source_plan_identity()
+
+
+def test_history_daemon_honors_backoff_for_current_source_plan(tmp_path):
+    output_dir = tmp_path / "current-plan"
+    write_future_source_backoff(output_dir, source_plan_identity())
+
+    completed = run_dry_daemon(output_dir)
+
+    assert completed.returncode == 75, completed.stderr
+    status = json.loads((output_dir / "history_backfill_daemon_status.json").read_text(encoding="utf-8-sig"))
+    assert status["state"] == "source_unavailable"
+    assert status["source_failure_streak"] == 2
+    assert "still active" in status["message"]
 
 def test_history_startup_installer_persists_source_backoff_setting():
     text = INSTALLER.read_text(encoding="utf-8")

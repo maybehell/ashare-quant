@@ -32,6 +32,7 @@ from ashare_quant.data import (
     normalize_trade_calendar,
     normalize_stocks,
     history_from_tx,
+    history_overlap_quality,
     historical_backfill_required,
     history_backfill_completion_status,
     history_staging_frame_name,
@@ -301,6 +302,45 @@ class DataFetchTests(unittest.TestCase):
         self.assertEqual(provenance[0]["source"], "baostock")
         self.assertEqual(provenance[0]["amount_quality"], "derived_turnover")
         self.assertEqual(provenance[0]["rows"], 2)
+    def test_partial_history_strict_resume_rejects_unknown_or_estimated_amount(self):
+        root = Path.cwd() / "test_outputs" / "partial_history_strict_provenance"
+        store = DataStore(cache_dir=root / "cache", state_db=root / "state.sqlite3")
+        rows = []
+        for symbol in ["000001", "000002", "000003"]:
+            rows.extend(
+                [
+                    {"date": "2018-01-02", "symbol": symbol, "open": 10, "high": 10, "low": 10, "close": 10, "volume": 100, "amount": 1000},
+                    {"date": "2026-08-07", "symbol": symbol, "open": 11, "high": 11, "low": 11, "close": 11, "volume": 100, "amount": 1100},
+                ]
+            )
+        store.write_frame("prices_partial", pd.DataFrame(rows))
+        store.write_frame(
+            "fetch_history_partial_provenance",
+            pd.DataFrame(
+                [
+                    {"symbol": "000001", "source": "stock_zh_a_daily", "amount_quality": "reported"},
+                    {"symbol": "000002", "source": "stock_zh_a_hist_tx", "amount_quality": "estimated_close_x_volume"},
+                ]
+            ),
+        )
+
+        frames, provenance, resumed = resumable_partial_history(
+            store,
+            ["000001", "000002", "000003"],
+            {symbol: date(2018, 1, 1) for symbol in ["000001", "000002", "000003"]},
+            date(2026, 8, 7),
+            {
+                "data": {
+                    "resume_partial_history": True,
+                    "history_backfill_tolerance_days": 31,
+                    "history_resume_require_trusted_provenance": True,
+                }
+            },
+        )
+
+        self.assertEqual(resumed, {"000001"})
+        self.assertEqual(len(frames), 1)
+        self.assertEqual(provenance[0]["amount_quality"], "reported")
     def test_merge_fetched_cache_preserves_failed_symbol_history_and_cached_benchmark(self):
         root = Path.cwd() / "test_outputs" / "merge_fetched_cache"
         config = {
@@ -734,13 +774,15 @@ class DataFetchTests(unittest.TestCase):
             {"000001": pd.Timestamp("2026-01-01").date()},
             True,
             "price_checkpoint",
-            history_provenance=[{"symbol": "000001", "source": "stock_zh_a_hist_tx", "first_date": "2026-01-02", "last_date": "2026-01-02", "rows": 1, "amount_quality": "estimated_close_x_volume"}],
+            history_provenance=[{"symbol": "000001", "source": "stock_zh_a_hist_tx", "first_date": "2026-01-02", "last_date": "2026-01-02", "rows": 1, "amount_quality": "estimated_close_x_volume", "overlap_status": "passed", "overlap_rows": 20, "overlap_close_median_relative_error": 0.001}],
         )
 
         self.assertEqual(len(store.read_frame("prices")), 1)
         self.assertEqual(store.read_frame("fetch_summary").iloc[0]["stage"], "price_checkpoint")
         provenance = store.read_frame("fetch_history_provenance")
         self.assertEqual(provenance.iloc[0]["amount_quality"], "estimated_close_x_volume")
+        self.assertEqual(provenance.iloc[0]["overlap_status"], "passed")
+        self.assertEqual(int(provenance.iloc[0]["overlap_rows"]), 20)
 
     def test_normalize_benchmark_canonicalizes_provider_symbol_alias(self):
         frame = normalize_benchmark(
@@ -810,6 +852,7 @@ class DataFetchTests(unittest.TestCase):
         self.assertEqual(socket.getdefaulttimeout(), original_socket_timeout)
     def test_baostock_batch_reconnects_after_session_failure(self):
         session_attempts = []
+        checkpoints = []
 
         @contextmanager
         def session_factory():
@@ -840,11 +883,15 @@ class DataFetchTests(unittest.TestCase):
             {"data": {"history_session_retries": 2, "history_session_retry_delay_seconds": 0}},
             session_factory=session_factory,
             fetcher=fetcher,
+            on_progress=lambda count, frames, provenance, errors: checkpoints.append(
+                (count, len(frames), len(provenance), errors)
+            ),
         )
 
         self.assertEqual(session_attempts, [1, 2])
         self.assertEqual(len(frames), 1)
         self.assertEqual(errors, {})
+        self.assertEqual(checkpoints[-1], (1, 1, 1, 0))
 
     def test_baostock_batch_retries_only_unfinished_symbols(self):
         calls = {"600000": 0, "000001": 0}
@@ -1087,6 +1134,53 @@ class DataFetchTests(unittest.TestCase):
         self.assertEqual(out["amount"].iloc[0], 110000)
         self.assertEqual(tx_symbol("600000"), "sh600000")
         self.assertEqual(tx_symbol("000001"), "sz000001")
+    def test_history_overlap_quality_passes_recent_reported_series(self):
+        dates = pd.bdate_range("2026-01-01", periods=25).date
+        reference = pd.DataFrame(
+            [{
+                "date": value,
+                "symbol": "600000",
+                "open": 10,
+                "high": 11,
+                "low": 9,
+                "close": 10,
+                "volume": 10000,
+                "amount": 100000,
+            } for value in dates]
+        )
+        candidate = reference.copy()
+        candidate["close"] = 10.05
+        candidate["amount"] = 105000
+
+        metrics, issues = history_overlap_quality(candidate, reference, {"data": {}})
+
+        self.assertFalse(issues)
+        self.assertEqual(metrics["overlap_status"], "passed")
+        self.assertEqual(metrics["overlap_rows"], 25)
+        self.assertLess(metrics["overlap_close_median_relative_error"], 0.01)
+        self.assertLess(metrics["overlap_amount_median_relative_error"], 0.10)
+
+    def test_history_overlap_quality_rejects_material_amount_divergence(self):
+        dates = pd.bdate_range("2026-01-01", periods=25).date
+        reference = pd.DataFrame(
+            [{
+                "date": value,
+                "symbol": "600000",
+                "open": 10,
+                "high": 11,
+                "low": 9,
+                "close": 10,
+                "volume": 10000,
+                "amount": 100000,
+            } for value in dates]
+        )
+        candidate = reference.copy()
+        candidate["amount"] = 150000
+
+        metrics, issues = history_overlap_quality(candidate, reference, {"data": {}})
+
+        self.assertEqual(metrics["overlap_status"], "failed")
+        self.assertTrue(any("amount median relative error" in issue for issue in issues))
     def test_price_frame_issues_rejects_nonpositive_adjusted_prices(self):
         frame = pd.DataFrame(
             [
@@ -1127,6 +1221,47 @@ class DataFetchTests(unittest.TestCase):
         self.assertFalse(price_frame_issues(repaired))
         self.assertTrue((repaired[["open", "high", "low", "close"]] > 0).all().all())
 
+
+    def test_fetch_symbol_history_uses_sina_reported_amount_before_tencent(self):
+        class FakeAk:
+            tx_called = False
+
+            def stock_zh_a_hist(self, **kwargs):
+                raise ConnectionError("eastmoney down")
+
+            def stock_zh_a_daily(self, **kwargs):
+                self.daily_kwargs = kwargs
+                return pd.DataFrame(
+                    [{
+                        "date": "2026-01-02",
+                        "open": 10,
+                        "high": 11,
+                        "low": 9,
+                        "close": 10,
+                        "volume": 12300,
+                        "amount": 125000,
+                    }]
+                )
+
+            def stock_zh_a_hist_tx(self, **kwargs):
+                self.tx_called = True
+                raise AssertionError("Tencent should not run after Sina succeeds")
+
+        client = FakeAk()
+        frame, provenance = fetch_symbol_history(
+            client,
+            "600000",
+            pd.Timestamp("2026-01-01").date(),
+            pd.Timestamp("2026-01-03").date(),
+            retries=1,
+        )
+
+        self.assertFalse(client.tx_called)
+        self.assertEqual(client.daily_kwargs["symbol"], "sh600000")
+        self.assertEqual(float(frame.iloc[0]["volume"]), 12300.0)
+        self.assertEqual(float(frame.iloc[0]["amount"]), 125000.0)
+        self.assertEqual(provenance["source"], "stock_zh_a_daily")
+        self.assertEqual(provenance["amount_quality"], "reported")
 
     def test_fetch_symbol_history_retries_and_returns_provenance(self):
         class FakeAk:

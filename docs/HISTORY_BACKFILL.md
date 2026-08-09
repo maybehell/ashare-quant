@@ -66,3 +66,20 @@ completed；该状态仍然不是策略激活或实盘授权。
 3. 比较更长历史下的超额收益、最大回撤、年度稳定性、滚动窗口和 bootstrap 区间。
 4. 继续使用冻结后的前向观察，不把历史扩展结果直接当作策略晋级依据。
 5. 任何策略激活、实盘账本初始化、Canary 认证和提交开关仍走各自独立门禁。
+
+## 2026-08-10 trusted source-chain update
+
+The isolated extended-history job now uses the ordered AkShare chain Eastmoney,
+Sina, then Tencent. Sina is accepted with its reported volume and amount only
+after recent overlap checks against committed market rows. This job rejects
+estimated amount and no longer resumes `resumed_partial_unknown_source` rows.
+A lower completed-symbol count after this upgrade is an intentional trust
+correction, not data loss from the formal cache.
+
+Partial checkpoints persist per-symbol provenance before prices. The daemon
+status schema includes `source_plan_identity`; a future source-outage delay is
+reused only for the same default and override configuration fingerprints.
+During the current BaoStock outage the isolated config disables BaoStock as a
+second fallback, while the ordinary daily configuration remains unchanged.
+None of these staging states authorizes strategy promotion, paper orders,
+broker access, live-ledger initialization, certification, or submission.
