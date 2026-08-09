@@ -90,6 +90,9 @@ def write_local_operator_status(
     formal_candidate = _read_csv(strategy_dir / "forward_only_candidate_observation.csv")
     broker_roadmap = _read_csv(strategy_dir / "broker_deployment_roadmap.csv")
     daemon_status = _read_json(strategy_dir / "observation_daemon_status.json")
+    history_daemon_status = _read_json(
+        project_path("outputs_extended_history_validation/history_backfill_daemon_status.json")
+    )
     scheduled_observation = _read_csv(strategy_dir / "daily_observation_summary.csv")
     broker_refresh = _read_csv(live_dir / "huatai_read_only_refresh.csv")
     client_status = _read_csv(live_dir / "huatai_client_status.csv")
@@ -164,6 +167,9 @@ def write_local_operator_status(
         max_age_seconds=int(
             float(strategy_config.get("observation_task", {}).get("daemon_heartbeat_max_minutes", 5)) * 60
         ),
+    )
+    history_daemon_ok, history_daemon_value, history_daemon_message = (
+        _history_backfill_daemon_status(history_daemon_status)
     )
     observation_settings = strategy_config.get("observation_task", {}) if isinstance(strategy_config.get("observation_task"), dict) else {}
     scheduled_required = str(observation_settings.get("required", False)).strip().lower() in {"true", "1", "yes"}
@@ -314,6 +320,7 @@ def write_local_operator_status(
         _row("strategy_candidate_family", family_value, family_ok, "strategy", "\u5019\u9009\u65cf\u6709\u6548\u72ec\u7acb\u6570\u91cf\u5ba1\u8ba1\uff1b\u7528\u4e8e\u9632\u6b62\u9ad8\u5ea6\u76f8\u4f3c\u53c2\u6570\u53d8\u4f53\u865a\u589e\u7814\u7a76\u8bc1\u636e\u3002"),
         _row("strategy_family_selection", family_selection_value, family_selection_ok, "strategy", "\u5019\u9009\u53bb\u91cd\u540e\u7684\u7b56\u7565\u65cf\u7ea7\u4e92\u8865\u7559\u51fa\u5ba1\u8ba1\u3002"),
         _row("primary_challenger_observation", challenger_value, challenger_ok, "research", challenger_message),
+        _row("extended_history_backfill", history_daemon_value, history_daemon_ok, "research", history_daemon_message),
         _row("strict_live_allowed", strict_allowed or "False", strict_strategy, "strategy", "严格实盘策略门禁。"),
         _row("recovery_candidate", recovery_value, recovery_ok, "research", recovery_message),
         _row("recovery_candidate_capital", recovery_capital_value, recovery_capital_ok, "research", recovery_capital_message),
@@ -504,6 +511,35 @@ def _observation_daemon_status(
     if passed:
         return True, value, "自动观察守护心跳正常；该进程只刷新冻结候选，不生成实盘订单。"
     return False, value, "自动观察守护缺失、停止、心跳过期或运行代码已过时；请重启观察守护进程。"
+
+
+def _history_backfill_daemon_status(
+    payload: dict[str, Any],
+) -> tuple[bool, str, str]:
+    if not payload:
+        return False, "missing", "尚未发现长历史补全状态；该研究证据不会影响现有正式缓存。"
+    state = str(payload.get("state", "") or "").strip().lower()
+    progress = payload.get("progress", {}) if isinstance(payload.get("progress"), dict) else {}
+    source_status = str(progress.get("source_status", "unknown") or "unknown").strip().lower()
+    def safe_count(value: object) -> int:
+        numeric = pd.to_numeric(value, errors="coerce")
+        return 0 if pd.isna(numeric) else max(int(numeric), 0)
+
+    completed = safe_count(progress.get("completed_symbols", 0))
+    requested = safe_count(progress.get("requested_symbols", 0))
+    next_run = str(payload.get("next_run_at", "") or "").strip()
+    backoff = safe_count(payload.get("source_backoff_minutes", 0))
+    value = (
+        f"state={state or 'missing'};completed={completed}/{requested};"
+        f"source={source_status};backoff_minutes={backoff};next={next_run or 'none'}"
+    )
+    if state == "complete":
+        return True, value, "长历史行情与固定策略隔离验证已完成；该结果仍不自动授权策略晋级。"
+    if state == "source_unavailable" or source_status == "source_unavailable":
+        return False, value, "长历史公共数据源当前不可用；已验证暂存数据保持不变，系统正在熔断退避，正式缓存未被替换。"
+    if state in {"waiting", "running", "deferred", "validating"}:
+        return True, value, "长历史研究任务正在有界运行或等待；未完成数据不会进入正式回测。"
+    return False, value, "长历史研究任务未就绪；检查 daemon 状态和日志，正式缓存仍保持原样。"
 
 
 def _observation_startup_status(

@@ -5,6 +5,72 @@ added directly below this introduction, newest first. It records verified facts;
 it is not a release-marketing document and does not replace generated audit
 artifacts.
 
+## 2026-08-10 - Bind daily signals to committed data and back off source outages
+
+**Objective**
+
+Improve strategy evidence credibility and unattended stability without tuning on
+current forward results, enabling broker submission, or initializing live state.
+
+**Changes**
+
+- Classified bounded long-history batches as `ok`, `degraded`,
+  `source_unavailable`, or `failed`, and persisted attempted/successful counts.
+- Added a restart-safe 240-minute source-outage backoff with audit exit code 75;
+  validated staging remains resumable and cannot replace the formal cache.
+- Exposed long-history source status in the Chinese local operator view as a
+  research warning that does not alter execution authority.
+- Excluded the new history staging/resume controls from strategy identity while
+  retaining market-file and run-manifest data binding.
+- Bound paper, shadow, broker capital feasibility, and broker order preview to
+  the exact latest completed fetch scope. Account marking retains all held-symbol
+  prices but resolves the latest complete date from that committed scope.
+- Recorded the durable decisions in ADR 0006 and ADR 0007 and updated the
+  architecture and history runbook.
+
+**Architecture and safety**
+
+- The raw cache may retain old symbols, but it no longer changes signal-date
+  completeness or target construction when a valid completed-fetch manifest is
+  present.
+- Paper and shadow provenance exposes committed-scope binding. Missing binding
+  remains research-only fallback evidence and cannot independently authorize
+  execution.
+- No candidate was tuned or promoted from current forward observations.
+- Broker submission and service submission remain disabled, emergency stop
+  remains active, and audited live-ledger, certification, active-strategy,
+  generic-order, and RPA-order files remain absent.
+
+**Verification**
+
+- A real bounded history attempt returned exit code 75 in 52.8 seconds with
+  `source_unavailable`, attempted 25, successful 0, and preserved 120/800
+  validated symbols. An immediate second run honored persisted backoff in 1.0
+  second without another network request.
+- Focused final regression passed: `134 passed in 5.60s`; full regression passed:
+  `1061 passed, 39 subtests passed in 154.52s`.
+- The primary challenger observation completed in 126.1 seconds and used the
+  committed 800-symbol scope through 2026-08-07 instead of the false raw-cache
+  date 2026-07-21.
+- The challenger retained strong historical metrics but failed current promotion
+  evidence: frozen forward excess return `-11.64%` over 20 trading days and
+  forward information ratio `-4.04`. Decision remains
+  `do_not_promote_quarantined_dependency`; no paper permission was granted.
+- Live evidence sync restored the frozen strategy hash and copied 34 evidence
+  files plus one manifest without copying orders, positions, or account state.
+- Restored local background tasks: observation supervisor PID 23068 with daemon
+  PID 23536, history daemon PID 5344 with source backoff until 05:58, and Git
+  sync daemon PID 21848 waiting for 22:30.
+
+**Remaining work**
+
+- Keep paper and live orders paused. Continue the frozen 60-day common forward
+  observation; do not optimize against the current 20-day challenger loss.
+- Complete independent long-history acquisition after the public source
+  recovers, then run the fixed isolated validation without promoting from it.
+- Manually restore Huatai authentication when current broker read-only evidence
+  is needed. Submission, live-ledger initialization, certification, and Canary
+  execution remain separately authorized future work.
 ## 2026-08-10 - Automate fail-closed Huatai read-only observation
 
 **Objective**

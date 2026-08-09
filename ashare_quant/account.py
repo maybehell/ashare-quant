@@ -10,7 +10,7 @@ import pandas as pd
 from pandas.errors import EmptyDataError
 
 from .config import project_path
-from .data import DataStore, normalize_symbol
+from .data import DataStore, committed_fetch_market_scope, normalize_symbol
 from .io_utils import atomic_to_csv
 from .validation import complete_market_dates, latest_close_map_asof, latest_data_date
 
@@ -410,7 +410,8 @@ def resolve_account_reset_date(
     if prices.empty:
         return date.today()
     benchmark = store.load_benchmark(required=False)
-    dates = complete_market_dates(prices, benchmark, config)
+    scoped_prices, _scope_ok, _scope_value = committed_fetch_market_scope(store, prices)
+    dates = complete_market_dates(scoped_prices, benchmark, config)
     return dates[-1] if dates else latest_data_date(prices) or date.today()
 
 
@@ -681,7 +682,8 @@ def resolve_account_mark_prices(
     if prices.empty:
         raise RuntimeError("cached prices are empty; refresh market data before marking account state")
     benchmark = store.load_benchmark(required=False)
-    dates = complete_market_dates(prices, benchmark, config)
+    scoped_prices, _scope_ok, _scope_value = committed_fetch_market_scope(store, prices)
+    dates = complete_market_dates(scoped_prices, benchmark, config)
     mark_date = dates[-1] if dates else latest_data_date(prices)
     if mark_date is None:
         raise RuntimeError("cannot resolve latest mark date from cached prices")
@@ -1174,7 +1176,8 @@ def resolve_import_pricing(
     if asof_date is not None:
         asof = pd.to_datetime(asof_date).date()
     else:
-        dates = complete_market_dates(prices, benchmark, config)
+        scoped_prices, _scope_ok, _scope_value = committed_fetch_market_scope(store, prices)
+        dates = complete_market_dates(scoped_prices, benchmark, config)
         asof = dates[-1] if dates else latest_data_date(prices)
     if asof is None:
         raise RuntimeError("cannot resolve account import date from cached prices")

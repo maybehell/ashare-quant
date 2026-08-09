@@ -6,6 +6,7 @@ param(
     [int]$IntervalMinutes = 60,
     [int]$MaxRuntimeMinutes = 30,
     [int]$MaxValidationRuntimeMinutes = 120,
+    [int]$SourceFailureBackoffMinutes = 240,
     [switch]$Register,
     [switch]$ConfirmReplace,
     [switch]$StartNow,
@@ -19,6 +20,7 @@ if (-not (Test-Path -LiteralPath $daemon)) { throw "Missing daemon: $daemon" }
 if ($IntervalMinutes -lt 15) { throw "IntervalMinutes must be at least 15." }
 if ($MaxRuntimeMinutes -lt 5) { throw "MaxRuntimeMinutes must be at least 5." }
 if ($MaxValidationRuntimeMinutes -lt 10) { throw "MaxValidationRuntimeMinutes must be at least 10." }
+if ($SourceFailureBackoffMinutes -lt $IntervalMinutes) { throw "SourceFailureBackoffMinutes must be at least IntervalMinutes." }
 
 function Resolve-ProjectPath([string]$Value) {
     if ([IO.Path]::IsPathRooted($Value)) { return [IO.Path]::GetFullPath($Value) }
@@ -38,7 +40,8 @@ $parts = @(
     "-MaxSymbols", $MaxSymbols,
     "-IntervalMinutes", $IntervalMinutes,
     "-MaxRuntimeMinutes", $MaxRuntimeMinutes,
-    "-MaxValidationRuntimeMinutes", $MaxValidationRuntimeMinutes
+    "-MaxValidationRuntimeMinutes", $MaxValidationRuntimeMinutes,
+    "-SourceFailureBackoffMinutes", $SourceFailureBackoffMinutes
 )
 $argumentLine = $parts -join " "
 $launcher = "@echo off" + [Environment]::NewLine +
@@ -49,6 +52,7 @@ Write-Host "Startup entry: $target"
 Write-Host "Mode: research_history_backfill"
 Write-Host "Interval: $IntervalMinutes minutes; max batch runtime: $MaxRuntimeMinutes minutes"
 Write-Host "Fixed-strategy validation timeout: $MaxValidationRuntimeMinutes minutes"
+Write-Host "Source-wide failure backoff: $SourceFailureBackoffMinutes minutes"
 Write-Host "The daemon exits after completed history passes fixed-strategy validation."
 if (-not $Register) {
     Write-Host "Preview only. Re-run with -Register to install the current-user Startup entry."

@@ -93,9 +93,19 @@ Rules:
   provenance, failures, and progress. A request budget may stage incomplete
   work, but only complete batches that pass the normal fetch-success threshold
   may replace the formal market cache.
-- Backtest, readiness, stress, and capital-feasibility evidence use the exact
-  symbol scope of the latest completed fetch. Derived evidence that can affect
-  execution readiness must bind to the current main run-manifest data identity.
+- Bounded history progress distinguishes source-wide unavailability from
+  symbol-level failures. A source-wide outage returns a non-success audit code
+  and enters a persisted restart-safe backoff; it never advances completion or
+  replaces the formal cache.
+- Backtest, readiness, stress, capital-feasibility, paper/shadow signal, and
+  broker-preview calculations use the exact symbol scope of the latest
+  completed fetch. Account valuation may retain prices for held symbols outside
+  that scope, but resolves the latest complete market date from the committed
+  scope. Derived evidence that can affect execution readiness must bind to the
+  current main run-manifest data identity.
+- Data-acquisition scheduling and resumability knobs are operational identity,
+  not strategy identity. They are excluded from the backtest strategy hash;
+  their actual data effects remain bound by market-file and run-manifest hashes.
 
 ### 3.3 Strategy research and portfolio construction
 
@@ -163,6 +173,8 @@ Responsibilities:
 Rules:
 
 - Order artifacts carry provenance and execution-epoch identity.
+- Paper and shadow provenance records whether the committed fetch scope was
+  available; missing scope evidence cannot independently authorize execution.
 - Fill imports are idempotent and bounded by source orders.
 - SQLite financial effects and exported evidence must be reconcilable.
 - Paper and live ledgers use explicit paths and are never implicitly exchanged.
@@ -241,7 +253,7 @@ Additional constraints:
 | State/artifact | Authoritative writer | Consumers | Mutation policy |
 |---|---|---|---|
 | Parquet market cache and provenance | data layer | research, valuation | atomic refresh, source/date audit |
-| Namespaced historical backfill staging and progress | data layer and research-only daemon | data refresh, operator | resumable and replaceable; never authoritative until complete formal-cache commit |
+| Namespaced historical backfill staging and progress | data layer and research-only daemon | data refresh, operator | resumable and replaceable; source status and restart-safe backoff are audited; never authoritative until complete formal-cache commit |
 | Extended-history validation status | history validation workflow | operator, later research review | bind completed progress, fixed backtest config, and formal-price hash; never promotes or authorizes execution |
 | Research/backtest outputs | research workflow | governance, reports | replace by run; bind manifest; simulated orders use `backtest_orders.csv` only |
 | Frozen candidate and sealed inputs | candidate governance | forward observer, activation | immutable identity |
@@ -260,8 +272,9 @@ Additional constraints:
 ### Research and promotion
 
 0. When the historical sample is insufficient, fill it backward with the
-   bounded research-only daemon; retain the current formal cache until the full
-   requested scope and final fetch stages complete with zero failures. Then run
+   bounded research-only daemon; persist source-outage backoff across restarts
+   and retain the current formal cache until the full requested scope and final
+   fetch stages complete with zero failures. Then run
    the fixed strategy in isolated outputs and record hash-bound validation
    evidence without promotion.
 1. Refresh and audit normalized data.

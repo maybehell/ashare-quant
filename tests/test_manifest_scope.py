@@ -53,7 +53,15 @@ def test_fetch_operations_do_not_change_strategy_hash_but_coverage_rules_do():
             "min_daily_price_coverage_ratio": 0.9,
         }
     }
-    operational = {"data": {**base["data"], "metadata_source": "akshare", "history_workers": 1}}
+    operational = {
+        "data": {
+            **base["data"],
+            "metadata_source": "akshare",
+            "history_workers": 1,
+            "history_backfill_tolerance_days": 31,
+            "resume_partial_history": True,
+        }
+    }
     behavioral = {"data": {**base["data"], "min_daily_price_coverage_ratio": 0.8}}
 
     assert backtest_config_sha256(base) == backtest_config_sha256(operational)

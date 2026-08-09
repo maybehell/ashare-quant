@@ -11,6 +11,7 @@ from ashare_quant.local_operator import (
     _broker_refresh_status,
     _challenger_observation_set_status,
     _formal_candidate_observation_status,
+    _history_backfill_daemon_status,
     _observation_daemon_status,
     _observation_startup_status,
     _recovery_candidate_capital_status,
@@ -23,6 +24,38 @@ from ashare_quant.local_operator import (
 
 
 class LocalOperatorTests(unittest.TestCase):
+
+    def test_history_backfill_source_outage_is_visible_without_claiming_completion(self):
+        passed, value, message = _history_backfill_daemon_status({
+            "state": "source_unavailable",
+            "next_run_at": "2026-08-10T05:58:20+08:00",
+            "source_backoff_minutes": 240,
+            "progress": {
+                "requested_symbols": 800,
+                "completed_symbols": 120,
+                "source_status": "source_unavailable",
+            },
+        })
+
+        self.assertFalse(passed)
+        self.assertIn("completed=120/800", value)
+        self.assertIn("backoff_minutes=240", value)
+        self.assertIn("熔断退避", message)
+        self.assertIn("正式缓存未被替换", message)
+
+    def test_history_backfill_waiting_is_research_progress_only(self):
+        passed, value, message = _history_backfill_daemon_status({
+            "state": "waiting",
+            "progress": {
+                "requested_symbols": 800,
+                "completed_symbols": 145,
+                "source_status": "ok",
+            },
+        })
+
+        self.assertTrue(passed)
+        self.assertIn("completed=145/800", value)
+        self.assertIn("未完成数据不会进入正式回测", message)
 
     def test_observation_startup_status_requires_current_safe_launcher(self):
         output = Path("test_outputs") / "observation_startup_status"

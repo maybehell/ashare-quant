@@ -18,7 +18,7 @@ from .autolive import (
 from .candidate import live_strategy_hash
 from .capital_aware import build_capital_aware_target_weights, capital_aware_enabled
 from .config import project_path
-from .data import DataStore
+from .data import DataStore, scope_market_frames_to_committed_fetch
 from .factors import build_configured_target_portfolio
 from .io_utils import atomic_to_csv
 from .models import Position
@@ -83,6 +83,9 @@ def write_broker_capital_feasibility(config: dict[str, Any]) -> dict[str, Path]:
         try:
             store = DataStore.from_config(config)
             stocks, prices, fundamentals = store.load_market_data()
+            stocks, prices, fundamentals, _scope_ok, _scope_value = (
+                scope_market_frames_to_committed_fetch(store, stocks, prices, fundamentals)
+            )
             benchmark = store.load_benchmark(required=False)
             data_errors = validate_market_data(stocks, prices, fundamentals)
             if data_errors:
@@ -706,6 +709,9 @@ def write_broker_order_preview(config: dict[str, Any], current_date: date | None
             raise RuntimeError("exactly one broker account snapshot is required")
         store = DataStore.from_config(config)
         stocks, prices, fundamentals = store.load_market_data()
+        stocks, prices, fundamentals, _scope_ok, _scope_value = (
+            scope_market_frames_to_committed_fetch(store, stocks, prices, fundamentals)
+        )
         benchmark = store.load_benchmark(required=False)
         data_errors = validate_market_data(stocks, prices, fundamentals)
         if data_errors:

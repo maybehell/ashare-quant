@@ -61,6 +61,69 @@ class PaperTests(unittest.TestCase):
         self.assertFalse((output_dir / "shadow_archive").exists())
         store.log_run.assert_called_once()
 
+    def test_shadow_uses_latest_committed_fetch_scope_for_complete_dates(self):
+        output_dir = Path.cwd() / "test_outputs" / "shadow_committed_scope"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        config = {
+            "paths": {"output_dir": str(output_dir)},
+            "strategy": {"name": "scope-test", "top_n": 10},
+            "benchmark": {"symbol": "000300"},
+            "data": {
+                "min_daily_price_coverage_ratio": 0.9,
+                "require_benchmark_on_signal_date": False,
+            },
+            "rules": {"effective_date": "2026-01-01"},
+        }
+        manifest = {
+            "candidate_id": "scope-candidate",
+            "strategy_hash": live_strategy_hash(config),
+            "freeze_mode": "forward_only_preregistration",
+            "freeze_boundary_schema_version": 2,
+            "freeze_price_end": "2026-01-10",
+            "freeze_known_data_end": "2026-01-10",
+        }
+        stocks = pd.DataFrame(
+            [{"symbol": "600000"}, {"symbol": "000001"}, {"symbol": "300001"}]
+        )
+        prices = pd.DataFrame(
+            [
+                {"date": date(2026, 1, 1), "symbol": symbol}
+                for symbol in ["600000", "000001", "300001"]
+            ]
+            + [
+                {"date": date(2026, 1, 2), "symbol": symbol}
+                for symbol in ["600000", "000001"]
+            ]
+        )
+        summary = pd.DataFrame(
+            [{
+                "requested_symbols": 2,
+                "fetched_symbols": 2,
+                "failed_items": 0,
+                "stage": "complete",
+            }]
+        )
+        provenance = pd.DataFrame([{"symbol": "600000"}, {"symbol": "000001"}])
+        store = Mock()
+        store.load_market_data.return_value = (stocks, prices, pd.DataFrame())
+        store.load_benchmark.return_value = pd.DataFrame()
+        store.read_frame.side_effect = lambda name: {
+            "fetch_summary": summary,
+            "fetch_history_provenance": provenance,
+        }[name]
+
+        with (
+            patch("ashare_quant.paper.DataStore.from_config", return_value=store),
+            patch("ashare_quant.paper.validate_config", return_value=[]),
+            patch("ashare_quant.paper.validate_market_data", return_value=[]),
+            patch("ashare_quant.paper.load_candidate_manifest", return_value=manifest),
+        ):
+            paths = run_shadow_signals(config, run_date="2026-01-02")
+
+        status = pd.read_csv(paths["shadow_observation_status.csv"])
+        self.assertEqual(status.loc[0, "latest_complete_signal_date"], "2026-01-02")
+        self.assertEqual(status.loc[0, "status"], "waiting_for_post_freeze_market_data")
+        self.assertEqual(store.read_frame.call_count, 2)
     def test_resolve_order_date_uses_cached_next_date(self):
         dates = [date(2026, 4, 27), date(2026, 4, 28)]
         self.assertEqual(resolve_order_date(dates, date(2026, 4, 27)), date(2026, 4, 28))

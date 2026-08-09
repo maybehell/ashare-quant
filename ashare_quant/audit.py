@@ -100,6 +100,7 @@ DATA_OPERATIONAL_CONFIG_KEYS = {
     "force_cached_universe",
     "benchmark_fallback_to_baostock",
     "history_fallback_to_baostock",
+    "history_backfill_tolerance_days",
     "history_retries",
     "history_source",
     "history_workers",
@@ -113,6 +114,7 @@ DATA_OPERATIONAL_CONFIG_KEYS = {
     "metadata_source",
     "metadata_workers",
     "request_timeout_seconds",
+    "resume_partial_history",
     "spot_retries",
     "use_cached_universe_on_spot_failure",
 }

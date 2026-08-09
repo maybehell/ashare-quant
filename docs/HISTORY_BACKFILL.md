@@ -10,6 +10,8 @@
 
 当前用户启动项 AshareQuantHistoryBackfill.cmd 已安装。登录 Windows 后，
 守护脚本每 60 分钟尝试一批，每批最多请求 25 只股票，最长运行 30 分钟。
+如果整批均为 BaoStock 会话级失败，状态会变为 source_unavailable、退出码为 75，
+并退避 240 分钟；未到期的退避在 daemon 或 Windows 重启后仍会继承。
 17:30 至 21:30 以及每日观察任务运行期间会主动让路。全部 800 只和最终基准
 获取均零失败、正式缓存提交成功后，守护进程会自动运行固定参数长历史回测；
 只有隔离验证成功后才退出。该步骤不会自动晋级或生成执行订单。
@@ -38,17 +40,20 @@
 
 数据完成后也可以手动运行同一个研究验证器：
 
-    .scriptsaq.ps1 --config configsextended_history_validation.yaml history-validate
+    .\scripts\aq.ps1 --config .\configs\extended_history_validation.yaml history-validate
 
 ## 权威状态与暂存文件
 
-- history_backfill_daemon_status.json：守护进程、下一次运行时间和最近退出码。
-- history_backfill_progress_extended_history_validation.parquet：请求、完成、剩余和失败数量。
+- history_backfill_daemon_status.json：守护进程、下一次运行时间、最近退出码、源故障连续次数和退避分钟数。
+- history_backfill_progress_extended_history_validation.parquet：请求、完成、剩余、失败数量，以及 source_status、attempted_symbols、successful_symbols。
 - prices_partial_extended_history_validation.parquet：已验证且可恢复的历史暂存行情。
 - fetch_history_partial_provenance_extended_history_validation.parquet：暂存行情来源证据。
 - fetch_failures_extended_history_validation.parquet：仅代表最近一批的失败项。
 - history_validation_status.csv：固定策略验证状态、正式行情哈希、配置哈希和核心指标。
 
+`source_unavailable` 表示当前公共源不可用，不表示 25 只股票同时发生数据异常。
+该状态不会清空已验证暂存数据，也不会把失败批次计为完成。等待 `next_run_at`
+后 daemon 才会再发起有界请求；无需频繁手动重启。
 未完成时，暂存文件都不是正式回测输入。系统不会替换 data/cache/prices.parquet。
 history_validation_status.csv 只有在完整进度、正式缓存和隔离回测全部匹配时才为
 completed；该状态仍然不是策略激活或实盘授权。

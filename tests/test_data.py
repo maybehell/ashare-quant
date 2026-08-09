@@ -14,6 +14,7 @@ from ashare_quant.data import (
     akshare_network_context,
     build_fetch_summary,
     build_history_backfill_progress,
+    classify_history_batch_source_status,
     apply_stock_info,
     apply_stock_profile_cninfo,
     cached_universe_symbols,
@@ -481,6 +482,40 @@ class DataFetchTests(unittest.TestCase):
             101.0,
         )
 
+    def test_history_batch_source_status_distinguishes_outage_from_symbol_failures(self):
+        symbols = ["600000", "000001"]
+        self.assertEqual(
+            classify_history_batch_source_status(
+                symbols,
+                set(),
+                {
+                    "600000": "baostock session attempt 2/2: timed out",
+                    "000001": "baostock session attempt 2/2: timed out",
+                },
+            ),
+            "source_unavailable",
+        )
+        self.assertEqual(
+            classify_history_batch_source_status(
+                symbols,
+                set(),
+                {"600000": "empty history", "000001": "invalid rows"},
+            ),
+            "failed",
+        )
+        self.assertEqual(
+            classify_history_batch_source_status(
+                symbols,
+                {"600000"},
+                {"000001": "temporary failure"},
+            ),
+            "degraded",
+        )
+        self.assertEqual(
+            classify_history_batch_source_status(symbols, set(symbols), {}),
+            "ok",
+        )
+
     def test_history_backfill_progress_distinguishes_progress_from_completion(self):
         frame = pd.DataFrame(
             [{"symbol": "000001", "date": "2018-01-02", "close": 10}]
@@ -495,6 +530,9 @@ class DataFetchTests(unittest.TestCase):
             date(2026, 8, 7),
             1,
             status="in_progress",
+            source_status="source_unavailable",
+            attempted_symbols=1,
+            successful_symbols=0,
         ).iloc[0]
 
         self.assertEqual(progress["status"], "in_progress")
@@ -502,6 +540,9 @@ class DataFetchTests(unittest.TestCase):
         self.assertEqual(int(progress["remaining_symbols"]), 2)
         self.assertEqual(int(progress["deferred_symbols"]), 1)
         self.assertEqual(int(progress["request_budget"]), 1)
+        self.assertEqual(progress["source_status"], "source_unavailable")
+        self.assertEqual(int(progress["attempted_symbols"]), 1)
+        self.assertEqual(int(progress["successful_symbols"]), 0)
     def test_history_completion_requires_zero_final_fetch_failures(self):
         self.assertEqual(history_backfill_completion_status([]), "complete")
         self.assertEqual(

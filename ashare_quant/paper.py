@@ -11,7 +11,7 @@ import pandas as pd
 from .audit import mapping_sha256, orders_frame_sha256, signal_frame_sha256
 from .candidate import candidate_freeze_boundary_evidence, live_strategy_hash, load_candidate_manifest, matching_candidate_id
 from .capital_aware import build_capital_aware_target_weights, capital_aware_enabled
-from .data import DataStore
+from .data import DataStore, scope_market_frames_to_committed_fetch
 from .factors import build_configured_target_portfolio, decompose_reference_anchor_target
 from .models import Order, Position
 from .order_integrity import attach_order_provenance_integrity
@@ -98,6 +98,9 @@ def run_paper(
         raise ValueError("; ".join(config_errors))
     store = DataStore.from_config(config)
     stocks, prices, fundamentals = store.load_market_data()
+    stocks, prices, fundamentals, fetch_scope_passed, fetch_scope_value = (
+        scope_market_frames_to_committed_fetch(store, stocks, prices, fundamentals)
+    )
     data_errors = validate_market_data(stocks, prices, fundamentals)
     if data_errors:
         raise ValueError("; ".join(data_errors))
@@ -212,6 +215,8 @@ def run_paper(
             "breadth_exposure_multiplier": breadth_multiplier,
             "strategy_health_exposure_multiplier": health_exposure["exposure"],
             "combined_exposure_multiplier": combined_multiplier,
+            "committed_fetch_scope_passed": bool(fetch_scope_passed),
+            "committed_fetch_scope": fetch_scope_value,
             "strategy_health_exposure_reason": health_exposure["reason"],
         },
         signal=signal,
@@ -230,6 +235,9 @@ def run_shadow_signals(
         raise ValueError("; ".join(config_errors))
     store = DataStore.from_config(config)
     stocks, prices, fundamentals = store.load_market_data()
+    stocks, prices, fundamentals, fetch_scope_passed, fetch_scope_value = (
+        scope_market_frames_to_committed_fetch(store, stocks, prices, fundamentals)
+    )
     data_errors = validate_market_data(stocks, prices, fundamentals)
     if data_errors:
         raise ValueError("; ".join(data_errors))
@@ -330,6 +338,8 @@ def run_shadow_signals(
         "breadth_state": breadth_exposure["breadth_state"],
         "breadth_symbol_count": breadth_exposure["breadth_symbol_count"],
         "combined_exposure_multiplier": exposure_multiplier,
+        "committed_fetch_scope_passed": bool(fetch_scope_passed),
+        "committed_fetch_scope": fetch_scope_value,
     }
     component_index = weights.index.astype(str)
     components = pd.DataFrame(

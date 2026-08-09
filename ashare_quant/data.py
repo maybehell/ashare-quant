@@ -440,6 +440,9 @@ def fetch_akshare(store: DataStore, config: dict[str, Any]) -> list[Path]:
         )
         failure_frame_name = history_staging_frame_name(config, "fetch_failures")
         fallback_history_count = 0
+        history_batch_source_status = "not_attempted"
+        history_attempted_symbols = 0
+        history_successful_symbols = 0
         checkpoint_every = int(config.get("data", {}).get("checkpoint_every", 25))
         history_workers = max(1, int(config.get("data", {}).get("history_workers", 1)))
         history_retries = max(1, int(config.get("data", {}).get("history_retries", 1)))
@@ -499,6 +502,7 @@ def fetch_akshare(store: DataStore, config: dict[str, Any]) -> list[Path]:
                 f"deferred={len(deferred_symbols)}.",
                 flush=True,
             )
+        history_attempted_symbols = len(pending_symbols)
 
         def handle_history_result(idx: int, symbol: str, result: tuple[pd.DataFrame, dict[str, object]] | None, error: Exception | None) -> None:
             nonlocal fallback_history_count
@@ -591,6 +595,24 @@ def fetch_akshare(store: DataStore, config: dict[str, Any]) -> list[Path]:
 
                 detail = f"{prior}; {error}".strip("; ")
                 failures.append({"symbol": symbol, "stage": "history", "error": detail})
+        attempted_set = {normalize_symbol(symbol) for symbol in pending_symbols}
+        successful_set = {
+            normalize_symbol(frame["symbol"].iloc[0])
+            for frame in price_frames
+            if not frame.empty and "symbol" in frame
+        } - resumed_symbols
+        history_successful_symbols = len(attempted_set & successful_set)
+        history_errors = {
+            normalize_symbol(row.get("symbol", "")): str(row.get("error", ""))
+            for row in failures
+            if row.get("stage") == "history"
+            and normalize_symbol(row.get("symbol", "")) in attempted_set
+        }
+        history_batch_source_status = classify_history_batch_source_status(
+            pending_symbols,
+            successful_set,
+            history_errors,
+        )
         history_provenance.sort(key=lambda row: str(row.get("symbol", "")))
         failures.sort(key=lambda row: (str(row.get("stage", "")), str(row.get("symbol", ""))))
 
@@ -615,6 +637,9 @@ def fetch_akshare(store: DataStore, config: dict[str, Any]) -> list[Path]:
                 end,
                 history_budget,
                 status="in_progress",
+                source_status=history_batch_source_status,
+                attempted_symbols=history_attempted_symbols,
+                successful_symbols=history_successful_symbols,
             )
             paths = [
                 store.write_frame(partial_frame_name, partial),
@@ -756,6 +781,9 @@ def fetch_akshare(store: DataStore, config: dict[str, Any]) -> list[Path]:
             end,
             history_budget,
             status=history_backfill_completion_status(failures),
+            source_status=history_batch_source_status,
+            attempted_symbols=history_attempted_symbols,
+            successful_symbols=history_successful_symbols,
         )
         if history_budget
         else None
@@ -1320,6 +1348,26 @@ def unfinished_history_symbols(
     ]
 
 
+def classify_history_batch_source_status(
+    attempted_symbols: list[str],
+    successful_symbols: set[str],
+    errors: dict[str, str],
+) -> str:
+    attempted = {normalize_symbol(symbol) for symbol in attempted_symbols}
+    successful = {normalize_symbol(symbol) for symbol in successful_symbols} & attempted
+    if not attempted:
+        return "not_attempted"
+    if successful == attempted:
+        return "ok"
+    if successful:
+        return "degraded"
+    unsuccessful = attempted - successful
+    error_texts = [str(errors.get(symbol, "") or "").lower() for symbol in unsuccessful]
+    if error_texts and all("baostock session attempt" in value for value in error_texts):
+        return "source_unavailable"
+    return "failed"
+
+
 def build_history_backfill_progress(
     symbols: list[str],
     price_frames: list[pd.DataFrame],
@@ -1331,6 +1379,9 @@ def build_history_backfill_progress(
     request_budget: int,
     *,
     status: str,
+    source_status: str = "unknown",
+    attempted_symbols: int = 0,
+    successful_symbols: int = 0,
 ) -> pd.DataFrame:
     requested = {normalize_symbol(symbol) for symbol in symbols}
     completed = requested - set(unfinished_history_symbols(symbols, price_frames))
@@ -1345,6 +1396,9 @@ def build_history_backfill_progress(
                 "deferred_symbols": len({normalize_symbol(value) for value in deferred_symbols}),
                 "failed_items": len(failures),
                 "request_budget": request_budget,
+                "source_status": str(source_status or "unknown"),
+                "attempted_symbols": max(int(attempted_symbols), 0),
+                "successful_symbols": max(int(successful_symbols), 0),
                 "requested_start": start,
                 "requested_end": end,
                 "generated_at": datetime.now().isoformat(timespec="seconds"),
