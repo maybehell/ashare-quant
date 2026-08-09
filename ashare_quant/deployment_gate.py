@@ -14,6 +14,7 @@ from .autolive_alerts import build_auto_live_alert_audit
 from .autolive_integrity import build_command_adapter_file_audit
 from .candidate import forward_risk_evaluation_identity, live_strategy_hash, load_candidate_manifest
 from .capital_modes import build_capital_mode_assessment
+from .capital_sensitivity import capital_sensitivity_needs_refresh
 from .config import load_config, project_path
 from .data import DataStore, committed_fetch_market_scope
 from .diagnostics import latest_universe_history_coverage
@@ -152,6 +153,7 @@ def write_deployment_gate(
     canary_capital_candidates = _read_csv(live_dir / "broker_canary_capital_candidates.csv")
     capital_transition = _read_csv(live_dir / "broker_capital_transition.csv")
     capital_sensitivity = _read_csv(strategy_dir / "micro_capital_sensitivity.csv")
+    capital_sensitivity_current = _capital_sensitivity_current(strategy_config)
     active_execution = build_active_execution_status(strategy_config)
 
     configured = _forward_candidate_configs(strategy_config)
@@ -357,6 +359,7 @@ def write_deployment_gate(
         capital_sensitivity,
         strategy_config,
         snapshot_current=snapshot_ok,
+        sensitivity_current=capital_sensitivity_current,
     )
     capital_mode_row = _last_row(capital_mode)
     binding_ok, binding_value = _all_checks_passed(binding)
@@ -412,13 +415,15 @@ def write_deployment_gate(
         and _truth(capital_transition_row.get("snapshot_fresh"))
         and _truth(capital_transition_row.get("strategy_identity_preserved"))
         and _truth(capital_transition_row.get("full_strategy_ready"))
+        and _truth(capital_mode_row.get("strategy_deployment_allowed"))
     )
     full_strategy_capital_value = (
         f"current={capital_transition_row.get('current_total_asset', 'missing')};"
         f"minimum={capital_transition_row.get('minimum_full_strategy_equity', 'missing')};"
         f"gap={capital_transition_row.get('full_strategy_capital_gap', 'missing')};"
         f"snapshot_current={snapshot_ok};"
-        f"identity_preserved={_truth(capital_transition_row.get('strategy_identity_preserved'))}"
+        f"identity_preserved={_truth(capital_transition_row.get('strategy_identity_preserved'))};"
+        f"sensitivity_current={capital_sensitivity_current}"
     )
 
     auto = live_config.get("auto_live", {}) if isinstance(live_config.get("auto_live"), dict) else {}
@@ -569,6 +574,19 @@ def write_deployment_gate(
         "broker_deployment_roadmap.csv": broker_roadmap_path,
         **display_paths,
     }
+
+
+def _capital_sensitivity_current(strategy_config: dict[str, Any]) -> bool:
+    validation = strategy_config.get("validation", {})
+    validation = validation if isinstance(validation, dict) else {}
+    configured = str(validation.get("capital_mode_sensitivity_config", "") or "").strip()
+    if not configured:
+        return True
+    try:
+        sensitivity_config = load_config(project_path(configured))
+        return not capital_sensitivity_needs_refresh(sensitivity_config)
+    except (OSError, TypeError, ValueError):
+        return False
 
 
 def _pending_attribution_timing_evidence(row: pd.Series) -> tuple[bool, str]:

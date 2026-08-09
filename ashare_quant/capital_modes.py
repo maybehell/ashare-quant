@@ -14,6 +14,7 @@ CAPITAL_MODE_COLUMNS = [
     "mode",
     "mode_label_cn",
     "snapshot_fresh",
+    "capital_sensitivity_current",
     "current_total_asset",
     "available_cash",
     "strategy_target_positions",
@@ -38,6 +39,7 @@ def build_capital_mode_assessment(
     strategy_config: dict[str, Any],
     *,
     snapshot_current: bool | None = None,
+    sensitivity_current: bool = True,
 ) -> pd.DataFrame:
     """Classify capital usability without adapting or promoting the strategy."""
     account = transition.iloc[-1] if not transition.empty else pd.Series(dtype=object)
@@ -45,7 +47,7 @@ def build_capital_mode_assessment(
     available = _number(account.get("available_cash"))
     transition_fresh = _truth(account.get("snapshot_fresh"))
     snapshot_fresh = transition_fresh if snapshot_current is None else transition_fresh and snapshot_current
-    canary_ready = _truth(account.get("canary_ready"))
+    canary_ready = _truth(account.get("canary_ready")) and snapshot_fresh
     full_ready = _truth(account.get("full_strategy_ready")) and snapshot_fresh
     minimum_equity = _number(account.get("minimum_full_strategy_equity"))
 
@@ -64,7 +66,12 @@ def build_capital_mode_assessment(
 
     capital_gap = max(minimum_equity - current, 0.0) if minimum_equity > 0 else float("nan")
     capital_ratio = current / minimum_equity if minimum_equity > 0 else float("nan")
-    evidence_ready = not transition.empty and not sensitivity.empty and minimum_equity > 0
+    evidence_ready = (
+        not transition.empty
+        and not sensitivity.empty
+        and minimum_equity > 0
+        and sensitivity_current
+    )
 
     if not snapshot_fresh:
         mode = "refresh_required"
@@ -77,7 +84,10 @@ def build_capital_mode_assessment(
     elif canary_ready:
         mode = "canary_review_only"
         label = "仅可复核 Canary"
-        reason = "资金只支持隔离的一手执行链验证，不支持部署或缩减冻结策略。"
+        if full_ready and not sensitivity_current:
+            reason = "本金敏感性研究未绑定当前行情清单；完整策略被阻断，仅保留隔离的一手执行链复核。"
+        else:
+            reason = "资金只支持隔离的一手执行链验证，不支持部署或缩减冻结策略。"
     else:
         mode = "observation_only"
         label = "仅观察"
@@ -88,6 +98,7 @@ def build_capital_mode_assessment(
         "mode": mode,
         "mode_label_cn": label,
         "snapshot_fresh": snapshot_fresh,
+        "capital_sensitivity_current": sensitivity_current,
         "current_total_asset": current,
         "available_cash": available,
         "strategy_target_positions": target_positions,

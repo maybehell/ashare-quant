@@ -78,6 +78,7 @@ class CapitalModeAssessmentTests(unittest.TestCase):
         ).iloc[0]
 
         self.assertEqual(result["mode"], "refresh_required")
+        self.assertFalse(result["canary_ready"])
         self.assertFalse(result["full_strategy_ready"])
         self.assertFalse(result["strategy_deployment_allowed"])
 
@@ -92,6 +93,26 @@ class CapitalModeAssessmentTests(unittest.TestCase):
         self.assertEqual(result["mode"], "refresh_required")
         self.assertFalse(result["snapshot_fresh"])
         self.assertFalse(result["strategy_deployment_allowed"])
+
+    def test_stale_sensitivity_blocks_full_strategy_but_preserves_canary_review(self):
+        result = build_capital_mode_assessment(
+            self.transition(
+                current_total_asset=600000,
+                available_cash=600000,
+                canary_ready=True,
+                full_strategy_ready=True,
+            ),
+            self.sensitivity,
+            self.config,
+            sensitivity_current=False,
+        ).iloc[0]
+
+        self.assertEqual(result["mode"], "canary_review_only")
+        self.assertFalse(result["capital_sensitivity_current"])
+        self.assertTrue(result["canary_ready"])
+        self.assertTrue(result["full_strategy_ready"])
+        self.assertFalse(result["strategy_deployment_allowed"])
+
     def test_full_strategy_mode_requires_fresh_full_capital_evidence(self):
         result = build_capital_mode_assessment(
             self.transition(

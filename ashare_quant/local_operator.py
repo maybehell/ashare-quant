@@ -102,6 +102,7 @@ def write_local_operator_status(
     account_binding = _read_csv(live_dir / "auto_live_account_binding_audit.csv")
     capital_feasibility = _read_csv(live_dir / "broker_capital_feasibility_audit.csv")
     canary_capital = _read_csv(live_dir / "broker_canary_capital_audit.csv")
+    capital_mode = _read_csv(strategy_dir / "capital_mode_assessment.csv")
     order_preview = _read_csv(live_dir / "broker_order_preview_audit.csv")
     canary = _read_csv(live_dir / "huatai_desktop_canary_audit.csv")
     launcher_ok, launcher_state, launcher_message = _launcher_runtime_status(
@@ -117,6 +118,23 @@ def write_local_operator_status(
     snapshot_max_age = int(live_config.get("auto_live", {}).get("account_snapshot_max_age_seconds", 300))
     snapshot_fresh, snapshot_value = _snapshot_freshness(account_snapshot, snapshot_max_age)
     account_ok = account_audit_ok and snapshot_fresh
+    capital_mode_row = capital_mode.iloc[-1] if not capital_mode.empty else pd.Series(dtype=object)
+    reported_capital_mode = str(capital_mode_row.get("mode", "") or "").strip()
+    reported_snapshot_fresh = str(capital_mode_row.get("snapshot_fresh", "")).strip().lower() in {
+        "1", "true", "yes", "y"
+    }
+    capital_mode_current = snapshot_fresh and reported_snapshot_fresh and bool(reported_capital_mode)
+    effective_capital_mode = reported_capital_mode if capital_mode_current else "refresh_required"
+    capital_mode_label = (
+        str(capital_mode_row.get("mode_label_cn", "") or "").strip()
+        if capital_mode_current
+        else "需刷新账户"
+    )
+    capital_mode_reason = (
+        str(capital_mode_row.get("reason_cn", "") or "").strip()
+        if capital_mode_current
+        else "券商快照或资金模式证据已过期；旧余额不会用于判断运行模式。"
+    )
     canary_ok, canary_value = _passed_count(canary)
     paper_allowed = _check_value(health, "paper_orders_allowed")
     strict_allowed = _check_value(health, "strict_live_allowed")
@@ -310,6 +328,7 @@ def write_local_operator_status(
         _row("broker_account_binding", binding_value if binding_required else "not_required", binding_ok, "broker", "Signed binding between the isolated live ledger and the current broker account."),
         _row("broker_capital_feasibility", capital_value if capital_required else "not_required", capital_ok, "broker", "Current broker capital must represent the target portfolio under board-lot and weight constraints."),
         _row("broker_canary_capital", canary_capital_value, canary_capital_ok, "broker", "Execution-only one-lot affordability; this never replaces the full strategy capital gate or authorizes submission."),
+        _row("capital_operating_mode", f"{effective_capital_mode}: {capital_mode_label}", effective_capital_mode != "refresh_required", "broker", capital_mode_reason),
         _row("broker_account_import_preview", preview_value, preview_ok, "broker", "券商快照生成的不写入账户预检。"),
         _row("broker_snapshot_fresh", snapshot_value, snapshot_fresh, "broker", "状态页重新计算快照年龄，不复用过期余额。"),
         _row("canary_arming_audit", canary_value, canary_ok, "broker", "Canary 武装审计；安全开关关闭时预期不会全通过。"),

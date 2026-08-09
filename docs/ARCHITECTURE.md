@@ -153,7 +153,8 @@ Rules:
 ### 3.6 Broker boundary and live-safety control plane
 
 Owners: `autolive*.py`, `broker_initialization.py`, `broker_preview.py`,
-`broker_readonly_history.py`, `canary_capital.py`, `huatai_*.py`, `rpa.py`,
+`broker_readonly_history.py`, `canary_capital.py`, `capital_modes.py`,
+`huatai_*.py`, `rpa.py`,
 `live_secrets.py`, and bridge/alert scripts under `scripts/`.
 
 Responsibilities:
@@ -162,12 +163,17 @@ Responsibilities:
 - Certify preview, monitor, query, cancel, fill, and recovery behavior.
 - Enforce account binding, staged rollout, cash/order limits, emergency stop,
   freshness windows, single-use confirmation, and incident alerts.
+- Classify capital evidence as refresh required, observation only, Canary review
+  only, or full-strategy review without adapting the frozen strategy.
 - Maintain append-only journals and recovery points around privileged actions.
 
 Rules:
 
 - Broker-specific UI details remain behind the adapter boundary.
 - Read-only refresh cannot submit orders or initialize the live ledger.
+- A stale broker snapshot clears both effective Canary and full-strategy capital
+  readiness. Stale capital-sensitivity evidence blocks full-strategy review but
+  cannot turn an execution-only Canary into strategy authorization.
 - Submission is impossible unless every independent gate passes in the current
   run; old reports are not authority.
 - Unknown or partial outcomes trigger query/recovery and critical alerting, not
@@ -219,6 +225,7 @@ Additional constraints:
 | Active execution strategy/epoch | strategy activation | paper/live order generation | atomic activation/deactivation |
 | Paper SQLite ledger | account/paper domain | reports, reconciliation | transactional |
 | Broker read-only snapshot/history | broker adapter/history | binding, risk, reports | append/audit; no financial writes |
+| Capital mode assessment | deployment gate | local operator, reports | derived from fresh broker snapshot and manifest-bound sensitivity evidence; never authorizes submit |
 | Live SQLite ledger | broker initialization/fills | risk, settlement | explicit initialization; transactional |
 | Orders/RPA tickets | paper/execution pipeline | preview/live control | `orders.csv` and `rpa_orders.csv` are never written by backtest; provenance-bound, quarantine stale batch |
 | Rollout approval/confirmation | live control plane | submission gate | signed, expiring, single purpose |
@@ -241,10 +248,12 @@ Additional constraints:
 ### Daily safe operation
 
 1. Refresh market data and broker read-only evidence independently.
-2. Update frozen candidate observations without tuning.
-3. Recompute strategy/readiness reports.
-4. Generate paper orders only when the corresponding gate permits it.
-5. Notify on data, strategy, broker, and operational failures.
+2. Reclassify the capital operating mode from current broker and research
+   evidence; never reuse stale balances.
+3. Update frozen candidate observations without tuning.
+4. Recompute strategy/readiness reports.
+5. Generate paper orders only when the corresponding gate permits it.
+6. Notify on data, strategy, broker, and operational failures.
 
 ### Guarded live cycle
 

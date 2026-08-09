@@ -792,11 +792,19 @@ class LocalOperatorTests(unittest.TestCase):
             "generated_at": "2026-01-01T00:00:00+00:00",
             "account_id": "huatai-test",
         }])
+        self.write_csv(self.strategy / "capital_mode_assessment.csv", [{
+            "mode": "canary_review_only",
+            "mode_label_cn": "仅可复核 Canary",
+            "snapshot_fresh": True,
+            "canary_ready": True,
+        }])
         strategy, live = self.configs()
         paths = write_local_operator_status(strategy, live)
         status = pd.read_csv(paths["local_operator_status.csv"]).set_index("item")
         self.assertEqual(status.loc["overall_status", "value"], "blocked")
         self.assertFalse(bool(status.loc["broker_snapshot_fresh", "passed"]))
+        self.assertEqual(status.loc["capital_operating_mode", "value"], "refresh_required: 需刷新账户")
+        self.assertFalse(bool(status.loc["capital_operating_mode", "passed"]))
 
 
     def test_failed_launcher_heartbeat_blocks_runtime_status(self):

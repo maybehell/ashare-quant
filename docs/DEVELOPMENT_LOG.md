@@ -4,6 +4,62 @@ This is the chronological engineering record for the repository. New entries are
 added directly below this introduction, newest first. It records verified facts;
 it is not a release-marketing document and does not replace generated audit
 artifacts.
+
+## 2026-08-09 - Make capital operating mode current and operator-visible
+
+**Objective**
+
+Prevent stale broker balances or stale small-capital research from overstating
+Canary or full-strategy readiness, and expose one clear capital conclusion in
+the local operator status and Chinese report.
+
+**Changes**
+
+- Made broker snapshot freshness clear both effective Canary and full-strategy
+  capital readiness in `capital_modes.py`.
+- Added manifest-bound small-capital sensitivity currentness to the deployment
+  gate; stale research may remain visible but cannot permit full-strategy review.
+- Added the four-state capital operating mode to one-click local status and the
+  Chinese HTML report.
+- Refreshed the research-only 2,500 to 600,000 yuan board-lot sensitivity study
+  against the current 2026-08-07 market-data fingerprint.
+
+**Architecture and safety**
+
+- Capital mode is explanatory derived evidence, not execution authority. It
+  never adapts the frozen strategy, enables submission, creates orders, or
+  initializes a ledger.
+- A stale account snapshot always yields `refresh_required`; stale sensitivity
+  evidence blocks full-strategy review while preserving the independent nature
+  of a separately authorized one-lot Canary.
+- Broker submission remained disabled, emergency stop remained active, and no
+  live ledger, activation certificate, generic order, or RPA order was created.
+
+**Verification**
+
+- Focused capital, local operator, report, and deployment tests: `112 passed in
+  7.25s`.
+- Full regression: `1031 passed, 3 skipped, 39 subtests passed in 155.45s`.
+- Current sensitivity audit passed exact reference market-data binding. The
+  2,500 to 30,000 yuan levels made no trades; 50,000 yuan remained 99.25% cash;
+  100,000 yuan ended with one position; 600,000 yuan was the first configured
+  level passing the research threshold with 54 final positions.
+- Current account mode is `refresh_required` because the last broker snapshot is
+  stale. Effective Canary readiness and full-strategy readiness are both false.
+- Playwright CLI launch was attempted for visual inspection but the installed
+  Chrome process closed during startup; generated HTML content and render-health
+  checks remain part of regression verification.
+
+**Remaining work**
+
+- Refresh the Huatai account only after an authenticated client session is
+  available; keep this a read-only action.
+- The 600,000 yuan research threshold is not the 100-position full-strategy
+  replication threshold. Current broker feasibility evidence still requires
+  approximately 2.702 million yuan for the frozen full strategy.
+- Continue the untuned 60-day forward observation and extend independent history
+  before any strategy promotion review.
+
 ## 2026-08-09 - Bind derived evidence and harden recovery commits
 
 **Objective**
@@ -51,6 +107,7 @@ Restore reliable unattended observation, refresh the public research cache, and 
 - Made BaoStock the default history source and added freshness/coverage gates before reusing cached stock metadata.
 - Bound source-health checks and backtests to the exact symbol set in the latest completed fetch manifest.
 - Separated research orders into `backtest_orders.csv`; backtests no longer write the generic `orders.csv` or `rpa_orders.csv` execution artifacts.
+
 - Updated operator diagnostics, tests, README output guidance, and architecture artifact ownership rules.
 
 **Architecture and safety**

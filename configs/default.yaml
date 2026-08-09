@@ -155,6 +155,7 @@
     "min_time_fold_positive_ratio": 0.50,
     "min_time_fold_top_half_ratio": 0.50,
     "min_time_fold_worst_excess_return": -0.15,
+    "capital_mode_sensitivity_config": "configs/micro_capital_feasibility.yaml",
     "capital_sensitivity": {
       "cash_levels": [100000, 300000, 600000, 1000000],
       "max_abs_return_drag": 0.02,

@@ -8,10 +8,31 @@ from ashare_quant.diagnostics import strategy_reliability_report
 from ashare_quant.candidate import live_strategy_hash
 from ashare_quant.audit import build_run_manifest, frame_sha256, mapping_sha256, orders_frame_sha256
 from ashare_quant.execution import build_execution_modes, build_execution_playbook, build_execution_readiness, build_execution_roadmap, execution_readiness_level
-from ashare_quant.report import calc_metrics, current_shadow_forward_audit, formal_candidate_report_link, html_table, industry_exposure, load_strategy_research_evidence, order_source_diagnostics, post_warmup_validation_reports, read_csv, write_outputs
+from ashare_quant.report import calc_metrics, current_shadow_forward_audit, formal_candidate_report_link, html_table, industry_exposure, load_strategy_research_evidence, order_source_diagnostics, post_warmup_validation_reports, read_csv, write_html_report, write_outputs
 
 
 class ReportTests(unittest.TestCase):
+    def test_report_renders_capital_operating_mode_in_chinese(self):
+        path = Path("test_outputs") / "report_capital_mode.html"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        write_html_report(
+            path,
+            capital_mode_assessment=pd.DataFrame(
+                [{
+                    "mode": "refresh_required",
+                    "mode_label_cn": "需刷新账户",
+                    "snapshot_fresh": False,
+                    "capital_sensitivity_current": False,
+                    "strategy_deployment_allowed": False,
+                    "reason_cn": "旧余额不会用于判断运行模式。",
+                }]
+            ),
+        )
+
+        html = path.read_text(encoding="utf-8")
+        self.assertIn("资金运行模式", html)
+        self.assertIn("需刷新账户", html)
+        self.assertIn("旧余额不会用于判断运行模式", html)
     def test_html_table_localizes_forward_selection_fields(self):
         html = html_table(
             pd.DataFrame(
