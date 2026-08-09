@@ -28,13 +28,15 @@ Publish the source to a private GitHub repository and provide AI-independent dai
 
 - `.\.venv\Scripts\python.exe -m pytest tests\test_git_sync_preflight.py tests\test_documentation_governance.py -q`: `7 passed in 0.20s`.
 - `.\.venv\Scripts\python.exe -m pytest -q`: `1017 passed, 3 skipped, 39 subtests passed in 284.28s`.
+- `github_sync_daemon.ps1 -RunOnce`: completed with exit code `0`, preserved the last-run audit fields, and pushed through the repository-scoped SSH key.
+- Startup verification: one daemon process, state `waiting`, schedule `22:30`, next run `2026-08-09T22:30:00+08:00`, last exit code `0`.
 - Private repository `maybehell/ashare-quant` was created and initial commit `f576ce3` was pushed over a repository-scoped SSH Deploy Key.
 - Windows Task Scheduler registration was denied by the host; a non-admin, single-instance Startup daemon was added as the supported local fallback.
-- Startup-daemon installation and exercise remain pending in this entry.
+- The non-admin Startup daemon was installed, exercised, restarted, and verified as a single waiting process for the daily 22:30 schedule.
 
 **Remaining work**
 
-- Install and exercise the daily Startup daemon, then record its final verification result.
+- Observe the first naturally scheduled 22:30 run in `Logger/github_sync.log`; no implementation blocker remains.
 
 ## 2026-08-09 - Establish architecture and development governance
 
