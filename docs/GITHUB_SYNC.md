@@ -32,16 +32,25 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\sync_github.ps1
 
 日志写入 `Logger/github_sync.log`，该文件不会上传。
 
-## 定时任务
+## 定时同步
 
-默认安装为每天 22:30，在当前 Windows 用户登录时运行：
+本机默认使用不需要管理员权限的登录启动守护程序：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install_github_sync_startup.ps1 -StartNow
+```
+
+它在当前用户登录后隐藏运行，每天 22:30 同步一次；电脑休眠错过时间后会在
+当天恢复时补跑。守护程序使用单实例锁，状态写入
+`Logger/github_sync_daemon_status.json`。
+
+在允许注册 Windows 计划任务的环境，也可改用：
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install_github_sync_task.ps1
 ```
 
-任务名为 `AShareQuantGitHubSync`，采用单实例和 30 分钟超时。机器关机时不会
-运行；下次可运行时由 Windows 的 `StartWhenAvailable` 设置补跑。
+任务名为 `AShareQuantGitHubSync`，采用单实例和 30 分钟超时。
 
 ## 故障处理
 

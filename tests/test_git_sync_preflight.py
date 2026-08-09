@@ -42,3 +42,17 @@ def test_sync_script_is_allowlisted_and_non_destructive() -> None:
     assert "git add -A" not in script
     assert '"push", "origin", $Branch' in script
     assert "--force" not in script
+
+def test_startup_daemon_is_single_instance_and_recoverable() -> None:
+    root = Path(__file__).resolve().parents[1]
+    daemon = (root / "scripts" / "github_sync_daemon.ps1").read_text(encoding="utf-8")
+    installer = (root / "scripts" / "install_github_sync_startup.ps1").read_text(
+        encoding="utf-8"
+    )
+    assert "FileMode]::CreateNew" in daemon
+    assert "another GitHub sync daemon is already running" in daemon
+    assert "staleStream" in daemon
+    assert "[switch]$RunOnce" in daemon
+    assert "Start-Sleep" in daemon
+    assert 'GetFolderPath("Startup")' in installer
+    assert "-WindowStyle Hidden" in installer
