@@ -5,6 +5,67 @@ added directly below this introduction, newest first. It records verified facts;
 it is not a release-marketing document and does not replace generated audit
 artifacts.
 
+## 2026-08-10 - Add resumable long-history validation
+
+**Objective**
+
+Extend the fixed strategy's independent historical sample without tuning it,
+blocking daily operation, or allowing incomplete public-source data to become
+formal research evidence.
+
+**Changes**
+
+- Added listing-date-aware backward gap detection to incremental market
+  acquisition.
+- Added bounded historical request budgets, validated partial resume, source
+  provenance preservation, current-batch failure replacement, and explicit
+  progress artifacts.
+- Isolated extended-history staging from daily refresh through a validated
+  configuration namespace.
+- Added a research-only extended-history configuration fixed from 2018-01-01
+  through 2026-08-07.
+- Added a single-instance, 30-minute-bounded local daemon and current-user
+  Startup installer. It processes 25 unfinished symbols per hour, yields during
+  daily observation hours, and exits automatically after completion.
+- Added ADR 0003, architecture ownership rules, and a Chinese operating runbook.
+
+**Architecture and safety**
+
+- Incomplete history is replaceable staging only. The formal prices cache is
+  committed only after the full requested scope completes and the normal fetch
+  success threshold passes.
+- Staging prices, provenance, failures, and progress share one research
+  namespace, so daily refresh cannot overwrite this job's resumable state.
+- The job is research only: it cannot tune or promote a candidate, generate
+  execution orders, initialize a live ledger, access a broker, or enable
+  submission.
+- Broker submit remained disabled, emergency stop remained active, service
+  submit remained disabled, and all audited protected live/order artifacts
+  remained absent.
+
+**Verification**
+
+- Data and CLI focused regression: 142 passed in 3.25s.
+- Documentation governance: 3 passed in 0.12s.
+- Full regression: 1039 passed, 39 subtests passed in 156.25s.
+- PowerShell daemon and installer parsed successfully; installer preview and
+  dry-run lock/status lifecycle both exited 0.
+- The first real bounded daemon batch advanced validated progress from 98/800
+  to 122/800 with zero failures in about two minutes.
+- Formal prices.parquet retained its 2026-08-09 20:40:03 timestamp while the
+  namespaced staging files advanced on 2026-08-10.
+- Current-user Startup installation was verified with a live daemon heartbeat.
+
+**Remaining work**
+
+- Let the bounded daemon finish the remaining historical scope; do not describe
+  the strategy as long-history validated before progress is complete.
+- After completion, audit source/date coverage and run the fixed strategy with
+  the isolated extended-history configuration. Do not use the result to rewrite
+  the frozen forward candidates.
+- Continue the untuned 60-day common forward observation. Strategy health still
+  blocks paper and live orders.
+
 ## 2026-08-09 - Make capital operating mode current and operator-visible
 
 **Objective**

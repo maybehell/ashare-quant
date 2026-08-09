@@ -4,7 +4,7 @@ Status: authoritative
 
 Version: 1.0
 
-Last reviewed: 2026-08-09
+Last reviewed: 2026-08-10
 
 ## 1. Purpose
 
@@ -80,6 +80,13 @@ Rules:
 - Network failure may preserve a clearly identified old cache, but cannot label
   it fresh.
 - Cache replacement and partial recovery are atomic and auditable.
+- Historical gaps are evaluated per symbol against the requested research start
+  and the verified listing date; incremental latest-date overlap alone is not
+  sufficient evidence of historical coverage.
+- Long historical refreshes use validated, namespaced partial prices,
+  provenance, failures, and progress. A request budget may stage incomplete
+  work, but only complete batches that pass the normal fetch-success threshold
+  may replace the formal market cache.
 - Backtest, readiness, stress, and capital-feasibility evidence use the exact
   symbol scope of the latest completed fetch. Derived evidence that can affect
   execution readiness must bind to the current main run-manifest data identity.
@@ -220,6 +227,7 @@ Additional constraints:
 | State/artifact | Authoritative writer | Consumers | Mutation policy |
 |---|---|---|---|
 | Parquet market cache and provenance | data layer | research, valuation | atomic refresh, source/date audit |
+| Namespaced historical backfill staging and progress | data layer and research-only daemon | data refresh, operator | resumable and replaceable; never authoritative until complete formal-cache commit |
 | Research/backtest outputs | research workflow | governance, reports | replace by run; bind manifest; simulated orders use `backtest_orders.csv` only |
 | Frozen candidate and sealed inputs | candidate governance | forward observer, activation | immutable identity |
 | Active execution strategy/epoch | strategy activation | paper/live order generation | atomic activation/deactivation |
@@ -236,6 +244,9 @@ Additional constraints:
 
 ### Research and promotion
 
+0. When the historical sample is insufficient, fill it backward with the
+   bounded research-only daemon; retain the current formal cache until the full
+   requested scope completes.
 1. Refresh and audit normalized data.
 2. Preregister candidate family and evaluation policy.
 3. Run the main backtest first, then bind walk-forward, benchmark, cost, factor,

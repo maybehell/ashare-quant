@@ -1,0 +1,38 @@
+{
+  "paths": {
+    "output_dir": "outputs_extended_history_validation",
+    "state_db": "data/state_extended_history_validation.sqlite3"
+  },
+  "data": {
+    "history_request_budget": 25,
+    "history_staging_namespace": "extended_history_validation"
+  },
+  "observation_task": {
+    "required": false,
+    "startup_required": false
+  },
+  "backtest": {
+    "start": "2018-01-01",
+    "end": "2026-08-07",
+    "initial_cash": 1000000,
+    "rebalance": "monthly"
+  },
+  "validation": {
+    "research_only": true,
+    "apply_active_execution": false,
+    "optimized_on_current_cache": true,
+    "experiment_status": "extended_history_validation",
+    "experiment_reason": "Evaluate the fixed default strategy on a longer historical sample without changing parameters or inheriting promotion evidence.",
+    "candidate_path": "data/live_candidate_extended_history_validation.json",
+    "primary_challenger_config": "",
+    "primary_challenger_configs": [],
+    "forward_only_candidate_configs": [],
+    "research_archive_configs": [],
+    "min_backtest_trading_days": 1500
+  },
+  "auto_live": {
+    "enabled": false,
+    "allow_broker_submit": false,
+    "emergency_stop": true
+  }
+}

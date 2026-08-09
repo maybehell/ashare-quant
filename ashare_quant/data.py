@@ -381,7 +381,9 @@ def fetch_akshare(store: DataStore, config: dict[str, Any]) -> list[Path]:
             )
             return [store.write_frame("benchmark", cached_benchmark)]
         incremental = bool(config.get("data", {}).get("incremental_fetch", True))
-        cached_latest = cached_latest_dates_by_symbol(store) if incremental else {}
+        cached_ranges = cached_price_date_ranges_by_symbol(store) if incremental else {}
+        cached_latest = {symbol: bounds[1] for symbol, bounds in cached_ranges.items()}
+        cached_earliest = {symbol: bounds[0] for symbol, bounds in cached_ranges.items()}
         if immutable_candidate_freeze_date(config) is not None:
             requested_count = len(symbols)
             symbols = [
@@ -423,9 +425,20 @@ def fetch_akshare(store: DataStore, config: dict[str, Any]) -> list[Path]:
                 return [store.write_frame("benchmark", benchmark)]
 
         fetch_starts: dict[str, date] = {}
+        historical_backfill_symbols: list[str] = []
         price_frames = []
         failures = []
         history_provenance: list[dict[str, object]] = []
+        partial_frame_name = history_staging_frame_name(config, "prices_partial")
+        provenance_frame_name = history_staging_frame_name(
+            config,
+            "fetch_history_partial_provenance",
+        )
+        progress_frame_name = history_staging_frame_name(
+            config,
+            "history_backfill_progress",
+        )
+        failure_frame_name = history_staging_frame_name(config, "fetch_failures")
         fallback_history_count = 0
         checkpoint_every = int(config.get("data", {}).get("checkpoint_every", 25))
         history_workers = max(1, int(config.get("data", {}).get("history_workers", 1)))
@@ -433,9 +446,59 @@ def fetch_akshare(store: DataStore, config: dict[str, Any]) -> list[Path]:
         history_source = str(config.get("data", {}).get("history_source", "auto")).strip().lower()
         if history_source not in {"auto", "akshare", "baostock"}:
             raise ValueError("data.history_source must be auto, akshare, or baostock")
+        expected_starts = expected_history_start_dates(stocks, symbols, base_start)
         for symbol in symbols:
-            fetch_starts[str(symbol)] = fetch_start_for_symbol(symbol, base_start, cached_latest, config) if incremental else base_start
+            expected_start = expected_starts.get(normalize_symbol(symbol), base_start)
+            fetch_starts[str(symbol)] = (
+                fetch_start_for_symbol(
+                    symbol,
+                    expected_start,
+                    cached_latest,
+                    config,
+                    cached_earliest=cached_earliest,
+                )
+                if incremental
+                else expected_start
+            )
             fetch_starts[str(symbol)] = immutable_fetch_start(config, fetch_starts[str(symbol)])
+            earliest = cached_earliest.get(normalize_symbol(symbol))
+            if earliest is not None and fetch_starts[str(symbol)] < earliest:
+                historical_backfill_symbols.append(normalize_symbol(symbol))
+
+        resumed_frames, resumed_provenance, resumed_symbols = resumable_partial_history(
+            store,
+            symbols,
+            fetch_starts,
+            end,
+            config,
+        )
+        price_frames.extend(resumed_frames)
+        history_provenance.extend(resumed_provenance)
+        pending_symbols = [
+            symbol for symbol in symbols if normalize_symbol(symbol) not in resumed_symbols
+        ]
+        if resumed_symbols:
+            print(
+                f"Resumed validated partial history: {len(resumed_symbols)}/{len(symbols)} symbols; "
+                f"pending={len(pending_symbols)}.",
+                flush=True,
+            )
+        history_budget = max(
+            0,
+            int(config.get("data", {}).get("history_request_budget", 0) or 0),
+        )
+        deferred_symbols = (
+            pending_symbols[history_budget:]
+            if history_budget and len(pending_symbols) > history_budget
+            else []
+        )
+        if deferred_symbols:
+            pending_symbols = pending_symbols[:history_budget]
+            print(
+                f"History request budget: processing={len(pending_symbols)}; "
+                f"deferred={len(deferred_symbols)}.",
+                flush=True,
+            )
 
         def handle_history_result(idx: int, symbol: str, result: tuple[pd.DataFrame, dict[str, object]] | None, error: Exception | None) -> None:
             nonlocal fallback_history_count
@@ -450,14 +513,14 @@ def fetch_akshare(store: DataStore, config: dict[str, Any]) -> list[Path]:
             if checkpoint_every > 0 and idx % checkpoint_every == 0:
                 if price_frames:
                     partial = normalize_prices(pd.concat(price_frames, ignore_index=True))
-                    store.write_frame("prices_partial", partial)
+                    store.write_frame(partial_frame_name, partial)
                     partial_rows = len(partial)
                 else:
                     partial_rows = 0
-                print(f"Fetched {idx}/{len(symbols)} symbols; success={len(price_frames)}, failed={len(failures)}, partial rows={partial_rows}", flush=True)
+                print(f"Fetched {idx + len(resumed_symbols)}/{len(symbols)} symbols; success={len(price_frames)}, failed={len(failures)}, partial rows={partial_rows}", flush=True)
 
-        if history_source != "baostock" and (history_workers == 1 or len(symbols) <= 1):
-            for idx, symbol in enumerate(symbols, start=1):
+        if history_source != "baostock" and (history_workers == 1 or len(pending_symbols) <= 1):
+            for idx, symbol in enumerate(pending_symbols, start=1):
                 try:
                     result = fetch_symbol_history(ak, symbol, fetch_starts[str(symbol)], end, retries=history_retries)
                     handle_history_result(idx, symbol, result, None)
@@ -467,7 +530,7 @@ def fetch_akshare(store: DataStore, config: dict[str, Any]) -> list[Path]:
             with ThreadPoolExecutor(max_workers=history_workers) as executor:
                 future_map = {
                     executor.submit(fetch_symbol_history, ak, symbol, fetch_starts[str(symbol)], end, history_retries): symbol
-                    for symbol in symbols
+                    for symbol in pending_symbols
                 }
                 for idx, future in enumerate(as_completed(future_map), start=1):
                     symbol = future_map[future]
@@ -478,7 +541,7 @@ def fetch_akshare(store: DataStore, config: dict[str, Any]) -> list[Path]:
                         handle_history_result(idx, symbol, None, exc)
 
         baostock_targets = (
-            list(symbols)
+            list(pending_symbols)
             if history_source == "baostock"
             else [
                 str(row.get("symbol", ""))
@@ -506,7 +569,7 @@ def fetch_akshare(store: DataStore, config: dict[str, Any]) -> list[Path]:
                 combined = price_frames + batch_frames
                 partial = normalize_prices(pd.concat(combined, ignore_index=True)) if combined else pd.DataFrame(columns=PRICE_COLUMNS)
                 if not partial.empty:
-                    store.write_frame("prices_partial", partial)
+                    store.write_frame(partial_frame_name, partial)
                 print(
                     f"BaoStock requests={request_count}; completed={len(batch_frames)}/{len(baostock_targets)}; "
                     f"pending_errors={error_count}; partial_rows={len(partial)}",
@@ -531,13 +594,43 @@ def fetch_akshare(store: DataStore, config: dict[str, Any]) -> list[Path]:
         history_provenance.sort(key=lambda row: str(row.get("symbol", "")))
         failures.sort(key=lambda row: (str(row.get("stage", "")), str(row.get("symbol", ""))))
 
+        partial = pd.DataFrame(columns=PRICE_COLUMNS)
         if price_frames:
             partial = normalize_prices(pd.concat(price_frames, ignore_index=True))
-            store.write_frame("prices_partial", partial)
+            store.write_frame(partial_frame_name, partial)
             print(
                 f"Finished history batch: fetched={len(price_frames)}/{len(symbols)}, "
                 f"failed={len(failures)}, partial rows={len(partial)}."
             )
+
+        if deferred_symbols:
+            progress = build_history_backfill_progress(
+                symbols,
+                price_frames,
+                failures,
+                resumed_symbols,
+                deferred_symbols,
+                base_start,
+                end,
+                history_budget,
+                status="in_progress",
+            )
+            paths = [
+                store.write_frame(partial_frame_name, partial),
+                store.write_frame(
+                    provenance_frame_name,
+                    pd.DataFrame(history_provenance),
+                ),
+                store.write_frame(progress_frame_name, progress),
+                store.write_frame(
+                    failure_frame_name,
+                    pd.DataFrame(
+                        failures,
+                        columns=["symbol", "stage", "error"],
+                    ),
+                ),
+            ]
+            return paths
 
         if not price_frames:
             if failures:
@@ -559,6 +652,21 @@ def fetch_akshare(store: DataStore, config: dict[str, Any]) -> list[Path]:
                 "系统已保留原有正式缓存；请降低行情池数量或稍后重试。"
             )
 
+        if history_budget:
+            store.write_frame(
+                progress_frame_name,
+                build_history_backfill_progress(
+                    symbols,
+                    price_frames,
+                    failures,
+                    resumed_symbols,
+                    [],
+                    base_start,
+                    end,
+                    history_budget,
+                    status="complete",
+                ),
+            )
         fetched_prices = normalize_prices(pd.concat(price_frames, ignore_index=True))
         fetched_stocks = normalize_stocks(stocks)
         if config.get("data", {}).get("commit_price_checkpoint", True):
@@ -584,6 +692,7 @@ def fetch_akshare(store: DataStore, config: dict[str, Any]) -> list[Path]:
                 incremental,
                 "price_checkpoint",
                 history_provenance=history_provenance,
+                historical_backfill_symbols=historical_backfill_symbols,
             )
             print(f"Committed price checkpoint: fetched_symbols={len(price_frames)}, merged_rows={len(prices)}.")
         if config.get("data", {}).get("enrich_metadata", True):
@@ -663,6 +772,7 @@ def fetch_akshare(store: DataStore, config: dict[str, Any]) -> list[Path]:
         incremental,
         "complete",
         history_provenance=history_provenance,
+        historical_backfill_symbols=historical_backfill_symbols,
     )
 
 
@@ -680,6 +790,7 @@ def write_fetch_outputs(
     incremental: bool,
     stage: str,
     history_provenance: list[dict[str, object]] | None = None,
+    historical_backfill_symbols: list[str] | None = None,
 ) -> list[Path]:
     fetch_summary = build_fetch_summary(
         symbols,
@@ -690,6 +801,7 @@ def write_fetch_outputs(
         fetch_starts=fetch_starts,
         incremental=incremental,
         stage=stage,
+        historical_backfill_symbols=historical_backfill_symbols,
     )
     paths = [
         store.write_frame("stocks", normalize_stocks(stocks)),
@@ -761,17 +873,148 @@ def recover_partial_prices(store: DataStore, config: dict[str, Any]) -> list[Pat
     )
     return paths
 
-def cached_latest_dates_by_symbol(store: DataStore) -> dict[str, date]:
+def cached_price_date_ranges_by_symbol(store: DataStore) -> dict[str, tuple[date, date]]:
     try:
-
         prices = normalize_prices(store.read_frame("prices", required=False))
     except Exception:
         return {}
     if prices.empty:
         return {}
-    latest = prices.groupby("symbol")["date"].max()
-    return {str(symbol): value for symbol, value in latest.items() if not pd.isna(value)}
+    ranges = prices.groupby("symbol")["date"].agg(["min", "max"])
+    return {
+        str(symbol): (row["min"], row["max"])
+        for symbol, row in ranges.iterrows()
+        if not pd.isna(row["min"]) and not pd.isna(row["max"])
+    }
 
+
+def cached_latest_dates_by_symbol(store: DataStore) -> dict[str, date]:
+    return {
+        symbol: bounds[1]
+        for symbol, bounds in cached_price_date_ranges_by_symbol(store).items()
+    }
+
+
+def expected_history_start_dates(
+    stocks: pd.DataFrame,
+    symbols: list[str],
+    base_start: date,
+) -> dict[str, date]:
+    expected = {normalize_symbol(symbol): base_start for symbol in symbols}
+    if stocks.empty or not {"symbol", "list_date"}.issubset(stocks.columns):
+        return expected
+    frame = stocks[["symbol", "list_date"]].copy()
+    frame["symbol"] = frame["symbol"].map(normalize_symbol)
+    frame["list_date"] = pd.to_datetime(frame["list_date"], errors="coerce").dt.date
+    for row in frame.dropna(subset=["list_date"]).itertuples(index=False):
+        if row.symbol in expected:
+            expected[row.symbol] = max(base_start, row.list_date)
+    return expected
+
+
+def historical_backfill_required(
+    symbol: str,
+    expected_start: date,
+    cached_earliest: dict[str, date],
+    config: dict[str, Any],
+) -> bool:
+    earliest = cached_earliest.get(normalize_symbol(symbol))
+    if earliest is None:
+        return False
+    tolerance = max(
+        0,
+        int(config.get("data", {}).get("history_backfill_tolerance_days", 31)),
+    )
+    return earliest > expected_start + timedelta(days=tolerance)
+
+
+def history_staging_frame_name(config: dict[str, Any], base_name: str) -> str:
+    namespace = str(
+        config.get("data", {}).get("history_staging_namespace", "")
+    ).strip()
+    if not namespace:
+        return base_name
+    if not re.fullmatch(r"[A-Za-z0-9_]+", namespace):
+        raise ValueError(
+            "data.history_staging_namespace must contain only letters, digits, and underscores"
+        )
+    return f"{base_name}_{namespace}"
+
+
+def resumable_partial_history(
+    store: DataStore,
+    symbols: list[str],
+    fetch_starts: dict[str, date],
+    end: date,
+    config: dict[str, Any],
+) -> tuple[list[pd.DataFrame], list[dict[str, object]], set[str]]:
+    if not bool(config.get("data", {}).get("resume_partial_history", True)):
+        return [], [], set()
+    try:
+        partial = normalize_prices(
+            store.read_frame(
+                history_staging_frame_name(config, "prices_partial"),
+                required=False,
+            )
+        )
+    except Exception:
+        return [], [], set()
+    if partial.empty:
+        return [], [], set()
+
+    requested = {normalize_symbol(symbol) for symbol in symbols}
+    normalized_starts = {
+        normalize_symbol(symbol): start for symbol, start in fetch_starts.items()
+    }
+    tolerance = max(
+        0,
+        int(config.get("data", {}).get("history_backfill_tolerance_days", 31)),
+    )
+    frames: list[pd.DataFrame] = []
+    provenance: list[dict[str, object]] = []
+    resumed: set[str] = set()
+    try:
+        provenance_frame = store.read_frame(
+            history_staging_frame_name(
+                config,
+                "fetch_history_partial_provenance",
+            ),
+            required=False,
+        )
+    except Exception:
+        provenance_frame = pd.DataFrame()
+    provenance_by_symbol = {}
+    if not provenance_frame.empty and "symbol" in provenance_frame:
+        provenance_by_symbol = {
+            normalize_symbol(row["symbol"]): row
+            for row in provenance_frame.to_dict(orient="records")
+        }
+    for symbol, frame in partial.groupby("symbol", sort=False):
+        clean_symbol = normalize_symbol(symbol)
+        if clean_symbol not in requested or clean_symbol not in normalized_starts:
+            continue
+        candidate = normalize_prices(frame)
+        first_date = candidate["date"].min()
+        last_date = candidate["date"].max()
+        start_covered = first_date <= normalized_starts[clean_symbol] + timedelta(days=tolerance)
+        end_covered = last_date >= end
+        if not start_covered or not end_covered or price_frame_issues(candidate):
+            continue
+        frames.append(candidate)
+        resumed.add(clean_symbol)
+        restored = dict(provenance_by_symbol.get(clean_symbol, {}))
+        restored.update(
+            {
+                "symbol": clean_symbol,
+                "first_date": first_date,
+                "last_date": last_date,
+                "rows": len(candidate),
+            }
+        )
+        restored.setdefault("source", "resumed_partial_unknown_source")
+        restored.setdefault("amount_quality", "preserved_normalized")
+        provenance.append(restored)
+    return frames, provenance, resumed
 
 def fetch_baostock_history_batch(
     symbols: list[str],
@@ -837,6 +1080,8 @@ def fetch_baostock_history_batch(
         if symbol not in completed
     }
     return frames, provenance_rows, final_errors
+
+
 def merge_benchmark_cache(store: DataStore, fetched: pd.DataFrame, config: dict[str, Any]) -> pd.DataFrame:
     cached = normalize_benchmark(store.read_frame("benchmark", required=False))
     incoming = normalize_benchmark(fetched)
@@ -859,7 +1104,12 @@ def fetch_start_for_symbol(
     base_start: date,
     cached_latest: dict[str, date],
     config: dict[str, Any],
+    *,
+    cached_earliest: dict[str, date] | None = None,
 ) -> date:
+    earliest = cached_earliest or {}
+    if historical_backfill_required(symbol, base_start, earliest, config):
+        return base_start
     latest = cached_latest.get(normalize_symbol(symbol))
     if latest is None:
         return base_start
@@ -1029,6 +1279,42 @@ def merge_cache_frame(existing: pd.DataFrame, fresh: pd.DataFrame, keys: list[st
     return merged.drop_duplicates(keys, keep="last").sort_values(sort_keys).reset_index(drop=True)
 
 
+def build_history_backfill_progress(
+    symbols: list[str],
+    price_frames: list[pd.DataFrame],
+    failures: list[dict[str, object]],
+    resumed_symbols: set[str],
+    deferred_symbols: list[str],
+    start: date,
+    end: date,
+    request_budget: int,
+    *,
+    status: str,
+) -> pd.DataFrame:
+    requested = {normalize_symbol(symbol) for symbol in symbols}
+    completed = {
+        normalize_symbol(frame["symbol"].iloc[0])
+        for frame in price_frames
+        if not frame.empty and "symbol" in frame
+    }
+    return pd.DataFrame(
+        [
+            {
+                "status": status,
+                "requested_symbols": len(requested),
+                "completed_symbols": len(completed),
+                "remaining_symbols": max(0, len(requested - completed)),
+                "resumed_symbols": len(resumed_symbols),
+                "deferred_symbols": len({normalize_symbol(value) for value in deferred_symbols}),
+                "failed_items": len(failures),
+                "request_budget": request_budget,
+                "requested_start": start,
+                "requested_end": end,
+                "generated_at": datetime.now().isoformat(timespec="seconds"),
+            }
+        ]
+    )
+
 def build_fetch_summary(
     symbols: list[str],
     price_frames: list[pd.DataFrame],
@@ -1038,6 +1324,7 @@ def build_fetch_summary(
     fetch_starts: dict[str, date] | None = None,
     incremental: bool = True,
     stage: str = "complete",
+    historical_backfill_symbols: list[str] | None = None,
 ) -> pd.DataFrame:
     fetched_symbols = sorted({str(frame["symbol"].iloc[0]) for frame in price_frames if not frame.empty and "symbol" in frame})
     latest = max(merged_prices["date"]) if not merged_prices.empty and "date" in merged_prices else ""
@@ -1049,6 +1336,7 @@ def build_fetch_summary(
                 "fetched_symbols": len(fetched_symbols),
                 "failed_items": len(failures),
                 "fallback_history_symbols": fallback_history_count,
+                "historical_backfill_symbols": len(set(historical_backfill_symbols or [])),
                 "merged_price_rows": len(merged_prices),
                 "merged_latest_date": latest,
                 "preserved_failed_symbols": max(0, len(symbols) - len(fetched_symbols)),

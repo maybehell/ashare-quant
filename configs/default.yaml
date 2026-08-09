@@ -43,6 +43,8 @@
     "preserve_cached_history_on_fetch": true,
     "incremental_fetch": true,
     "incremental_overlap_days": 20,
+    "history_backfill_tolerance_days": 31,
+    "resume_partial_history": true,
     "max_estimated_amount_source_ratio": 0.25
   },
   "fundamentals": {

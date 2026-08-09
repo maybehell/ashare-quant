@@ -12,11 +12,13 @@ from ashare_quant.data import (
 
     akshare_network_context,
     build_fetch_summary,
+    build_history_backfill_progress,
     apply_stock_info,
     apply_stock_profile_cninfo,
     cached_universe_symbols,
     benchmark_membership_fetch_symbols,
     enrich_stock_metadata_checkpointed,
+    expected_history_start_dates,
     fetch_start_for_symbol,
     finalized_market_data_end,
     fetch_symbol_history,
@@ -28,6 +30,8 @@ from ashare_quant.data import (
     normalize_trade_calendar,
     normalize_stocks,
     history_from_tx,
+    historical_backfill_required,
+    history_staging_frame_name,
     infer_board,
     ensure_required_fetch_symbols,
     immutable_fetch_start,
@@ -40,6 +44,7 @@ from ashare_quant.data import (
     reusable_metadata_cache,
     recover_partial_prices,
     resolve_finalized_trading_date,
+    resumable_partial_history,
     select_fetch_symbols,
     stocks_from_spot,
     tx_symbol,
@@ -194,6 +199,104 @@ class DataFetchTests(unittest.TestCase):
             {"data": {"incremental_overlap_days": 10}},
         )
         self.assertEqual(str(missing), "2026-01-01")
+
+    def test_incremental_fetch_start_backfills_a_real_historical_gap(self):
+        expected_start = date(2018, 1, 1)
+        cached_earliest = {"000001": date(2023, 1, 3)}
+        start = fetch_start_for_symbol(
+            "000001",
+            expected_start,
+            {"000001": date(2026, 8, 7)},
+            {"data": {"incremental_overlap_days": 20, "history_backfill_tolerance_days": 31}},
+            cached_earliest=cached_earliest,
+        )
+
+        self.assertEqual(start, expected_start)
+        self.assertTrue(
+            historical_backfill_required(
+                "000001",
+                expected_start,
+                cached_earliest,
+                {"data": {"history_backfill_tolerance_days": 31}},
+            )
+        )
+
+    def test_listing_date_prevents_false_history_gap_for_new_stock(self):
+        starts = expected_history_start_dates(
+            pd.DataFrame(
+                [
+                    {"symbol": "000001", "list_date": "1991-04-03"},
+                    {"symbol": "301001", "list_date": "2024-06-20"},
+                ]
+            ),
+            ["000001", "301001"],
+            date(2018, 1, 1),
+        )
+
+        self.assertEqual(starts["000001"], date(2018, 1, 1))
+        self.assertEqual(starts["301001"], date(2024, 6, 20))
+        self.assertFalse(
+            historical_backfill_required(
+                "301001",
+                starts["301001"],
+                {"301001": date(2024, 7, 1)},
+                {"data": {"history_backfill_tolerance_days": 31}},
+            )
+        )
+    def test_history_staging_namespace_is_validated(self):
+        self.assertEqual(
+            history_staging_frame_name(
+                {"data": {"history_staging_namespace": "extended_history"}},
+                "prices_partial",
+            ),
+            "prices_partial_extended_history",
+        )
+        with self.assertRaises(ValueError):
+            history_staging_frame_name(
+                {"data": {"history_staging_namespace": "../unsafe"}},
+                "prices_partial",
+            )
+
+    def test_partial_history_resume_requires_full_requested_coverage(self):
+        root = Path.cwd() / "test_outputs" / "partial_history_resume"
+        store = DataStore(cache_dir=root / "cache", state_db=root / "state.sqlite3")
+        store.write_frame(
+            "prices_partial",
+            pd.DataFrame(
+                [
+                    {"date": "2018-01-02", "symbol": "000001", "open": 10, "high": 10, "low": 10, "close": 10, "volume": 100, "amount": 1000},
+                    {"date": "2026-08-07", "symbol": "000001", "open": 11, "high": 11, "low": 11, "close": 11, "volume": 100, "amount": 1100},
+                    {"date": "2023-01-03", "symbol": "000002", "open": 20, "high": 20, "low": 20, "close": 20, "volume": 100, "amount": 2000},
+                    {"date": "2026-08-07", "symbol": "000002", "open": 21, "high": 21, "low": 21, "close": 21, "volume": 100, "amount": 2100},
+                ]
+            ),
+        )
+
+        store.write_frame(
+            "fetch_history_partial_provenance",
+            pd.DataFrame(
+                [
+                    {
+                        "symbol": "000001",
+                        "source": "baostock",
+                        "amount_quality": "derived_turnover",
+                    }
+                ]
+            ),
+        )
+        frames, provenance, resumed = resumable_partial_history(
+            store,
+            ["000001", "000002"],
+            {"000001": date(2018, 1, 1), "000002": date(2018, 1, 1)},
+            date(2026, 8, 7),
+            {"data": {"resume_partial_history": True, "history_backfill_tolerance_days": 31}},
+        )
+
+        self.assertEqual(resumed, {"000001"})
+        self.assertEqual(len(frames), 1)
+        self.assertEqual(provenance[0]["source"], "baostock")
+        self.assertEqual(provenance[0]["amount_quality"], "derived_turnover")
+        self.assertEqual(provenance[0]["rows"], 2)
     def test_merge_fetched_cache_preserves_failed_symbol_history_and_cached_benchmark(self):
         root = Path.cwd() / "test_outputs" / "merge_fetched_cache"
         config = {
@@ -375,6 +478,27 @@ class DataFetchTests(unittest.TestCase):
             101.0,
         )
 
+    def test_history_backfill_progress_distinguishes_progress_from_completion(self):
+        frame = pd.DataFrame(
+            [{"symbol": "000001", "date": "2018-01-02", "close": 10}]
+        )
+        progress = build_history_backfill_progress(
+            ["000001", "000002", "000003"],
+            [frame],
+            [],
+            {"000001"},
+            ["000003"],
+            date(2018, 1, 1),
+            date(2026, 8, 7),
+            1,
+            status="in_progress",
+        ).iloc[0]
+
+        self.assertEqual(progress["status"], "in_progress")
+        self.assertEqual(int(progress["completed_symbols"]), 1)
+        self.assertEqual(int(progress["remaining_symbols"]), 2)
+        self.assertEqual(int(progress["deferred_symbols"]), 1)
+        self.assertEqual(int(progress["request_budget"]), 1)
     def test_fetch_summary_reports_preserved_symbols(self):
         price_frames = [pd.DataFrame([{"symbol": "000001", "date": "2026-01-02"}])]
         summary = build_fetch_summary(
@@ -383,6 +507,7 @@ class DataFetchTests(unittest.TestCase):
             [{"symbol": "000002", "stage": "history", "error": "timeout"}],
             pd.DataFrame([{"date": "2026-01-02"}]),
             0,
+            historical_backfill_symbols=["000001"],
         )
 
         row = summary.iloc[0]
@@ -390,6 +515,7 @@ class DataFetchTests(unittest.TestCase):
         self.assertEqual(int(row["fetched_symbols"]), 1)
         self.assertEqual(int(row["preserved_failed_symbols"]), 1)
         self.assertEqual(int(row["failed_items"]), 1)
+        self.assertEqual(int(row["historical_backfill_symbols"]), 1)
     def test_recover_partial_prices_merges_partial_and_preserves_benchmark(self):
         root = Path.cwd() / "test_outputs" / "recover_partial_prices"
         config = {

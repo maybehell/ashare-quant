@@ -137,6 +137,7 @@ def main(argv: list[str] | None = None) -> None:
     fetch.add_argument("--no-metadata", action="store_true", help="Skip per-symbol industry/listing-date enrichment")
     fetch.add_argument("--cached-universe", action="store_true", help="Skip stock spot source and refresh using cached universe symbols")
     fetch.add_argument("--full-history", action="store_true", help="Fetch from backtest.start instead of incremental overlap")
+    fetch.add_argument("--history-budget", type=int, help="Maximum unfinished symbols to fetch in this resumable history-backfill run")
 
     sub.add_parser("fetch-account-prices", help="Refresh only current account-position prices from cached universe, then rerun account-state")
 
@@ -451,6 +452,9 @@ def run_command(args: argparse.Namespace, config: dict) -> None:
             config.setdefault("data", {})["enrich_metadata"] = False
         if args.full_history:
             config.setdefault("data", {})["incremental_fetch"] = False
+        history_budget = getattr(args, "history_budget", None)
+        if history_budget is not None:
+            config.setdefault("data", {})["history_request_budget"] = max(0, history_budget)
         if args.cached_universe:
             config.setdefault("data", {})["force_cached_universe"] = True
         if args.benchmark_only:
