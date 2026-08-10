@@ -33,6 +33,7 @@ from ashare_quant.data import (
     normalize_stocks,
     history_from_tx,
     history_overlap_quality,
+    history_start_coverage_quality,
     historical_backfill_required,
     history_backfill_completion_status,
     history_staging_frame_name,
@@ -53,6 +54,7 @@ from ashare_quant.data import (
     stocks_from_spot,
     tx_symbol,
     unfinished_history_symbols,
+    validate_history_start_coverage_batch,
     write_fetch_outputs,
 )
 
@@ -1181,6 +1183,269 @@ class DataFetchTests(unittest.TestCase):
 
         self.assertEqual(metrics["overlap_status"], "failed")
         self.assertTrue(any("amount median relative error" in issue for issue in issues))
+
+    def test_history_start_coverage_accepts_cross_source_confirmed_gap(self):
+        outer = self
+
+        class FakeAk:
+            @staticmethod
+            def stock_zh_a_hist_tx(**kwargs):
+                outer.assertEqual(kwargs["symbol"], "sh603986")
+                return pd.DataFrame(
+                    [
+                        {
+                            "date": "2018-03-02",
+                            "open": 10,
+                            "close": 10,
+                            "high": 11,
+                            "low": 9,
+                            "amount": 100,
+                        },
+                        {
+                            "date": "2026-08-07",
+                            "open": 20,
+                            "close": 20,
+                            "high": 21,
+                            "low": 19,
+                            "amount": 100,
+                        },
+                    ]
+                )
+
+        candidate = pd.DataFrame(
+            [
+                {
+                    "date": "2018-03-02",
+                    "symbol": "603986",
+                    "open": 10,
+                    "high": 11,
+                    "low": 9,
+                    "close": 10,
+                    "volume": 10000,
+                    "amount": 100000,
+                }
+            ]
+        )
+
+        metrics, issues = history_start_coverage_quality(
+            FakeAk(),
+            "603986",
+            candidate,
+            "stock_zh_a_daily",
+            date(2018, 1, 1),
+            date(2026, 8, 7),
+            {"data": {"history_backfill_tolerance_days": 31}},
+        )
+
+        self.assertFalse(issues)
+        self.assertEqual(metrics["start_coverage_status"], "cross_source_confirmed_gap")
+        self.assertEqual(metrics["start_coverage_verifier_source"], "stock_zh_a_hist_tx")
+        self.assertEqual(metrics["start_coverage_verifier_first_date"], date(2018, 3, 2))
+
+    def test_history_start_coverage_rejects_unconfirmed_late_start(self):
+        class FakeAk:
+            @staticmethod
+            def stock_zh_a_hist_tx(**kwargs):
+                return pd.DataFrame(
+                    [
+                        {
+                            "date": "2018-02-01",
+                            "open": 10,
+                            "close": 10,
+                            "high": 11,
+                            "low": 9,
+                            "amount": 100,
+                        }
+                    ]
+                )
+
+        candidate = pd.DataFrame(
+            [
+                {
+                    "date": date(2018, 3, 2),
+                    "symbol": "603986",
+                    "open": 10,
+                    "high": 11,
+                    "low": 9,
+                    "close": 10,
+                    "volume": 10000,
+                    "amount": 100000,
+                }
+            ]
+        )
+
+        metrics, issues = history_start_coverage_quality(
+            FakeAk(),
+            "603986",
+            candidate,
+            "stock_zh_a_daily",
+            date(2018, 1, 1),
+            date(2026, 8, 7),
+            {"data": {"history_backfill_tolerance_days": 31}},
+        )
+
+        self.assertEqual(metrics["start_coverage_status"], "unverified_gap")
+        self.assertTrue(any("without matching alternate source" in issue for issue in issues))
+
+    def test_partial_history_resume_accepts_current_cross_source_gap_evidence(self):
+        root = Path.cwd() / "test_outputs" / "partial_history_cross_source_gap"
+        store = DataStore(cache_dir=root / "cache", state_db=root / "state.sqlite3")
+        store.write_frame(
+            "prices_partial",
+            pd.DataFrame(
+                [
+                    {
+                        "date": "2018-03-02",
+                        "symbol": "603986",
+                        "open": 10,
+                        "high": 11,
+                        "low": 9,
+                        "close": 10,
+                        "volume": 10000,
+                        "amount": 100000,
+                    },
+                    {
+                        "date": "2026-08-07",
+                        "symbol": "603986",
+                        "open": 20,
+                        "high": 21,
+                        "low": 19,
+                        "close": 20,
+                        "volume": 20000,
+                        "amount": 400000,
+                    },
+                ]
+            ),
+        )
+        store.write_frame(
+            "fetch_history_partial_provenance",
+            pd.DataFrame(
+                [
+                    {
+                        "symbol": "603986",
+                        "source": "stock_zh_a_daily",
+                        "amount_quality": "reported",
+                        "start_coverage_status": "cross_source_confirmed_gap",
+                        "start_coverage_expected_date": "2018-01-01",
+                        "start_coverage_observed_date": "2018-03-02",
+                        "start_coverage_verifier_source": "stock_zh_a_hist_tx",
+                        "start_coverage_verifier_first_date": "2018-03-02",
+                    }
+                ]
+            ),
+        )
+
+        frames, provenance, resumed = resumable_partial_history(
+            store,
+            ["603986"],
+            {"603986": date(2018, 1, 1)},
+            date(2026, 8, 7),
+            {
+                "data": {
+                    "resume_partial_history": True,
+                    "history_backfill_tolerance_days": 31,
+                    "history_resume_require_trusted_provenance": True,
+                }
+            },
+        )
+
+        self.assertEqual(resumed, {"603986"})
+        self.assertEqual(len(frames), 1)
+        self.assertEqual(
+            provenance[0]["start_coverage_status"],
+            "cross_source_confirmed_gap",
+        )
+
+    def test_baostock_batch_start_coverage_is_validated_before_acceptance(self):
+        class FakeAk:
+            @staticmethod
+            def stock_zh_a_daily(**kwargs):
+                return pd.DataFrame(
+                    [
+                        {
+                            "date": "2018-03-02",
+                            "open": 10,
+                            "close": 10,
+                            "high": 11,
+                            "low": 9,
+                            "volume": 10000,
+                            "amount": 100000,
+                        }
+                    ]
+                )
+
+            @staticmethod
+            def stock_zh_a_hist_tx(**kwargs):
+                raise AssertionError("first verifier should confirm the boundary")
+
+        frame = pd.DataFrame(
+            [
+                {
+                    "date": "2018-03-02",
+                    "symbol": "603986",
+                    "open": 10,
+                    "high": 11,
+                    "low": 9,
+                    "close": 10,
+                    "volume": 10000,
+                    "amount": 100000,
+                }
+            ]
+        )
+        frames, provenance, errors = validate_history_start_coverage_batch(
+            FakeAk(),
+            [frame],
+            [
+                {
+                    "symbol": "603986",
+                    "source": "baostock_query_history_k_data_plus_qfq",
+                    "amount_quality": "reported",
+                }
+            ],
+            {"603986": date(2018, 1, 1)},
+            date(2026, 8, 7),
+            {"data": {"history_backfill_tolerance_days": 31}},
+        )
+
+        self.assertFalse(errors)
+        self.assertEqual(len(frames), 1)
+        self.assertEqual(
+            provenance[0]["start_coverage_status"],
+            "cross_source_confirmed_gap",
+        )
+        self.assertEqual(
+            provenance[0]["start_coverage_verifier_source"],
+            "stock_zh_a_daily",
+        )
+
+    def test_baostock_batch_start_coverage_rejects_missing_provenance(self):
+        frame = pd.DataFrame(
+            [
+                {
+                    "date": "2018-01-02",
+                    "symbol": "600000",
+                    "open": 10,
+                    "high": 11,
+                    "low": 9,
+                    "close": 10,
+                    "volume": 10000,
+                    "amount": 100000,
+                }
+            ]
+        )
+        frames, provenance, errors = validate_history_start_coverage_batch(
+            object(),
+            [frame],
+            [],
+            {"600000": date(2018, 1, 1)},
+            date(2026, 8, 7),
+            {"data": {"history_backfill_tolerance_days": 31}},
+        )
+
+        self.assertFalse(frames)
+        self.assertFalse(provenance)
+        self.assertIn("600000", errors)
+
     def test_price_frame_issues_rejects_nonpositive_adjusted_prices(self):
         frame = pd.DataFrame(
             [

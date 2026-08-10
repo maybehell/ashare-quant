@@ -51,6 +51,11 @@ strategy validation.
    failed items, attempts at least one symbol, and succeeds for every attempt.
    Any other non-outage result uses the regular 60-minute interval, while a
    source-wide outage retains the persisted 240-minute backoff.
+10. A first history date beyond the configured tolerance is accepted only when
+    a separately queried alternate provider returns the same first date. The
+    expected date, observed date, verifier source, verifier date, and coverage
+    status are persisted. Resume revalidates those dates against the current
+    request; missing, stale, or contradictory evidence fails closed.
 
 ## Consequences
 
@@ -63,6 +68,9 @@ Positive:
 - Switching to a healthy source is not blocked by stale outage state.
 - A healthy public source can complete independent evidence collection in
   bounded 25-symbol batches without waiting an hour between successful batches.
+- Legitimate long suspensions no longer consume one request slot forever or
+  prevent authoritative completion, while truncated provider history remains
+  rejected unless another provider confirms the same boundary.
 
 Costs:
 
@@ -76,6 +84,9 @@ Costs:
 - The accelerated interval increases request cadence while healthy. The
   25-symbol budget, 15-minute lower bound, quiet window, observation lock,
   regular fallback interval, and source-outage backoff limit that cost.
+- A late-start series may require one additional provider request. Provider
+  agreement is evidence of the observed trading boundary, not proof that the
+  providers are operationally independent in every upstream dependency.
 
 ## Alternatives considered
 

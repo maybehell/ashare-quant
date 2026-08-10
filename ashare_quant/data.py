@@ -38,6 +38,9 @@ HISTORY_PROVENANCE_COLUMNS = [
     "overlap_close_median_relative_error",
     "overlap_volume_median_relative_error",
     "overlap_amount_median_relative_error",
+    "start_coverage_status", "start_coverage_expected_date",
+    "start_coverage_observed_date", "start_coverage_verifier_source",
+    "start_coverage_verifier_first_date",
 ]
 
 
@@ -526,18 +529,31 @@ def fetch_akshare(store: DataStore, config: dict[str, Any]) -> list[Path]:
                     config,
                 )
                 provenance.update(overlap)
+                start_coverage, start_coverage_issues = history_start_coverage_quality(
+                    ak,
+                    symbol,
+                    normalized,
+                    str(provenance.get("source", "")),
+                    fetch_starts[str(symbol)],
+                    end,
+                    config,
+                )
+                provenance.update(start_coverage)
                 allow_estimated = bool(
                     config.get("data", {}).get(
                         "history_allow_estimated_amount_fallback",
                         True,
                     )
                 )
-                trust_issues = list(overlap_issues)
+                alternate_source_issues = list(overlap_issues)
                 if provenance.get("amount_quality") != "reported" and not allow_estimated:
-                    trust_issues.append(
+                    alternate_source_issues.append(
                         f"amount quality {provenance.get('amount_quality')} is not allowed"
                     )
-                if trust_issues and provenance["source"] != "stock_zh_a_hist":
+                trust_issues = list(start_coverage_issues)
+                if provenance["source"] != "stock_zh_a_hist":
+                    trust_issues.extend(alternate_source_issues)
+                if trust_issues:
                     failures.append(
                         {
                             "symbol": symbol,
@@ -640,6 +656,17 @@ def fetch_akshare(store: DataStore, config: dict[str, Any]) -> list[Path]:
                 config,
                 on_progress=baostock_checkpoint,
             )
+            batch_frames, batch_provenance, coverage_errors = (
+                validate_history_start_coverage_batch(
+                    ak,
+                    batch_frames,
+                    batch_provenance,
+                    fetch_starts,
+                    end,
+                    config,
+                )
+            )
+            batch_errors.update(coverage_errors)
             price_frames.extend(batch_frames)
             history_provenance.extend(batch_provenance)
             fallback_history_count += len(batch_frames)
@@ -1096,11 +1123,25 @@ def resumable_partial_history(
         candidate = normalize_prices(frame)
         first_date = candidate["date"].min()
         last_date = candidate["date"].max()
+        restored = dict(provenance_by_symbol.get(clean_symbol, {}))
         start_covered = first_date <= normalized_starts[clean_symbol] + timedelta(days=tolerance)
+        if not start_covered:
+            expected_date = pd.to_datetime(
+                restored.get("start_coverage_expected_date"), errors="coerce"
+            )
+            observed_date = pd.to_datetime(
+                restored.get("start_coverage_observed_date"), errors="coerce"
+            )
+            start_covered = (
+                restored.get("start_coverage_status") == "cross_source_confirmed_gap"
+                and not pd.isna(expected_date)
+                and expected_date.date() == normalized_starts[clean_symbol]
+                and not pd.isna(observed_date)
+                and observed_date.date() == first_date
+            )
         end_covered = last_date >= end
         if not start_covered or not end_covered or price_frame_issues(candidate):
             continue
-        restored = dict(provenance_by_symbol.get(clean_symbol, {}))
         restored.setdefault("source", "resumed_partial_unknown_source")
         restored.setdefault("amount_quality", "preserved_normalized")
         require_trusted_provenance = bool(
@@ -1866,6 +1907,148 @@ def history_overlap_quality(
             )
     metrics["overlap_status"] = "failed" if issues else "passed"
     return metrics, issues
+
+
+def history_start_coverage_quality(
+    ak: Any,
+    symbol: str,
+    candidate: pd.DataFrame,
+    source: str,
+    expected_start: date,
+    end: date,
+    config: dict[str, Any],
+) -> tuple[dict[str, object], list[str]]:
+    normalized_candidate = normalize_prices(candidate)
+    observed_start = (
+        normalized_candidate["date"].min() if not normalized_candidate.empty else None
+    )
+    metrics: dict[str, object] = {
+        "start_coverage_status": "invalid_candidate",
+        "start_coverage_expected_date": expected_start,
+        "start_coverage_observed_date": observed_start,
+        "start_coverage_verifier_source": "",
+        "start_coverage_verifier_first_date": None,
+    }
+    if observed_start is None:
+        return metrics, ["history has no observed start date"]
+    tolerance = max(
+        0,
+        int(config.get("data", {}).get("history_backfill_tolerance_days", 31)),
+    )
+    if observed_start <= expected_start + timedelta(days=tolerance):
+        metrics["start_coverage_status"] = "within_tolerance"
+        return metrics, []
+
+    verifiers: list[
+        tuple[
+            str,
+            Callable[[], pd.DataFrame],
+            Callable[[pd.DataFrame, str], pd.DataFrame],
+        ]
+    ] = []
+    start_text = expected_start.strftime("%Y%m%d")
+    end_text = end.strftime("%Y%m%d")
+    if source != "stock_zh_a_daily":
+        verifiers.append(
+            (
+                "stock_zh_a_daily",
+                lambda: ak.stock_zh_a_daily(
+                    symbol=tx_symbol(symbol),
+                    start_date=start_text,
+                    end_date=end_text,
+                    adjust="qfq",
+                ),
+                history_from_akshare,
+            )
+        )
+    if source not in {"stock_zh_a_hist_tx", "stock_zh_a_hist_tx_hfq_rebased"}:
+        verifiers.append(
+            (
+                "stock_zh_a_hist_tx",
+                lambda: ak.stock_zh_a_hist_tx(
+                    symbol=tx_symbol(symbol),
+                    start_date=start_text,
+                    end_date=end_text,
+                    adjust="qfq",
+                ),
+                history_from_tx,
+            )
+        )
+
+    verifier_errors: list[str] = []
+    for verifier_source, fetch, normalize in verifiers:
+        try:
+            raw = fetch()
+            verified = normalize_prices(normalize(raw, symbol))
+            verifier_first = verified["date"].min() if not verified.empty else None
+            if verifier_first is None:
+                verifier_errors.append(f"{verifier_source}: empty")
+                continue
+            if verifier_first == observed_start:
+                metrics.update(
+                    {
+                        "start_coverage_status": "cross_source_confirmed_gap",
+                        "start_coverage_verifier_source": verifier_source,
+                        "start_coverage_verifier_first_date": verifier_first,
+                    }
+                )
+                return metrics, []
+            verifier_errors.append(
+                f"{verifier_source}: first date {verifier_first} != {observed_start}"
+            )
+        except Exception as exc:
+            verifier_errors.append(f"{verifier_source}: {exc}")
+    metrics["start_coverage_status"] = "unverified_gap"
+    detail = f" ({'; '.join(verifier_errors)})" if verifier_errors else ""
+    return metrics, [
+        f"history starts {observed_start} after expected {expected_start} plus "
+        f"{tolerance} days without matching alternate source{detail}"
+    ]
+
+
+def validate_history_start_coverage_batch(
+    ak: Any,
+    frames: list[pd.DataFrame],
+    provenance_rows: list[dict[str, object]],
+    fetch_starts: dict[str, date],
+    end: date,
+    config: dict[str, Any],
+) -> tuple[list[pd.DataFrame], list[dict[str, object]], dict[str, str]]:
+    provenance_by_symbol = {
+        normalize_symbol(row.get("symbol", "")): dict(row)
+        for row in provenance_rows
+        if normalize_symbol(row.get("symbol", ""))
+    }
+    validated_frames: list[pd.DataFrame] = []
+    validated_provenance: list[dict[str, object]] = []
+    errors: dict[str, str] = {}
+    for frame in frames:
+        candidate = normalize_prices(frame)
+        if candidate.empty or "symbol" not in candidate:
+            continue
+        symbol = normalize_symbol(candidate["symbol"].iloc[0])
+        provenance = provenance_by_symbol.get(symbol)
+        expected_start = fetch_starts.get(symbol)
+        if provenance is None or expected_start is None:
+            errors[symbol] = "missing history provenance or expected start"
+            continue
+        metrics, issues = history_start_coverage_quality(
+            ak,
+            symbol,
+            candidate,
+            str(provenance.get("source", "")),
+            expected_start,
+            end,
+            config,
+        )
+        provenance.update(metrics)
+        if issues:
+            errors[symbol] = "; ".join(issues)
+            continue
+        validated_frames.append(candidate)
+        validated_provenance.append(provenance)
+    return validated_frames, validated_provenance, errors
+
 
 def price_frame_issues(frame: pd.DataFrame) -> list[str]:
     issues: list[str] = []

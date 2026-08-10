@@ -105,6 +105,11 @@ Rules:
   crash can lose recoverable work but cannot leave unproven prices eligible for
   resume. Persisted source-outage backoff is reused only when the effective
   default/override source-plan identity is unchanged.
+- A history series that starts after the configured coverage tolerance is not
+  accepted merely because its rows are structurally valid. A separately queried
+  alternate provider must report the same first trading date; that expected,
+  observed, verifier, and status evidence is persisted and must still match
+  before a later run may resume the series.
 - A bounded history daemon may use the 15-minute healthy interval only after a
   zero-exit batch reports source status `ok`, zero failures, at least one
   attempt, and equal attempted/successful counts. Degraded batches use the

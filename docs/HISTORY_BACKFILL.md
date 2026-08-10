@@ -101,3 +101,19 @@ healthy interval cannot exceed the regular interval. This scheduling policy
 changes only research-data acquisition timing; it does not change the strategy
 hash, formal cache acceptance, promotion evidence, account state, broker
 capability, or submission authority.
+
+## 2026-08-10 cross-source start-boundary evidence
+
+Some listed companies can remain suspended longer than the ordinary 31-day
+coverage tolerance. A structurally valid series with a late first row is no
+longer counted as a successful acquisition and then discarded on every resume.
+The acquisition now asks an alternate provider for the same requested range.
+Only an identical first trading date is accepted as
+`cross_source_confirmed_gap`.
+
+The partial provenance persists the requested start, observed first date,
+verifier source, verifier first date, and coverage status. A later resume checks
+that the persisted dates still match the current request and price frame.
+Missing or contradictory evidence fails closed and the symbol remains pending.
+This avoids both silent truncation and permanent retry of legitimate long
+suspensions.
