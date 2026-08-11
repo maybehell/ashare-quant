@@ -217,6 +217,7 @@ def build_live_readiness(
         max_age,
         "行情缓存必须足够新。",
     )
+    add_index_membership_readiness(add, data_quality, config)
 
     if bool(guard.get("require_fundamental_provenance", False)):
         add_fundamental_provenance_readiness(add, data_quality)
@@ -532,6 +533,32 @@ def data_quality_text(data_quality: pd.DataFrame, item: str) -> str:
         return ""
     value = row["value"].iloc[0]
     return "" if pd.isna(value) else str(value).strip()
+
+
+def add_index_membership_readiness(
+    add,
+    data_quality: pd.DataFrame,
+    config: dict[str, Any],
+) -> None:
+    policy = config.get("strategy", {}).get("benchmark_membership", {})
+    if not isinstance(policy, dict) or not bool(policy.get("enabled", False)):
+        return
+    ready = data_quality_bool(data_quality, "point_in_time_membership_ready")
+    coverage = data_quality_text(
+        data_quality,
+        "index_membership_historical_member_price_coverage",
+    )
+    minimum = data_quality_text(
+        data_quality,
+        "index_membership_minimum_snapshot_price_coverage",
+    )
+    add(
+        "point_in_time_membership_ready",
+        ready is True,
+        f"ready={ready};historical={coverage or 'missing'};minimum={minimum or 'missing'}",
+        "all point-in-time membership checks passed",
+        "启用历史指数成分后，成分快照和退出指数老成员行情必须完整；缺失时同时阻断实用与严格就绪。",
+    )
 
 
 def add_fundamental_provenance_readiness(add, data_quality: pd.DataFrame) -> None:
@@ -1302,6 +1329,7 @@ def build_practical_readiness(
         max_age,
         "行情缓存必须足够新。",
     )
+    add_index_membership_readiness(add, data_quality, config)
 
     if bool(guard.get("require_fundamental_provenance", False)):
         add_fundamental_provenance_readiness(add, data_quality)

@@ -1,0 +1,32 @@
+{
+  "extends": "hs300_point_in_time_core_v2_forward.yaml",
+  "paths": {
+    "cache_dir": "data/cache_hs300_point_in_time_history_reconstruction",
+    "output_dir": "outputs_hs300_point_in_time_history_reconstruction",
+    "state_db": "data/state_hs300_point_in_time_history_reconstruction.sqlite3"
+  },
+  "validation": {
+    "candidate_path": "data/research_candidate_hs300_point_in_time_history_reconstruction.json",
+    "research_governance_state_path": "data/research_governance_hs300_point_in_time_history_reconstruction.json",
+    "research_only": true,
+    "experiment_status": "historical_data_reconstruction",
+    "experiment_reason": "Isolated reconstruction of complete point-in-time CSI 300 member history. Historical results are diagnostic only and cannot inherit or authorize forward candidate evidence.",
+    "research_rationale": "Measure the impact of historical constituent completeness without changing the immutable V2 forward candidate cache or its evidence boundary.",
+    "require_frozen_input_evidence": false,
+    "primary_challenger_config": "",
+    "primary_challenger_strict": false
+  },
+  "strategy": {
+    "name": "hs300_point_in_time_history_reconstruction_diagnostic"
+  },
+  "data": {
+    "fetch_benchmark_membership_only": true,
+    "immutable_before_candidate_freeze": false,
+    "incremental_fetch": false,
+    "preserve_cached_history_on_fetch": true,
+    "history_source": "baostock",
+    "enrich_metadata": false,
+    "min_fetch_success_ratio": 0.99,
+    "min_fetch_success_symbols": 390
+  }
+}

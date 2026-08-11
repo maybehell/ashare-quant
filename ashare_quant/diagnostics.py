@@ -7,6 +7,11 @@ import pandas as pd
 from .validation import cache_age_days, complete_market_dates
 from .candidate import live_strategy_hash
 from .fundamental_policy import fundamental_factor_policy
+from .index_membership import (
+    build_index_membership_quality,
+    index_membership_data_quality_rows,
+    load_membership_from_config,
+)
 from .selection_bias import build_strategy_selection_bias
 
 
@@ -153,6 +158,15 @@ def data_quality_report(
         severity = "ok"
         note = "\u57fa\u672c\u9762\u56e0\u5b50\u4f7f\u7528\u5df2\u58f0\u660e\u7684\u65f6\u70b9\u53ef\u7528\u6570\u636e\u3002"
     add("fundamental_factor_status", status, severity, note)
+    membership_audit, _ = build_index_membership_quality(
+        config,
+        load_membership_from_config(config),
+        stocks,
+        prices,
+        benchmark,
+    )
+    membership_rows = index_membership_data_quality_rows(membership_audit)
+    rows.extend(membership_rows.to_dict(orient="records"))
     return pd.DataFrame(rows)
 
 

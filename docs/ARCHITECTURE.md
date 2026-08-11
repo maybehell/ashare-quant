@@ -82,6 +82,8 @@ Responsibilities:
 - Acquire, normalize, cache, and fingerprint market/reference data.
 - Preserve provenance, trading dates, listing dates, industries, and
   point-in-time index membership.
+- Audit historical index-member coverage and publish machine-readable snapshot
+  completeness evidence before readiness can consume the strategy result.
 
 Rules:
 
@@ -90,6 +92,16 @@ Rules:
 - Network failure may preserve a clearly identified old cache, but cannot label
   it fresh.
 - Cache replacement and partial recovery are atomic and auditable.
+- A cold membership-only fetch is orchestrated in dependency order: benchmark
+  history, point-in-time membership, then the research-period union of member
+  prices. Pre-price membership audits produce blocked evidence instead of
+  aborting initialization.
+- Point-in-time index readiness requires 100% historical-member price coverage
+  and 100% coverage in every snapshot. Missing exited-member prices block both
+  practical and strict readiness; metadata coverage cannot substitute for them.
+- Frozen candidate caches are never historically repaired in place. Corrective
+  reconstruction uses isolated paths and research-only identity, and its
+  historical output cannot inherit forward evidence or execution authority.
 - Historical gaps are evaluated per symbol against the requested research start
   and the verified listing date; incremental latest-date overlap alone is not
   sufficient evidence of historical coverage.

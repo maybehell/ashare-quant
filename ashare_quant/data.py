@@ -343,6 +343,7 @@ def fetch_akshare(store: DataStore, config: dict[str, Any]) -> list[Path]:
         raise RuntimeError("AkShare is not installed. Use --sample or install ashare-quant[data].") from exc
 
     with akshare_network_context(config):
+        ensure_benchmark_membership_fetch_prerequisites(store, config, ak)
         if config.get("data", {}).get("force_cached_universe", False):
             cached = cached_universe_symbols(store, config)
             if cached is None:
@@ -1577,6 +1578,57 @@ def benchmark_membership_only_fetch(config: dict[str, Any]) -> bool:
     return bool(config.get("data", {}).get("fetch_benchmark_membership_only", False))
 
 
+def ensure_benchmark_membership_fetch_prerequisites(
+    store: DataStore,
+    config: dict[str, Any],
+    ak: Any,
+) -> list[Path]:
+    if not benchmark_membership_only_fetch(config):
+        return []
+    if benchmark_membership_fetch_symbols(store, config):
+        return []
+
+    paths: list[Path] = []
+    benchmark = store.load_benchmark(required=False)
+    if benchmark.empty:
+        benchmark = normalize_benchmark(fetch_benchmark_akshare(ak, config))
+        if benchmark.empty and bool(
+            config.get("data", {}).get("benchmark_fallback_to_baostock", True)
+        ):
+            benchmark_cfg = config.get("benchmark", {})
+            start = pd.to_datetime(config["backtest"]["start"]).date()
+            end = finalized_market_data_end(config)
+            configured_end = config.get("backtest", {}).get("end")
+            if configured_end:
+                end = min(end, pd.to_datetime(configured_end).date())
+            with baostock_session() as client:
+                benchmark = normalize_benchmark(
+                    fetch_benchmark_frame_baostock(
+                        client,
+                        str(benchmark_cfg.get("symbol", "000300")),
+                        str(benchmark_cfg.get("name", "000300")),
+                        start,
+                        end,
+                    )
+                )
+        if benchmark.empty:
+            raise RuntimeError(
+                "Point-in-time membership cold start requires benchmark history, "
+                "but all configured benchmark sources failed."
+            )
+        paths.append(store.write_frame("benchmark", benchmark))
+
+    from .index_membership import refresh_benchmark_membership
+
+    refreshed = refresh_benchmark_membership(config)
+    paths.extend(refreshed.values())
+    if not benchmark_membership_fetch_symbols(store, config):
+        raise RuntimeError(
+            "Point-in-time membership refresh completed without usable research-period symbols."
+        )
+    return paths
+
+
 def benchmark_membership_fetch_symbols(store: DataStore, config: dict[str, Any]) -> list[str]:
     policy = config.get("strategy", {}).get("benchmark_membership", {})
     if not isinstance(policy, dict) or not bool(policy.get("enabled", False)):
@@ -1594,9 +1646,22 @@ def benchmark_membership_fetch_symbols(store: DataStore, config: dict[str, Any])
     membership = membership.dropna(subset=["snapshot_date"])
     if membership.empty:
         return []
-    latest_snapshot = membership["snapshot_date"].max()
+    if benchmark_membership_only_fetch(config):
+        start_value = config.get("backtest", {}).get("start")
+        end_value = config.get("backtest", {}).get("end")
+        if start_value:
+            membership = membership[
+                membership["snapshot_date"] >= pd.to_datetime(start_value)
+            ]
+        if end_value:
+            membership = membership[
+                membership["snapshot_date"] <= pd.to_datetime(end_value)
+            ]
+    else:
+        latest_snapshot = membership["snapshot_date"].max()
+        membership = membership[membership["snapshot_date"] == latest_snapshot]
     return (
-        membership.loc[membership["snapshot_date"] == latest_snapshot, "symbol"]
+        membership["symbol"]
         .map(normalize_symbol)
         .drop_duplicates()
         .sort_values()

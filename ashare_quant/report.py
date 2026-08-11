@@ -61,6 +61,14 @@ from .execution_quality import EXECUTION_QUALITY_COLUMNS, EXECUTION_QUALITY_DETA
 from .factor_robustness import FACTOR_ROBUSTNESS_COLUMNS, FACTOR_ROBUSTNESS_SUMMARY_COLUMNS
 from .factors import cap_and_normalize
 from .industry_risk import INDUSTRY_RISK_COLUMNS, build_industry_risk_audit
+from .index_membership import (
+    MEMBERSHIP_QUALITY_COLUMNS,
+    MEMBERSHIP_SNAPSHOT_COLUMNS,
+    build_index_membership_quality,
+    current_index_membership_quality,
+    index_membership_quality_warnings,
+    load_membership_from_config,
+)
 from .forward_factors import FORWARD_FACTOR_COLUMNS, build_forward_factor_monitor, forward_factor_warnings, write_forward_factor_monitor
 from .io_utils import atomic_to_csv
 from .observation_plan import OBSERVATION_SCHEDULE_COLUMNS, build_observation_schedule
@@ -251,6 +259,8 @@ DEFAULT_COLUMNS = {
     "benchmark_comparison.csv": ["date", "strategy_nav", "benchmark_nav", "strategy_return", "benchmark_return", "excess_return"],
     "excess_bootstrap.csv": EXCESS_BOOTSTRAP_COLUMNS,
     "data_quality.csv": ["item", "value", "severity", "note"],
+    "index_membership_quality.csv": MEMBERSHIP_QUALITY_COLUMNS,
+    "index_membership_snapshots.csv": MEMBERSHIP_SNAPSHOT_COLUMNS,
     "data_source_health.csv": ["check", "passed", "value", "threshold", "severity", "next_action", "command"],
     "robustness_split.csv": ["sample", "start", "end", "strategy_return", "benchmark_return", "excess_return", "information_ratio"],
     "annual_performance.csv": ["year", "strategy_return", "benchmark_return", "excess_return", "max_strategy_drawdown"],
@@ -657,6 +667,13 @@ def write_outputs(
     excess_bootstrap = block_bootstrap_excess(comparison, config)
     metrics = calc_metrics(equity)
     metrics.update(benchmark_metrics(comparison))
+    membership_quality, membership_snapshots = build_index_membership_quality(
+        config,
+        load_membership_from_config(config),
+        stocks if stocks is not None else pd.DataFrame(),
+        prices if prices is not None else pd.DataFrame(),
+        benchmark if benchmark is not None else pd.DataFrame(),
+    )
     data_quality = data_quality_report(
         stocks if stocks is not None else pd.DataFrame(),
         prices if prices is not None else pd.DataFrame(),
@@ -791,6 +808,8 @@ def write_outputs(
         "benchmark_comparison.csv": comparison,
         "excess_bootstrap.csv": excess_bootstrap,
         "data_quality.csv": data_quality,
+        "index_membership_quality.csv": membership_quality,
+        "index_membership_snapshots.csv": membership_snapshots,
         "data_source_health.csv": data_source_health,
         "robustness_split.csv": robustness,
         "annual_performance.csv": annual,
@@ -892,6 +911,8 @@ def write_outputs(
         excess_bootstrap=excess_bootstrap,
         metrics=metrics,
         data_quality=data_quality,
+        index_membership_quality=membership_quality,
+        index_membership_snapshots=membership_snapshots,
         data_source_health=data_source_health,
         robustness=robustness,
         annual=annual,
@@ -1296,7 +1317,7 @@ def write_html_report(path: Path, **kwargs: Any) -> Path:
     frame_keys = [
         "daily_observation_summary", "daily_observation_audit",
         "daily_observation_progress", "daily_observation_progress_audit",
-        "equity", "orders", "positions", "exposure", "industry_risk_audit", "comparison", "excess_bootstrap", "data_quality", "survivorship_bias_audit", "survivorship_bias_snapshots", "data_source_health",
+        "equity", "orders", "positions", "exposure", "industry_risk_audit", "comparison", "excess_bootstrap", "data_quality", "index_membership_quality", "index_membership_snapshots", "survivorship_bias_audit", "survivorship_bias_snapshots", "data_source_health",
         "robustness", "annual", "rolling", "regime_validation", "strategy_reliability", "strategy_health",
         "strategy_candidate_stability", "strategy_promotion", "research_candidate_observation", "forward_only_candidate_observation", "forward_candidate_attribution", "forward_candidate_selection", "forward_candidate_selection_summary", "candidate_failure_history", "risk_exposure", "walk_forward", "walk_forward_summary",
         "execution_model_reconciliation", "execution_model_reconciliation_summary",
@@ -1330,6 +1351,7 @@ def write_html_report(path: Path, **kwargs: Any) -> Path:
 
     warning_items = (
         bias_warnings(frames["data_quality"], frames["robustness"])
+        + index_membership_quality_warnings(frames["index_membership_quality"])
         + survivorship_warnings(frames["survivorship_bias_audit"])
         + rolling_warnings(frames["rolling"])
         + regime_validation_warnings(frames["regime_validation"])
@@ -1520,6 +1542,8 @@ def write_html_report(path: Path, **kwargs: Any) -> Path:
         ("订单流动性与容量审计", frames["order_liquidity_audit"], "暂无订单流动性审计。运行 aq order-audit 或 export-orders 后生成。"),
         ("数据源健康", frames["data_source_health"], "暂无数据源健康诊断。运行 aq source-health 后生成。"),
         ("数据质量诊断", frames["data_quality"], "暂无数据质量诊断。"),
+        ("时点指数成分质量门禁", frames["index_membership_quality"], "当前策略未启用时点指数成分，或尚未生成质量审计。"),
+        ("时点指数成分快照覆盖", frames["index_membership_snapshots"], "暂无时点指数成分快照覆盖明细。"),
         ("幸存者偏差审计", frames["survivorship_bias_audit"], "暂无幸存者偏差审计；长期结果不能据此视为无偏。"),
         ("幸存者偏差年度快照", frames["survivorship_bias_snapshots"], "暂无年度股票池覆盖快照。"),
         ("样本内 / 样本外拆分", frames["robustness"], "暂无拆分数据。"),
@@ -1958,6 +1982,19 @@ def regenerate_report(config: dict[str, Any]) -> Path:
     orders = read_csv(output_dir / "orders.csv")
     comparison = read_csv(output_dir / "benchmark_comparison.csv")
     excess_bootstrap = read_csv(output_dir / "excess_bootstrap.csv")
+    membership_quality, membership_snapshots = current_index_membership_quality(config)
+    atomic_to_csv(
+        membership_quality,
+        output_dir / "index_membership_quality.csv",
+        index=False,
+        encoding="utf-8-sig",
+    )
+    atomic_to_csv(
+        membership_snapshots,
+        output_dir / "index_membership_snapshots.csv",
+        index=False,
+        encoding="utf-8-sig",
+    )
     data_quality = read_csv(output_dir / "data_quality.csv")
     run_manifest = read_csv(output_dir / "run_manifest.csv")
     data_quality = data_quality_with_current_cache_age(data_quality, run_manifest, config)
@@ -2110,6 +2147,8 @@ def regenerate_report(config: dict[str, Any]) -> Path:
         excess_bootstrap=read_csv(output_dir / "excess_bootstrap.csv"),
         metrics=metrics,
         data_quality=data_quality,
+        index_membership_quality=membership_quality,
+        index_membership_snapshots=membership_snapshots,
         survivorship_bias_audit=read_csv(output_dir / "survivorship_bias_audit.csv"),
         survivorship_bias_snapshots=read_csv(output_dir / "survivorship_bias_snapshots.csv"),
         data_source_health=data_source_health,

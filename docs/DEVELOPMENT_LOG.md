@@ -5,6 +5,101 @@ added directly below this introduction, newest first. It records verified facts;
 it is not a release-marketing document and does not replace generated audit
 artifacts.
 
+## 2026-08-11 - Enforce complete point-in-time index-member history
+
+**Objective**
+
+Remove the latest-constituent survivorship path from CSI 300 point-in-time
+research, preserve the immutable V2 forward candidate, and measure the strategy
+again on a separately governed complete historical-member cache.
+
+**Changes**
+
+- Changed membership-only acquisition from the latest 300 constituents to the
+  union of all constituents in snapshots inside the configured research range.
+- Added machine-readable membership quality and per-snapshot artifacts covering
+  identity, provenance, cardinality, future dates, calendar alignment, gaps,
+  freshness, catalog coverage, historical-member prices, and minimum snapshot
+  price coverage.
+- Required 100% historical-member and per-snapshot price coverage. The composite
+  gate now blocks both practical and strict readiness and appears in the Chinese
+  report.
+- Made membership quality generation fail closed without crashing when stocks
+  and prices do not yet exist.
+- Added cold-start orchestration so a new membership-only fetch prepares
+  benchmark history and point-in-time membership before requesting member
+  prices.
+- Added the isolated
+  `configs/hs300_point_in_time_history_reconstruction.yaml` research design.
+  It does not alter or inherit authority from the immutable V2 forward candidate.
+- Updated architecture and accepted ADR 0010.
+
+**Architecture and safety**
+
+- This change is owned by data acquisition, data trust, research diagnostics,
+  readiness, and reporting. It does not change broker adapters, account state,
+  live-ledger ownership, order generation, activation, or submission.
+- V2 remained immutable through 2026-07-31. Its incremental refresh accepted
+  only post-freeze rows and did not rewrite missing historical constituents.
+- V3 uses separate cache, output, state, candidate, governance, and strategy
+  identities. Its status is `historical_data_reconstruction` and its results
+  are diagnostic only.
+- Missing membership quality fails practical and strict readiness. Research
+  output cannot authorize execution.
+
+**Verified evidence**
+
+- V2 before refresh committed only 300 of 395 historical members. Historical
+  member coverage was 75.9494%, and the earliest snapshot covered 190/300.
+- V2 incremental refresh committed 393 symbols but correctly left pre-freeze
+  history unchanged; its minimum snapshot coverage remained 75%.
+- V3 fetched 395/395 historical members with zero final failures and committed
+  341,390 price rows. It contains 45 monthly/current snapshots and 13,500
+  constituent rows; every snapshot has exactly 300 members.
+- V3 historical-member coverage is 395/395 and minimum per-snapshot coverage is
+  100%. Stock-catalog coverage is 99.4937%; the two delisted names were absent
+  from the current spot catalog but their historical prices were returned by
+  BaoStock when requested from 2023.
+- The corrected diagnostic backtest ran from 2023-07-06 through 2026-08-10:
+  strategy return 16.9120%, benchmark return 22.3608%, excess return -5.4488%,
+  maximum drawdown -10.3910%, information ratio -0.287520, and annualized
+  turnover 1.705906.
+- The last-30% sample excess return is -1.3293%. Walk-forward produced three
+  non-overlapping test folds, 0% positive-fold ratio, average test excess
+  -5.3311%, and worst test excess -8.4189%. The strategy is not eligible for
+  promotion or practical/live use.
+- Affected data/membership/readiness/report tests: 140 passed. Isolated
+  cold-start and quality tests: 7 passed. Full regression: 1093 passed and 39
+  subtests passed in 290.74 seconds.
+- Playwright loaded the V3 report at 1440 x 1000, found the Chinese point-in-time
+  quality section and four occurrences of `priced=395/395`, and captured
+  `output/playwright/point-in-time-membership-report.png`. The only console
+  error was the existing optional missing `favicon.ico`.
+
+**Protected live-state audit**
+
+- Absent: `data/huatai_live_state.sqlite3`,
+  `outputs_live/huatai_desktop_canary_certification.json`,
+  `data/active_execution_strategy.json`, main/V2/V3 `orders.csv`, and
+  main/V2/V3 `rpa_orders.csv`.
+- Default, V2, V3, and bridge-template configurations have
+  `auto_live.enabled=false` and `allow_broker_submit=false`. Huatai
+  read-only and Canary keep `allow_broker_submit=false` and
+  `emergency_stop=true`.
+- No broker action, live-ledger initialization, Canary arm, candidate activation,
+  order creation, protected-state repair, or account mutation was performed.
+
+**Remaining work**
+
+- Do not tune or promote the current point-in-time parameter set: the corrected
+  full-period, holdout, and walk-forward excess returns are negative.
+- Design a new preregistered successor using independent economic hypotheses,
+  then require frozen post-design forward evidence rather than selecting on this
+  V3 result.
+- Acquire authoritative industry, listing-date, historical ST/risk-warning, and
+  point-in-time fundamental data. Current V3 industry and listing placeholders
+  remain unsuitable for strict live conclusions.
+
 ## 2026-08-11 - Quantify long-history survivorship exposure
 
 **Objective**
