@@ -140,6 +140,47 @@ class CandidateValidationTests(unittest.TestCase):
 
         self.assertEqual(history_path, candidate_failure_history_path(config))
         self.assertTrue(is_candidate_quarantined(config))
+        recovery = pd.DataFrame(
+            [
+                {"date": "2026-01-03", "strategy_nav": 1.00, "benchmark_nav": 1.00},
+                {"date": "2026-01-04", "strategy_nav": 1.02, "benchmark_nav": 1.00},
+                {"date": "2026-01-05", "strategy_nav": 1.05, "benchmark_nav": 1.01},
+                {"date": "2026-01-06", "strategy_nav": 1.08, "benchmark_nav": 1.01},
+                {"date": "2026-01-07", "strategy_nav": 1.10, "benchmark_nav": 1.02},
+            ]
+        )
+        stale_shadow = pd.DataFrame(
+            [
+                {
+                    "candidate_id": "failed-candidate",
+                    "evidence_type": "continuous_portfolio",
+                    "status": "continuous_ok",
+                    "execution_date": "2026-01-04",
+                    "latest_date": "2026-01-05",
+                    "observed_trading_days": 1,
+                    "portfolio_return": -0.01,
+                    "benchmark_return": 0.0,
+                }
+            ]
+        )
+
+        validation = build_candidate_validation(config, recovery, stale_shadow).set_index("check")
+        recovered_progress = build_candidate_forward_progress(config, recovery, stale_shadow).iloc[0]
+
+        self.assertFalse(bool(validation.loc["candidate_quarantine_clear", "passed"]))
+        self.assertIn(
+            "early_forward_degradation",
+            validation.loc["candidate_quarantine_clear", "value"],
+        )
+        self.assertEqual(
+            validation.loc["forward_validation_status", "value"],
+            "quarantined_forward_failure",
+        )
+        self.assertEqual(recovered_progress["status"], "quarantined_forward_failure")
+        self.assertEqual(recovered_progress["overfit_status"], "quarantined")
+        self.assertEqual(int(recovered_progress["observed_forward_trading_days"]), 4)
+        self.assertGreater(float(recovered_progress["forward_excess_return"]), 0.0)
+
         config["strategy"]["name"] = "renamed-test"
         self.assertTrue(is_candidate_quarantined(config))
         with self.assertRaisesRegex(RuntimeError, "quarantined after forward failure"):

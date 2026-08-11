@@ -5,6 +5,58 @@ added directly below this introduction, newest first. It records verified facts;
 it is not a release-marketing document and does not replace generated audit
 artifacts.
 
+## 2026-08-11 - Make forward-failure quarantine irreversible
+
+**Objective**
+
+Remove contradictory candidate authority reports and ensure that an early or
+terminal forward failure cannot later recover into strategy activation.
+
+**Changes**
+
+- Added a shared lookup for the latest terminal failure matching either the
+  strategy hash or behavior hash. Candidate validation now publishes
+  `candidate_quarantine_clear`, and both validation and progress report
+  `quarantined_forward_failure` after a matching terminal record.
+- Required the quarantine check in candidate activation. Current positive
+  returns remain visible for research, but cannot restore execution authority.
+- Made legacy candidate progress use the same benchmark-comparison evidence as
+  legacy validation. Immutable shadow observations remain the evidence source
+  for forward-only preregistered candidates.
+- Recorded the durable strategy-governance rule in `docs/ARCHITECTURE.md` and
+  ADR 0011.
+
+**Verification**
+
+- Before the fix, the same candidate `fb600e42987b51aa` reported 23 observed
+  days with `early_forward_degradation` in progress, but 37 days with
+  `early_forward_warning` in validation.
+- Focused candidate, activation, readiness, and strategy-health tests passed:
+  `89 passed, 2 subtests passed in 12.17s`.
+- Full regression passed: `1096 passed, 39 subtests passed in 300.39s`.
+- Documentation governance tests passed: `3 passed in 0.13s`.
+- A current `candidate-audit` made validation, progress, and strict readiness
+  agree on 37 days, -4.7761% excess return, and
+  `quarantined_forward_failure`. The append-only failure record remains
+  `early_forward_degradation@2026-07-16T16:38:27+08:00`.
+- A local-only `live-evidence-sync` was attempted after source inspection proved
+  it does not access the broker, generate orders, or initialize a ledger. It
+  failed closed because stocks, prices, and fundamentals row/hash identities
+  did not match; no stale evidence was published.
+- Protected paths `data/active_execution_strategy.json`,
+  `data/huatai_live_state.sqlite3`, `outputs/orders.csv`, and
+  `outputs/rpa_orders.csv` remained absent. `emergency_stop` remained true and
+  `allow_broker_submit` remained false.
+
+**Remaining work**
+
+- Treat the main candidate as permanently retired from activation. Continue the
+  three independently frozen successors to their untuned 60-day forward gates.
+- Rebuild one internally consistent current research evidence bundle before
+  publishing to the live audit workspace; do not bypass manifest identity
+  checks.
+- Broker submission remains disabled, and no live ledger exists.
+
 ## 2026-08-11 - Complete low-risk candidate verification
 
 **Verification**

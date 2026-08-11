@@ -207,6 +207,7 @@ def build_candidate_activation_audit(
     required_checks = {
         "candidate_exists",
         "candidate_hash_match",
+        "candidate_quarantine_clear",
         "candidate_forward_only_preregistration",
         "candidate_forward_risk_evaluation_policy",
         "candidate_forward_trading_days",

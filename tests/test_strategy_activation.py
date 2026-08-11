@@ -11,6 +11,7 @@ from ashare_quant.candidate import (
     candidate_benchmark_data_identity,
     forward_risk_evaluation_identity,
     live_strategy_hash,
+    record_candidate_failure,
 )
 from ashare_quant.config import apply_active_execution, load_config
 from ashare_quant.index_symbols import benchmark_index_identity
@@ -153,6 +154,35 @@ class StrategyActivationTests(unittest.TestCase):
             audit.loc["candidate_validation_current", "value"],
             "status=validated;missing=;failed=",
         )
+
+    def test_quarantined_candidate_cannot_recover_into_activation(self):
+        candidate_config = load_config(self.candidate_path)
+        record_candidate_failure(
+            candidate_config,
+            pd.DataFrame(
+                [
+                    {
+                        "candidate_id": self.candidate_id,
+                        "status": "early_forward_degradation",
+                        "observed_forward_trading_days": 5,
+                        "forward_excess_return": -0.06,
+                    }
+                ]
+            ),
+        )
+
+        audit = build_candidate_activation_audit(
+            self.base_config,
+            self.candidate_path,
+            expected_candidate_id=self.candidate_id,
+        ).set_index("check")
+
+        self.assertFalse(bool(audit.loc["candidate_validation_current", "passed"]))
+        self.assertIn(
+            "candidate_quarantine_clear",
+            audit.loc["candidate_validation_current", "value"],
+        )
+        self.assertFalse(self.activation_path.exists())
 
     def test_strict_live_readiness_failure_blocks_candidate_activation(self):
         self.mock_readiness.return_value = pd.DataFrame(

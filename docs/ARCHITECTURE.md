@@ -4,7 +4,7 @@ Status: authoritative
 
 Version: 1.0
 
-Last reviewed: 2026-08-10
+Last reviewed: 2026-08-11
 
 ## 1. Purpose
 
@@ -200,6 +200,11 @@ Rules:
 - Backtest rank alone never activates a strategy.
 - Historical reruns cannot increase forward-observation days.
 - Candidate changes create a new identity and restart applicable evidence.
+- A recorded early or terminal forward failure permanently quarantines the matching
+  strategy or behavior fingerprint. Validation, progress, strict readiness, and
+  activation consume the same append-only failure history; later returns cannot
+  restore eligibility. Legacy candidates use benchmark-comparison evidence
+  consistently, while forward-only preregistrations use immutable shadow evidence.
 - Activation changes strategy authority only; it does not enable broker submit.
 
 ### 3.5 Account and execution domain

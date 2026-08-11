@@ -209,21 +209,28 @@ def load_candidate_failure_history(config: dict[str, Any]) -> pd.DataFrame:
     return history[CANDIDATE_FAILURE_COLUMNS]
 
 
-def is_candidate_quarantined(config: dict[str, Any], strategy_hash: str | None = None) -> bool:
+def candidate_quarantine_record(
+    config: dict[str, Any], strategy_hash: str | None = None
+) -> dict[str, Any] | None:
     history = load_candidate_failure_history(config)
     if history.empty:
-        return False
+        return None
     target = str(strategy_hash or live_strategy_hash(config))
     behavior_target = live_strategy_behavior_hash(config)
-    return bool(
+    matched = history[
         (
-            (
-                history["strategy_hash"].fillna("").astype(str).eq(target)
-                | history["behavior_hash"].fillna("").astype(str).eq(behavior_target)
-            )
-            & history["status"].fillna("").astype(str).isin(QUARANTINE_STATUSES)
-        ).any()
-    )
+            history["strategy_hash"].fillna("").astype(str).eq(target)
+            | history["behavior_hash"].fillna("").astype(str).eq(behavior_target)
+        )
+        & history["status"].fillna("").astype(str).isin(QUARANTINE_STATUSES)
+    ]
+    if matched.empty:
+        return None
+    return matched.iloc[-1].to_dict()
+
+
+def is_candidate_quarantined(config: dict[str, Any], strategy_hash: str | None = None) -> bool:
+    return candidate_quarantine_record(config, strategy_hash) is not None
 
 
 def quarantined_ensemble_members(config: dict[str, Any]) -> list[str]:
@@ -1205,6 +1212,19 @@ def build_candidate_validation(
     frozen_hash = str(manifest.get("strategy_hash", ""))
     hash_match = bool(frozen_hash and frozen_hash == current_hash)
     add("candidate_hash_match", hash_match, current_hash[:16], frozen_hash[:16], "当前实盘相关配置必须与冻结候选参数一致。")
+    quarantine = candidate_quarantine_record(config, frozen_hash)
+    quarantine_value = (
+        "clear"
+        if quarantine is None
+        else f"{quarantine.get('status', 'failed')}@{quarantine.get('recorded_at', 'unknown')}"
+    )
+    add(
+        "candidate_quarantine_clear",
+        quarantine is None,
+        quarantine_value,
+        "clear",
+        "候选一旦触发前向硬停或期末失败即永久隔离；后续行情改善不能恢复其晋级资格。",
+    )
     membership_ok, current_rows, current_membership_hash, frozen_rows, frozen_membership_hash = (
         candidate_index_membership_evidence(config, manifest)
     )
@@ -1410,6 +1430,8 @@ def build_candidate_validation(
             status = "benchmark_index_mapping_mismatch"
         elif not hash_match:
             status = "config_mismatch"
+        elif quarantine is not None:
+            status = "quarantined_forward_failure"
         elif not boundary_ok:
             status = "unsafe_freeze_boundary"
         elif not membership_ok:
@@ -1497,6 +1519,8 @@ def build_candidate_validation(
 
     if not hash_match:
         status = "config_mismatch"
+    elif quarantine is not None:
+        status = "quarantined_forward_failure"
     elif not membership_ok:
         status = "index_membership_evidence_mismatch"
     elif not frozen_input_ok:
@@ -1619,7 +1643,7 @@ def build_candidate_forward_progress(
             manifest.get("candidate_id", ""),
             manifest.get("freeze_price_end"),
         )
-        if not forward_only or boundary_ok
+        if forward_only and boundary_ok
         else None
     )
     if comparison.empty or not {"date", "strategy_nav", "benchmark_nav"}.issubset(comparison.columns):
@@ -1662,6 +1686,7 @@ def build_candidate_forward_progress(
     risk = candidate_forward_risk_state(config, manifest, risk_observation, days_ok)
     early_degraded, early_days, early_threshold = candidate_early_forward_degraded(config, manifest, days, excess_return)
     early_warning, warning_threshold = candidate_early_forward_warning(config, manifest, days, excess_return)
+    quarantine = candidate_quarantine_record(config, frozen_hash)
     if not hash_match:
         status = "config_mismatch"
         overfit_status = "invalid_candidate"
@@ -1670,6 +1695,13 @@ def build_candidate_forward_progress(
         status = "unsafe_freeze_boundary"
         overfit_status = "invalid_candidate"
         next_action = "旧候选冻结边界未覆盖登记时已知数据；重新登记候选并从新数据开始累计，禁止迁移旧前向天数。"
+    elif quarantine is not None:
+        status = "quarantined_forward_failure"
+        overfit_status = "quarantined"
+        next_action = (
+            f"该策略已因 {quarantine.get('status', 'forward_failure')} 于 "
+            f"{quarantine.get('recorded_at', 'unknown')} 永久隔离；继续观察仅用于研究，不得恢复或晋级。"
+        )
     elif pd.isna(freeze_date):
         status = "invalid_freeze_date"
         overfit_status = "invalid_candidate"
