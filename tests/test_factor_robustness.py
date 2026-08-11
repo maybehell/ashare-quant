@@ -7,8 +7,10 @@ import pandas as pd
 from ashare_quant.candidate import candidate_evidence_identity_sha256
 from ashare_quant.data import DataStore, make_sample_data
 from ashare_quant.factor_robustness import (
+    current_factor_robustness_data_sha256,
     ensemble_diversity_summary,
     factor_robustness_candidates,
+    factor_robustness_data_sha256,
     factor_robustness_market_data,
     factor_robustness_provenance,
     factor_robustness_summary,
@@ -33,6 +35,23 @@ class FactorRobustnessTests(unittest.TestCase):
         self.assertEqual(len(first), 64)
         self.assertNotEqual(first, second)
         self.assertNotEqual(first, moved_boundary)
+    def test_current_factor_data_hash_uses_the_effective_market_frames(self):
+        config = self.make_config("factor_current_data_hash")
+        dates = pd.to_datetime(["2026-01-01", "2026-01-02"]).date
+        stocks = pd.DataFrame([{"symbol": "000001"}])
+        prices = pd.DataFrame({"date": dates, "symbol": ["000001"] * 2, "close": [1.0, 1.1]})
+        fundamentals = pd.DataFrame({"date": dates, "symbol": ["000001"] * 2, "roe": [0.1, 0.1]})
+        benchmark = pd.DataFrame({"date": dates, "symbol": ["000300"] * 2, "close": [1.0, 1.0]})
+        expected = factor_robustness_data_sha256(stocks, prices, fundamentals, benchmark)
+
+        with patch(
+            "ashare_quant.factor_robustness.factor_robustness_market_data",
+            return_value=(stocks, prices, fundamentals, benchmark, ""),
+        ):
+            actual = current_factor_robustness_data_sha256(config)
+
+        self.assertEqual(actual, expected)
+
     def test_forward_candidate_factor_data_is_capped_at_freeze_boundary(self):
         dates = pd.date_range("2026-01-01", periods=5, freq="D")
         stocks = pd.DataFrame([{"symbol": "000001"}])

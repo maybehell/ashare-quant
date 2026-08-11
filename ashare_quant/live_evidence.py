@@ -13,7 +13,11 @@ import pandas as pd
 from .audit import backtest_config_sha256, build_run_manifest, mapping_sha256
 from .config import project_path
 from .io_utils import atomic_to_csv, replace_with_retry
-from .readiness import current_manifest_frames, readiness_evidence_issues
+from .readiness import (
+    build_live_readiness_from_outputs,
+    current_manifest_frames,
+    readiness_evidence_issues,
+)
 
 
 STRATEGY_EVIDENCE_FILES = (
@@ -21,6 +25,8 @@ STRATEGY_EVIDENCE_FILES = (
     "performance_metrics.csv",
     "benchmark_comparison.csv",
     "excess_bootstrap.csv",
+    "factor_robustness.csv",
+    "factor_robustness_summary.csv",
     "data_quality.csv",
     "data_source_health.csv",
     "robustness_split.csv",
@@ -57,6 +63,8 @@ REQUIRED_STRATEGY_EVIDENCE_FILES = (
     "performance_metrics.csv",
     "benchmark_comparison.csv",
     "excess_bootstrap.csv",
+    "factor_robustness.csv",
+    "factor_robustness_summary.csv",
     "strategy_candidate_stability.csv",
     "walk_forward_summary.csv",
     "cost_stress.csv",
@@ -77,8 +85,55 @@ SYNC_COLUMNS = [
     "source_config_sha256",
     "live_config_sha256",
     "backtest_config_sha256",
+    "evidence_bundle_sha256",
     "generated_at",
 ]
+
+
+DERIVED_EVIDENCE_IDENTITY_CHECKS = {
+    "factor_robustness": (
+        "factor_robustness_candidate_identity_current",
+        "factor_robustness_config_current",
+        "factor_robustness_data_bound",
+        "factor_robustness_data_current",
+        "factor_robustness_forward_isolation",
+    ),
+    "cost_stress": (
+        "cost_stress_config_hash",
+        "cost_stress_data_hash",
+    ),
+}
+
+
+def strategy_derived_evidence_issues(config: dict[str, Any]) -> list[str]:
+    guard = config.get("live_guard", {})
+    if not isinstance(guard, dict):
+        guard = {}
+    required: list[str] = []
+    if bool(guard.get("require_factor_robustness", False)):
+        required.extend(DERIVED_EVIDENCE_IDENTITY_CHECKS["factor_robustness"])
+    if bool(guard.get("require_cost_stress", False)) and bool(
+        guard.get("require_current_cost_stress", True)
+    ):
+        required.extend(DERIVED_EVIDENCE_IDENTITY_CHECKS["cost_stress"])
+    if not required:
+        return []
+
+    readiness = build_live_readiness_from_outputs(config)
+    if readiness.empty or not {"check", "passed", "value"}.issubset(readiness.columns):
+        return ["derived evidence identity checks are missing"]
+
+    issues: list[str] = []
+    for check in required:
+        selected = readiness[readiness["check"].astype(str) == check]
+        if selected.empty:
+            issues.append(f"{check} missing")
+            continue
+        row = selected.iloc[-1]
+        passed = str(row.get("passed", "")).strip().lower() in {"true", "1", "yes"}
+        if not passed:
+            issues.append(f"{check}={row.get('value', 'failed')}")
+    return issues
 
 
 def sync_live_strategy_evidence(
@@ -101,10 +156,23 @@ def sync_live_strategy_evidence(
     evidence_issues = readiness_evidence_issues(strategy_config)
     if evidence_issues:
         raise RuntimeError("source strategy evidence is not current: " + "; ".join(evidence_issues))
+    derived_issues = strategy_derived_evidence_issues(strategy_config)
+    if derived_issues:
+        raise RuntimeError(
+            "source derived strategy evidence is not current: " + "; ".join(derived_issues)
+        )
 
     missing = [name for name in REQUIRED_STRATEGY_EVIDENCE_FILES if not (source_dir / name).is_file()]
     if missing:
         raise RuntimeError("source strategy evidence is incomplete: " + ", ".join(missing))
+
+    source_files = {
+        name: source_dir / name
+        for name in STRATEGY_EVIDENCE_FILES
+        if (source_dir / name).is_file()
+    }
+    source_hashes = {name: file_sha256(path) for name, path in source_files.items()}
+    evidence_bundle_hash = mapping_sha256(source_hashes)
 
     destination_dir.mkdir(parents=True, exist_ok=True)
     generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
@@ -113,15 +181,17 @@ def sync_live_strategy_evidence(
     rows: list[dict[str, object]] = []
     paths: dict[str, Path] = {}
 
-    for name in STRATEGY_EVIDENCE_FILES:
-        source = source_dir / name
-        if not source.is_file():
-            continue
+    for name, source in source_files.items():
+        expected_sha256 = source_hashes[name]
+        if file_sha256(source) != expected_sha256:
+            raise RuntimeError(f"source strategy evidence changed before publishing {name}")
         destination = destination_dir / name
         atomic_copy(source, destination)
         source_sha256 = file_sha256(source)
         destination_sha256 = file_sha256(destination)
-        if source_sha256 != destination_sha256:
+        if source_sha256 != expected_sha256:
+            raise RuntimeError(f"source strategy evidence changed while publishing {name}")
+        if destination_sha256 != expected_sha256:
             raise RuntimeError(f"strategy evidence hash mismatch after publishing {name}")
         rows.append(
             {
@@ -134,10 +204,20 @@ def sync_live_strategy_evidence(
                 "source_config_sha256": source_config_hash,
                 "live_config_sha256": live_config_hash,
                 "backtest_config_sha256": strategy_hash,
+                "evidence_bundle_sha256": evidence_bundle_hash,
                 "generated_at": generated_at,
             }
         )
         paths[f"live-evidence:{name}"] = destination
+
+    changed_sources = [
+        name for name, source in source_files.items()
+        if file_sha256(source) != source_hashes[name]
+    ]
+    if changed_sources:
+        raise RuntimeError(
+            "source strategy evidence changed during publish: " + ", ".join(changed_sources)
+        )
 
     frames = current_manifest_frames(live_config)
     run_manifest = build_run_manifest(
@@ -166,6 +246,7 @@ def sync_live_strategy_evidence(
     paths["live-evidence:run_manifest.csv"] = run_manifest_path
 
     remaining_issues = readiness_evidence_issues(live_config)
+    remaining_issues.extend(strategy_derived_evidence_issues(live_config))
     if remaining_issues:
         raise RuntimeError("published live strategy evidence failed verification: " + "; ".join(remaining_issues))
 
@@ -183,6 +264,7 @@ def sync_live_strategy_evidence(
                 "source_config_sha256": source_config_hash,
                 "live_config_sha256": live_config_hash,
                 "backtest_config_sha256": strategy_hash,
+                "evidence_bundle_sha256": evidence_bundle_hash,
                 "orders_copied": False,
                 "positions_copied": False,
                 "account_state_copied": False,

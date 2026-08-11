@@ -137,6 +137,14 @@ def factor_robustness_data_sha256(
     return mapping_sha256({name: frame_sha256(frame) if not frame.empty else "" for name, frame in frames.items()})
 
 
+def current_factor_robustness_data_sha256(config: dict[str, Any]) -> str:
+    store = DataStore.from_config(config)
+    stocks, prices, fundamentals, benchmark, _freeze_cutoff = factor_robustness_market_data(
+        config, store
+    )
+    return factor_robustness_data_sha256(stocks, prices, fundamentals, benchmark)
+
+
 def factor_robustness_provenance(
     config: dict[str, Any],
     stocks: pd.DataFrame,

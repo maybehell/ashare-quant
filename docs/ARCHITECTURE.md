@@ -205,6 +205,11 @@ Rules:
   activation consume the same append-only failure history; later returns cannot
   restore eligibility. Legacy candidates use benchmark-comparison evidence
   consistently, while forward-only preregistrations use immutable shadow evidence.
+- Publishing research evidence into the live audit workspace requires a current
+  base run manifest and current identities for every required derived artifact.
+  Factor-robustness detail and summary are part of the allowlisted bundle. Every
+  copied row carries one bundle hash, and any source mutation during publication
+  aborts success; orders, positions, and account state are never included.
 - Activation changes strategy authority only; it does not enable broker submit.
 
 ### 3.5 Account and execution domain

@@ -5,6 +5,78 @@ added directly below this introduction, newest first. It records verified facts;
 it is not a release-marketing document and does not replace generated audit
 artifacts.
 
+## 2026-08-11 - Bind live evidence to one current derived bundle
+
+**Objective**
+
+Rebuild an internally consistent research evidence set and prevent stale or
+mixed derived reports from being published into the live audit workspace.
+
+**Changes**
+
+- Added exact current-data recomputation for factor-robustness evidence and a
+  strict `factor_robustness_data_current` readiness check. The expected hash
+  respects the same configured scope and forward-only freeze boundary as the
+  robustness run.
+- Added factor-robustness detail and summary to the required live evidence
+  allowlist. Source and destination publication now require current factor
+  candidate/config/data/isolation checks and current cost-stress config/data
+  checks.
+- Snapshotted every allowlisted source file before copy and added one
+  `evidence_bundle_sha256` to every sync row and success summary. Source changes
+  before, during, or after copy abort success.
+- Recorded the durable publication boundary in `docs/ARCHITECTURE.md` and ADR
+  0012.
+
+**Architecture and safety**
+
+- The change spans strategy governance and the read-only live evidence boundary.
+  It does not activate a strategy or add broker capability.
+- Evidence sync still excludes orders, positions, account state, broker access,
+  ledger initialization, and submission. A success summary is written only
+  after destination base and derived identity verification.
+- Existing flat output paths remain compatible. An interrupted copy has no
+  authority without a successful bundle summary.
+
+**Verification**
+
+- Rebuilt the main research evidence on the current committed cache:
+  `backtest`, `stress`, and `factor-robustness` all exited 0.
+- The factor data hash recomputed from the effective frames is
+  `16cb4ec0aea1ab370ec07d81d251d8f266d0ac69050a03dc26d36760eb6412c0`
+  and now matches strict readiness. Current cost-stress data identity reports
+  `match`.
+- Factor robustness remains honestly blocked as `review_required`: eight of
+  nine perturbation scenarios passed, one was fragile, and the baseline
+  anti-overfit check failed. The current high-cost scenario reports 83.55%
+  excess return but -27.43% maximum drawdown, failing the strict -25% limit.
+- Focused factor, readiness, and sync tests passed: `44 passed in 40.97s`.
+  The source-mutation sync suite passed separately: `6 passed in 0.88s`.
+- Full regression passed:
+  `1099 passed, 39 subtests passed in 167.57s (0:02:47)`.
+- Real local-only publication succeeded with 36 copied files, one generated
+  manifest, and bundle
+  `a2f634c6f760336a8f233da4c4b416e6048ccbf3673777b313a12c73ec80ae7d`.
+  The summary confirms orders, positions, and account state were not copied.
+- The deployment gate still reports `strategy_ready=False`,
+  `broker_read_only_ready=False`, and `ready_to_request_canary=False`.
+  Protected active-strategy, live-ledger, global order, RPA order, and
+  live-workspace order paths remained absent. `emergency_stop` remained true
+  and `allow_broker_submit` remained false.
+
+**Remaining work**
+
+- Do not activate the quarantined main candidate. The three independent
+  successors remain incomplete; the shortest authoritative forward window is
+  4/60 trading days and their freshness is currently 0/3.
+- Refresh market and forward-candidate observations beyond 2026-08-07 without
+  tuning from their observed path, then continue the fixed 60-day gates.
+- Restore current Huatai read-only authentication/evidence and complete replay,
+  alert, sandbox, account-binding, and Canary-capital gates before any separate
+  authorization to initialize a live ledger.
+- Strategy robustness and strict drawdown failures require a new independently
+  justified successor, not relaxed thresholds or post-hoc tuning.
+
 ## 2026-08-11 - Make forward-failure quarantine irreversible
 
 **Objective**

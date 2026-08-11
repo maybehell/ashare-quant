@@ -19,6 +19,15 @@ READINESS_COLUMNS = ["check", "passed", "value", "threshold", "message"]
 READINESS_ROADMAP_COLUMNS = ["priority", "area", "check", "status", "current", "required", "remaining", "next_action", "command"]
 
 
+def expected_factor_robustness_data_sha256(config: dict[str, Any]) -> str:
+    try:
+        from .factor_robustness import current_factor_robustness_data_sha256
+
+        return current_factor_robustness_data_sha256(config)
+    except Exception:
+        return ""
+
+
 def build_live_readiness(
     config: dict[str, Any],
     metrics: dict[str, float],
@@ -322,6 +331,14 @@ def build_live_readiness(
             factor_data_hash or "missing",
             "64-character market-data SHA-256",
             "因子稳健性必须记录实际测试行情的哈希身份。",
+        )
+        expected_factor_data_hash = expected_factor_robustness_data_sha256(config)
+        add(
+            "factor_robustness_data_current",
+            bool(expected_factor_data_hash) and factor_data_hash == expected_factor_data_hash,
+            factor_data_hash or "missing",
+            expected_factor_data_hash or "current factor-robustness market-data SHA-256",
+            "因子稳健性证据必须与当前配置在冻结边界内实际读取的行情数据完全一致。",
         )
         isolation_rows = (
             factor_summary[factor_summary["check"].astype(str) == "factor_robustness_forward_isolation"]

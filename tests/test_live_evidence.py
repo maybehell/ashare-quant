@@ -7,6 +7,7 @@ import pandas as pd
 from ashare_quant.audit import backtest_config_sha256
 from ashare_quant.live_evidence import (
     REQUIRED_STRATEGY_EVIDENCE_FILES,
+    atomic_copy,
     file_sha256,
     sync_live_strategy_evidence,
 )
@@ -64,6 +65,8 @@ class LiveEvidenceTests(unittest.TestCase):
             paths = sync_live_strategy_evidence(strategy, live_config)
 
         self.assertTrue((live / "performance_metrics.csv").exists())
+        self.assertTrue((live / "factor_robustness.csv").exists())
+        self.assertTrue((live / "factor_robustness_summary.csv").exists())
         self.assertEqual(
             file_sha256(source / "performance_metrics.csv"),
             file_sha256(live / "performance_metrics.csv"),
@@ -81,6 +84,11 @@ class LiveEvidenceTests(unittest.TestCase):
         self.assertEqual(summary.loc[0, "status"], "ok")
         self.assertFalse(bool(summary.loc[0, "orders_copied"]))
         self.assertEqual(summary.loc[0, "backtest_config_sha256"], backtest_config_sha256(strategy))
+        bundle_hash = str(summary.loc[0, "evidence_bundle_sha256"])
+        self.assertEqual(len(bundle_hash), 64)
+        audit = pd.read_csv(live / "live_strategy_evidence_sync.csv")
+        self.assertEqual(audit["evidence_bundle_sha256"].nunique(), 1)
+        self.assertEqual(str(audit["evidence_bundle_sha256"].iloc[0]), bundle_hash)
         self.assertIn("live_strategy_evidence_sync.csv", paths)
 
     def test_sync_rejects_different_strategy_configuration(self):
@@ -99,6 +107,66 @@ class LiveEvidenceTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(RuntimeError, "source strategy evidence is not current"):
                 sync_live_strategy_evidence(strategy, live_config)
+
+    def test_sync_rejects_source_change_during_publish(self):
+        strategy, live_config, source, live = self.fixture("live_evidence_source_change")
+        changed = False
+
+        def copy_then_mutate(source_path: Path, destination_path: Path) -> None:
+            nonlocal changed
+            atomic_copy(source_path, destination_path)
+            if not changed:
+                changed = True
+                with (source / "benchmark_comparison.csv").open(
+                    "a", encoding="utf-8"
+                ) as handle:
+                    handle.write("\nchanged,during_publish")
+
+        with (
+            patch("ashare_quant.live_evidence.readiness_evidence_issues", return_value=[]),
+            patch("ashare_quant.live_evidence.atomic_copy", side_effect=copy_then_mutate),
+        ):
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "source strategy evidence changed before publishing benchmark_comparison.csv",
+            ):
+                sync_live_strategy_evidence(strategy, live_config)
+
+        self.assertFalse((live / "live_strategy_evidence_sync_summary.csv").exists())
+
+    def test_sync_rejects_stale_required_derived_identity(self):
+        strategy, live_config, _, live = self.fixture("live_evidence_stale_derived")
+        guard = {
+            "require_factor_robustness": True,
+            "require_cost_stress": True,
+            "require_current_cost_stress": True,
+        }
+        strategy["live_guard"] = guard.copy()
+        live_config["live_guard"] = guard.copy()
+        stale = pd.DataFrame(
+            [
+                {
+                    "check": "factor_robustness_data_current",
+                    "passed": False,
+                    "value": "old-data-hash",
+                }
+            ]
+        )
+
+        with (
+            patch("ashare_quant.live_evidence.readiness_evidence_issues", return_value=[]),
+            patch(
+                "ashare_quant.live_evidence.build_live_readiness_from_outputs",
+                return_value=stale,
+            ),
+        ):
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "source derived strategy evidence is not current.*factor_robustness_data_current",
+            ):
+                sync_live_strategy_evidence(strategy, live_config)
+
+        self.assertFalse((live / "live_strategy_evidence_sync_summary.csv").exists())
 
     def test_sync_rejects_missing_required_evidence(self):
         strategy, live_config, source, _ = self.fixture("live_evidence_missing")

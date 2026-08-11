@@ -1,5 +1,6 @@
 import unittest
 from datetime import date
+from unittest.mock import patch
 from pathlib import Path
 
 import pandas as pd
@@ -983,15 +984,28 @@ class ReadinessTests(unittest.TestCase):
         }
 
         missing = build_live_readiness(**common)
-        passed = build_live_readiness(
-            **common,
-            factor_robustness_summary=pd.DataFrame([
-                {"check": "factor_robustness_status", "passed": True, "value": "passed"},
-                {"check": "factor_robustness_config_sha256", "passed": True, "value": backtest_config_sha256(config)},
-                {"check": "factor_robustness_data_sha256", "passed": True, "value": "a" * 64},
-                {"check": "factor_robustness_forward_isolation", "passed": True, "value": "sample_end=2026-01-01;freeze_cutoff=2026-01-01"},
-            ]),
-        )
+        factor_summary = pd.DataFrame([
+            {"check": "factor_robustness_status", "passed": True, "value": "passed"},
+            {"check": "factor_robustness_config_sha256", "passed": True, "value": backtest_config_sha256(config)},
+            {"check": "factor_robustness_data_sha256", "passed": True, "value": "a" * 64},
+            {"check": "factor_robustness_forward_isolation", "passed": True, "value": "sample_end=2026-01-01;freeze_cutoff=2026-01-01"},
+        ])
+        with patch(
+            "ashare_quant.readiness.expected_factor_robustness_data_sha256",
+            return_value="a" * 64,
+        ):
+            passed = build_live_readiness(
+                **common,
+                factor_robustness_summary=factor_summary,
+            )
+        with patch(
+            "ashare_quant.readiness.expected_factor_robustness_data_sha256",
+            return_value="b" * 64,
+        ):
+            stale = build_live_readiness(
+                **common,
+                factor_robustness_summary=factor_summary,
+            )
 
         missing_row = missing[missing["check"] == "factor_robustness_status"].iloc[0]
         passed_row = passed[passed["check"] == "factor_robustness_status"].iloc[0]
@@ -1002,9 +1016,13 @@ class ReadinessTests(unittest.TestCase):
         for check in (
             "factor_robustness_config_current",
             "factor_robustness_data_bound",
+            "factor_robustness_data_current",
             "factor_robustness_forward_isolation",
         ):
             row = passed[passed["check"] == check].iloc[0]
             self.assertTrue(bool(row["passed"]), check)
+        stale_data = stale[stale["check"] == "factor_robustness_data_current"].iloc[0]
+        self.assertFalse(bool(stale_data["passed"]))
+        self.assertEqual(stale_data["threshold"], "b" * 64)
 if __name__ == "__main__":
     unittest.main()
