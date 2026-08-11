@@ -5,6 +5,89 @@ added directly below this introduction, newest first. It records verified facts;
 it is not a release-marketing document and does not replace generated audit
 artifacts.
 
+## 2026-08-11 - Preserve frozen candidate inputs and committed market scope
+
+**Objective**
+
+Restore reliable daily forward observation after a real 2026-08-11 refresh
+exposed frozen-input mutation, committed-scope contraction, and conflicting
+same-date shadow evidence.
+
+**Changes**
+
+- Immutable candidate refresh now preserves the complete frozen stock catalog
+  and all fundamentals at or before the freeze date. Missing frozen baselines
+  fail closed; only post-freeze prices, benchmark rows, and fundamentals may be
+  appended.
+- Separated the complete committed symbol scope from the smaller incremental
+  request subset. Per-symbol source provenance is merged across refreshes, and
+  newly entering liquidity-ranked symbols are fetched when provenance is
+  missing even if their cached price date is current.
+- Paper and shadow signal generation now reject an incomplete committed fetch
+  scope instead of falling back to every cached symbol.
+- Added an explicit research-only full-scope refresh mode for controlled
+  provenance reconstruction; the daily default remains incremental.
+- Retired the corrupted point-in-time v2 identity without repairing its frozen
+  cache. A provisional v3 was also retired before forward attribution because
+  its pre-registration scope was only 393/395.
+- Created hs300_point_in_time_core_v4_forward only after its isolated cache
+  reached 395/395 with zero failures, then preregistered and sealed it.
+- Retired the original minimum-overlay identity after a same-date immutable
+  component conflict and created
+  breadth_guarded_minimum_overlay_v2_forward with no inherited observations.
+- Updated the active forward-only candidate set, the authoritative
+  architecture invariants, and ADR 0013. Strategy weights and risk thresholds
+  were not tuned from the newly observed returns.
+
+**Architecture and safety**
+
+- A fetch attempt, committed market scope, frozen research identity, and shadow
+  evidence are distinct states. Incremental operational work cannot redefine a
+  frozen identity or silently narrow the strategy's formal universe.
+- Corrupted or conflicting candidate evidence was retained and retired rather
+  than overwritten. Replacement candidates use isolated cache, output, state,
+  and manifest paths and start their forward windows at zero.
+- The workflow remained research-only. It did not activate an execution
+  strategy, initialize a live ledger, create generic/live/RPA order files, or
+  call the broker boundary.
+- Final configuration audit: emergency_stop=True and
+  allow_broker_submit=False.
+
+**Verification**
+
+- Real network reconstruction completed at 800/800 and zero failures for both
+  broad candidates. The point-in-time replacement completed at 395/395 and zero
+  failures after restart-safe partial-cache retry.
+- Successful forward-daily completed without paper or broker orders. Current
+  candidate states are:
+  6bd915f30663d669=10/60,
+  4cd5415b054138e4=0/60, and
+  2174e0a77b9902f2=0/60; all three report current market data and passing
+  frozen-input evidence.
+- Deployment remains blocked at common forward window 0/60; no selected
+  execution strategy exists.
+- Focused data/paper tests: 75 passed in 2.61s.
+- Shared CLI, candidate, deployment, data, and paper tests:
+  236 passed in 11.02s.
+- The first full run reported 1101 passed plus one Windows WinError 5 in an
+  unrelated directory-retry test. That test passed alone, and the complete
+  rerun passed: 1102 passed, 39 subtests passed in 161.12s.
+- Protected paths remained absent:
+  data/active_execution_strategy.json,
+  data/huatai_live_state.sqlite3, generic orders, RPA orders, and live
+  workspace orders.
+
+**Remaining work**
+
+- Do not compare or promote the two new candidates until they accumulate the
+  fixed 60-day forward window; the common comparison window is currently zero.
+- Continue untuned daily observation and monitor committed-scope churn,
+  provenance completeness, factor degradation, drawdown, turnover, and
+  candidate-set identity.
+- Restore current Huatai read-only authentication and complete replay, alert,
+  sandbox, account-binding, and capital gates before any separately authorized
+  live-ledger initialization or Canary submission.
+
 ## 2026-08-11 - Bind live evidence to one current derived bundle
 
 **Objective**

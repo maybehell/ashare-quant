@@ -102,6 +102,10 @@ Rules:
 - Frozen candidate caches are never historically repaired in place. Corrective
   reconstruction uses isolated paths and research-only identity, and its
   historical output cannot inherit forward evidence or execution authority.
+- An immutable candidate refresh preserves the complete frozen stock catalog and
+  every fundamental row at or before the freeze boundary. It may append only
+  post-freeze prices, benchmark rows, and fundamentals; a missing frozen baseline
+  fails closed instead of being reconstructed from newer market metadata.
 - Historical gaps are evaluated per symbol against the requested research start
   and the verified listing date; incremental latest-date overlap alone is not
   sufficient evidence of historical coverage.
@@ -146,6 +150,11 @@ Rules:
   that scope, but resolves the latest complete market date from the committed
   scope. Derived evidence that can affect execution readiness must bind to the
   current main run-manifest data identity.
+- A candidate incremental refresh keeps the complete committed symbol scope
+  separate from the smaller request subset. Per-symbol source provenance is
+  retained across increments, newly entering symbols are fetched before the
+  scope can pass, and exiting symbols are removed from that scope. Paper and
+  shadow signal generation fail closed when the committed scope is incomplete.
 - Data-acquisition scheduling and resumability knobs are operational identity,
   not strategy identity. They are excluded from the backtest strategy hash;
   their actual data effects remain bound by market-file and run-manifest hashes.

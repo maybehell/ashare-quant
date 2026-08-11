@@ -1,0 +1,68 @@
+{
+  "paths": {
+    "cache_dir": "data/cache_hs300_point_in_time_core_v4_forward",
+    "output_dir": "outputs_hs300_point_in_time_core_v4_forward",
+    "state_db": "data/state_hs300_point_in_time_core_v4_forward.sqlite3"
+  },
+  "validation": {
+    "candidate_path": "data/live_candidate_hs300_point_in_time_core_v4_forward.json",
+    "research_only": true,
+    "optimized_on_current_cache": true,
+    "experiment_status": "preregistered_forward_only",
+    "experiment_reason": "Replacement for v3 after preregistration exposed an incomplete 393/395 committed market scope; v2/v3 observations and authority are not inherited.",
+    "research_rationale": "Use contemporaneous CSI 300 membership and a 70% reference anchor to provide a structurally independent, lower-survivorship-bias family beside the broad-market liquidity strategies.",
+    "primary_challenger_config": "",
+    "primary_challenger_strict": false,
+    "require_frozen_input_evidence": true,
+    "research_archive_configs": [],
+    "research_governance_state_path": "data/research_governance_hs300_point_in_time_core_v4_forward.json",
+    "research_time_folds": 3
+  },
+  "strategy": {
+    "name": "hs300_point_in_time_core70_multifactor30_v4_forward",
+    "top_n": 100,
+    "max_stock_weight": 0.03,
+    "max_industry_weight": 0.30,
+    "weighting": "equal",
+    "benchmark_membership": {
+      "enabled": true,
+      "index_symbol": "000300",
+      "max_staleness_days": 120
+    },
+    "reference_anchor": {
+      "enabled": true,
+      "weight": 0.70,
+      "top_n": 300,
+      "max_stock_weight": 0.02,
+      "weighting": "liquidity_sqrt"
+    },
+    "lookbacks": {
+      "momentum": 60,
+      "long_momentum": 120,
+      "volatility": 60,
+      "drawdown": 60,
+      "short_reversal": 20,
+      "liquidity": 60
+    },
+    "weights": {
+      "momentum": 0.15,
+      "long_momentum": 0.15,
+      "valuation": 0.00,
+      "quality": 0.00,
+      "low_volatility": 0.20,
+      "low_drawdown": 0.15,
+      "trend_quality": 0.15,
+      "liquidity": 0.20
+    }
+  },
+  "data": {
+    "fetch_benchmark_membership_only": true,
+    "immutable_before_candidate_freeze": true,
+    "history_source": "baostock",
+    "enrich_metadata": false,
+    "history_session_retries": 3,
+    "history_session_retry_delay_seconds": 2,
+    "request_timeout_seconds": 5,
+    "complete_market_min_symbol_count": 270
+  }
+}

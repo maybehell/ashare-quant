@@ -45,6 +45,16 @@ class PaperTests(unittest.TestCase):
             patch("ashare_quant.paper.validate_config", return_value=[]),
             patch("ashare_quant.paper.validate_market_data", return_value=[]),
             patch(
+                "ashare_quant.paper.scope_market_frames_to_committed_fetch",
+                return_value=(
+                    store.load_market_data.return_value[0],
+                    store.load_market_data.return_value[1],
+                    store.load_market_data.return_value[2],
+                    True,
+                    "complete",
+                ),
+            ),
+            patch(
                 "ashare_quant.paper.complete_market_dates",
                 return_value=[date(2026, 1, 1), date(2026, 1, 2)],
             ),
@@ -60,6 +70,34 @@ class PaperTests(unittest.TestCase):
         self.assertTrue(signals.empty)
         self.assertFalse((output_dir / "shadow_archive").exists())
         store.log_run.assert_called_once()
+
+    def test_shadow_rejects_invalid_committed_fetch_scope(self):
+        config = {
+            "paths": {"output_dir": str(Path.cwd() / "test_outputs" / "shadow_invalid_scope")},
+            "strategy": {"name": "scope-test", "top_n": 10},
+        }
+        store = Mock()
+        store.load_market_data.return_value = (
+            pd.DataFrame([{"symbol": "600000"}]),
+            pd.DataFrame([{"date": date(2026, 1, 1), "symbol": "600000"}]),
+            pd.DataFrame(),
+        )
+        with (
+            patch("ashare_quant.paper.DataStore.from_config", return_value=store),
+            patch("ashare_quant.paper.validate_config", return_value=[]),
+            patch(
+                "ashare_quant.paper.scope_market_frames_to_committed_fetch",
+                return_value=(
+                    store.load_market_data.return_value[0],
+                    store.load_market_data.return_value[1],
+                    store.load_market_data.return_value[2],
+                    False,
+                    "stage=complete;requested=800;fetched=10",
+                ),
+            ),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "complete committed fetch scope"):
+                run_shadow_signals(config)
 
     def test_shadow_uses_latest_committed_fetch_scope_for_complete_dates(self):
         output_dir = Path.cwd() / "test_outputs" / "shadow_committed_scope"

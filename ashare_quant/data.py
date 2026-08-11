@@ -375,6 +375,7 @@ def fetch_akshare(store: DataStore, config: dict[str, Any]) -> list[Path]:
                 stocks, symbols = cached
                 print(f"Stock spot source unavailable; using cached universe ({len(symbols)} symbols). Details: {exc}")
 
+        formal_symbols = list(symbols)
         end = finalized_market_data_end(config)
         configured_end = config.get("backtest", {}).get("end")
         if configured_end:
@@ -400,12 +401,22 @@ def fetch_akshare(store: DataStore, config: dict[str, Any]) -> list[Path]:
         cached_ranges = cached_price_date_ranges_by_symbol(store) if incremental else {}
         cached_latest = {symbol: bounds[1] for symbol, bounds in cached_ranges.items()}
         cached_earliest = {symbol: bounds[0] for symbol, bounds in cached_ranges.items()}
-        if immutable_candidate_freeze_date(config) is not None:
+        if (
+            immutable_candidate_freeze_date(config) is not None
+            and bool(config.get("data", {}).get("candidate_incremental_gap_only", True))
+        ):
             requested_count = len(symbols)
-            symbols = [
-                symbol for symbol in symbols
-                if cached_latest.get(normalize_symbol(symbol), date.min) < end
-            ]
+            try:
+                provenance = store.read_frame("fetch_history_provenance", required=False)
+                proven_symbols = {
+                    normalize_symbol(symbol)
+                    for symbol in provenance.get("symbol", pd.Series(dtype=str))
+                }
+            except (AttributeError, FileNotFoundError, OSError, ValueError, TypeError):
+                proven_symbols = set()
+            symbols = candidate_incremental_gap_symbols(
+                symbols, cached_latest, end, proven_symbols
+            )
             print(f"Candidate incremental gap: pending={len(symbols)}/{requested_count}, target={end}.")
             if not symbols:
                 cached_benchmark = store.load_benchmark(required=False)
@@ -799,7 +810,9 @@ def fetch_akshare(store: DataStore, config: dict[str, Any]) -> list[Path]:
                 pd.DataFrame(columns=BENCHMARK_COLUMNS),
                 config,
             )
-            fundamentals = make_fundamentals_from_prices(prices)
+            fundamentals = merge_generated_fundamentals_cache(
+                store, make_fundamentals_from_prices(prices), config
+            )
             write_fetch_outputs(
                 store,
                 stocks,
@@ -815,6 +828,7 @@ def fetch_akshare(store: DataStore, config: dict[str, Any]) -> list[Path]:
                 "price_checkpoint",
                 history_provenance=history_provenance,
                 historical_backfill_symbols=historical_backfill_symbols,
+                scope_symbols=formal_symbols,
             )
             print(f"Committed price checkpoint: fetched_symbols={len(price_frames)}, merged_rows={len(prices)}.")
         if config.get("data", {}).get("enrich_metadata", True):
@@ -876,7 +890,9 @@ def fetch_akshare(store: DataStore, config: dict[str, Any]) -> list[Path]:
         if fetched_benchmark.empty:
             failures.append({"symbol": str(config.get("benchmark", {}).get("symbol", "000300")), "stage": "benchmark", "error": "empty"})
         stocks, prices, benchmark = merge_fetched_cache(store, fetched_stocks, fetched_prices, fetched_benchmark, config)
-        fundamentals = make_fundamentals_from_prices(prices)
+        fundamentals = merge_generated_fundamentals_cache(
+            store, make_fundamentals_from_prices(prices), config
+        )
         if fallback_history_count:
             print(f"Used non-primary history sources for {fallback_history_count}/{len(price_frames)} symbols.")
 
@@ -914,6 +930,7 @@ def fetch_akshare(store: DataStore, config: dict[str, Any]) -> list[Path]:
             "complete",
             history_provenance=history_provenance,
             historical_backfill_symbols=historical_backfill_symbols,
+            scope_symbols=formal_symbols,
         ),
         store,
         progress_frame_name,
@@ -933,6 +950,30 @@ def commit_formal_fetch_then_progress(
     return paths
 
 
+def merge_fetch_history_provenance(
+    store: DataStore,
+    current_rows: list[dict[str, object]],
+    scope_symbols: list[str],
+) -> pd.DataFrame:
+    try:
+        cached = store.read_frame("fetch_history_provenance", required=False)
+    except (AttributeError, FileNotFoundError, OSError, ValueError, TypeError):
+        cached = pd.DataFrame(columns=HISTORY_PROVENANCE_COLUMNS)
+    current = pd.DataFrame(current_rows, columns=HISTORY_PROVENANCE_COLUMNS)
+    merged = pd.concat([cached, current], ignore_index=True)
+    if merged.empty:
+        return pd.DataFrame(columns=HISTORY_PROVENANCE_COLUMNS)
+    merged["symbol"] = merged["symbol"].map(normalize_symbol)
+    allowed = {normalize_symbol(symbol) for symbol in scope_symbols}
+    return (
+        merged[merged["symbol"].isin(allowed)]
+        .drop_duplicates(["symbol"], keep="last")
+        .sort_values(["symbol"])
+        .reset_index(drop=True)
+        .reindex(columns=HISTORY_PROVENANCE_COLUMNS)
+    )
+
+
 def write_fetch_outputs(
     store: DataStore,
     stocks: pd.DataFrame,
@@ -948,9 +989,14 @@ def write_fetch_outputs(
     stage: str,
     history_provenance: list[dict[str, object]] | None = None,
     historical_backfill_symbols: list[str] | None = None,
+    scope_symbols: list[str] | None = None,
 ) -> list[Path]:
+    formal_symbols = list(scope_symbols if scope_symbols is not None else symbols)
+    formal_provenance = merge_fetch_history_provenance(
+        store, history_provenance or [], formal_symbols
+    )
     fetch_summary = build_fetch_summary(
-        symbols,
+        formal_symbols,
         price_frames,
         failures,
         prices,
@@ -959,6 +1005,8 @@ def write_fetch_outputs(
         incremental=incremental,
         stage=stage,
         historical_backfill_symbols=historical_backfill_symbols,
+        attempted_symbols=symbols,
+        formal_provenance=formal_provenance,
     )
     paths = [
         store.write_frame("stocks", normalize_stocks(stocks)),
@@ -966,7 +1014,7 @@ def write_fetch_outputs(
         store.write_frame("fundamentals", normalize_fundamentals(fundamentals)),
         store.write_frame("benchmark", normalize_benchmark(benchmark)),
         store.write_frame("fetch_summary", fetch_summary),
-        store.write_frame("fetch_history_provenance", pd.DataFrame(history_provenance or [], columns=HISTORY_PROVENANCE_COLUMNS)),
+        store.write_frame("fetch_history_provenance", formal_provenance),
     ]
     if failures:
         paths.append(store.write_frame("fetch_failures", pd.DataFrame(failures)))
@@ -1003,7 +1051,9 @@ def recover_partial_prices(store: DataStore, config: dict[str, Any]) -> list[Pat
         pd.DataFrame(columns=BENCHMARK_COLUMNS),
         config,
     )
-    fundamentals = make_fundamentals_from_prices(prices)
+    fundamentals = merge_generated_fundamentals_cache(
+        store, make_fundamentals_from_prices(prices), config
+    )
     price_frames = [frame.copy() for _symbol, frame in partial.groupby("symbol", sort=False)]
     fetch_starts = partial.groupby("symbol")["date"].min().to_dict()
     failures_frame = store.read_frame("fetch_failures", required=False)
@@ -1278,6 +1328,37 @@ def merge_benchmark_cache(store: DataStore, fetched: pd.DataFrame, config: dict[
     )
 
 
+def merge_generated_fundamentals_cache(
+    store: DataStore,
+    generated: pd.DataFrame,
+    config: dict[str, Any],
+) -> pd.DataFrame:
+    incoming = normalize_fundamentals(generated)
+    cutoff = immutable_candidate_freeze_date(config)
+    if cutoff is None:
+        return incoming
+
+    cached = normalize_fundamentals(store.read_frame("fundamentals", required=False))
+    if cached.empty:
+        raise RuntimeError(
+            "Immutable candidate cache has no frozen fundamentals; refusing refresh."
+        )
+    frozen = cached.loc[
+        pd.to_datetime(cached["date"], errors="coerce").dt.date <= cutoff
+    ].copy()
+    forward = pd.concat(
+        [
+            rows_strictly_after(cached, cutoff),
+            rows_strictly_after(incoming, cutoff),
+        ],
+        ignore_index=True,
+    )
+    return normalize_fundamentals(
+        pd.concat([frozen, forward], ignore_index=True)
+        .drop_duplicates(["date", "symbol"], keep="last")
+        .sort_values(["date", "symbol"])
+    )
+
 def fetch_start_for_symbol(
     symbol: str,
     base_start: date,
@@ -1295,6 +1376,27 @@ def fetch_start_for_symbol(
     overlap = int(config.get("data", {}).get("incremental_overlap_days", 20))
     candidate = latest - timedelta(days=max(0, overlap))
     return max(base_start, candidate)
+
+def candidate_incremental_gap_symbols(
+    symbols: list[str],
+    cached_latest: dict[str, date],
+    end: date,
+    proven_symbols: set[str] | None = None,
+) -> list[str]:
+    proven = (
+        {normalize_symbol(symbol) for symbol in proven_symbols}
+        if proven_symbols is not None
+        else None
+    )
+    return [
+        symbol
+        for symbol in symbols
+        if (
+            cached_latest.get(normalize_symbol(symbol), date.min) < end
+            or (proven is not None and normalize_symbol(symbol) not in proven)
+        )
+    ]
+
 
 def immutable_fetch_start(config: dict[str, Any], start: date) -> date:
     cutoff = immutable_candidate_freeze_date(config)
@@ -1423,7 +1525,14 @@ def merge_fetched_cache(
             f"benchmark={len(fetched_benchmark)}/{original_benchmark_rows}."
         )
     cached_stocks, cached_prices, cached_benchmark = load_cached_market_frames(store)
-    stocks = merge_cache_frame(cached_stocks, fetched_stocks, ["symbol"], ["symbol"])
+    if freeze_cutoff is not None:
+        if cached_stocks.empty:
+            raise RuntimeError(
+                "Immutable candidate cache has no frozen stock catalog; refusing refresh."
+            )
+        stocks = cached_stocks.copy()
+    else:
+        stocks = merge_cache_frame(cached_stocks, fetched_stocks, ["symbol"], ["symbol"])
     prices = merge_cache_frame(cached_prices, fetched_prices, ["date", "symbol"], ["date", "symbol"])
     benchmark = merge_cache_frame(cached_benchmark, fetched_benchmark, ["date"], ["date"])
     if len(prices) > len(fetched_prices):
@@ -1548,8 +1657,24 @@ def build_fetch_summary(
     incremental: bool = True,
     stage: str = "complete",
     historical_backfill_symbols: list[str] | None = None,
+    attempted_symbols: list[str] | None = None,
+    formal_provenance: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
-    fetched_symbols = sorted({str(frame["symbol"].iloc[0]) for frame in price_frames if not frame.empty and "symbol" in frame})
+    refreshed_symbols = sorted(
+        {
+            normalize_symbol(frame["symbol"].iloc[0])
+            for frame in price_frames
+            if not frame.empty and "symbol" in frame
+        }
+    )
+    if formal_provenance is None:
+        fetched_symbols = refreshed_symbols
+    else:
+        requested_set = {normalize_symbol(symbol) for symbol in symbols}
+        fetched_symbols = sorted(
+            set(formal_provenance.get("symbol", pd.Series(dtype=str)).map(normalize_symbol))
+            & requested_set
+        )
     latest = max(merged_prices["date"]) if not merged_prices.empty and "date" in merged_prices else ""
     starts = list((fetch_starts or {}).values())
     return pd.DataFrame(
@@ -1557,6 +1682,8 @@ def build_fetch_summary(
             {
                 "requested_symbols": len(symbols),
                 "fetched_symbols": len(fetched_symbols),
+                "attempted_symbols": len(attempted_symbols if attempted_symbols is not None else symbols),
+                "refreshed_symbols": len(refreshed_symbols),
                 "failed_items": len(failures),
                 "fallback_history_symbols": fallback_history_count,
                 "historical_backfill_symbols": len(set(historical_backfill_symbols or [])),

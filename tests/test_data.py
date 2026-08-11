@@ -18,6 +18,7 @@ from ashare_quant.data import (
     apply_stock_info,
     apply_stock_profile_cninfo,
     cached_universe_symbols,
+    candidate_incremental_gap_symbols,
     benchmark_membership_fetch_symbols,
     enrich_stock_metadata_checkpointed,
     expected_history_start_dates,
@@ -44,6 +45,7 @@ from ashare_quant.data import (
     immutable_candidate_freeze_date,
     merge_benchmark_cache,
     merge_fetched_cache,
+    merge_generated_fundamentals_cache,
     metadata_refresh_symbols,
     price_frame_issues,
     repair_tx_history_with_hfq,
@@ -138,6 +140,26 @@ class CommittedFetchMarketScopeTests(unittest.TestCase):
         self.assertFalse(passed)
         self.assertEqual(len(scoped), len(prices))
         self.assertIn("bound_symbols=1", value)
+
+
+class CandidateIncrementalScopeTests(unittest.TestCase):
+    def test_selects_only_symbols_missing_the_target_date(self):
+        symbols = ["000001", "000002", "000003", "000004"]
+        latest = {
+            "000001": date(2026, 8, 11),
+            "000002": date(2026, 8, 8),
+            "000004": date(2026, 8, 11),
+        }
+
+        self.assertEqual(
+            candidate_incremental_gap_symbols(
+                symbols,
+                latest,
+                date(2026, 8, 11),
+                {"000001", "000002", "000003"},
+            ),
+            ["000002", "000003", "000004"],
+        )
 
 
 class StockMetadataNormalizationTests(unittest.TestCase):
@@ -472,12 +494,40 @@ class DataFetchTests(unittest.TestCase):
         store.write_frame("stocks", stocks)
         store.write_frame("prices", cached_prices)
         store.write_frame(
+            "fundamentals",
+            pd.DataFrame(
+                [
+                    {"date": "2026-01-02", "symbol": "000001", "pe": 9, "pb": 1, "roe": 0.1},
+                ]
+            ),
+        )
+        store.write_frame(
             "benchmark",
             pd.DataFrame(
                 [
                     {"date": "2026-01-02", "symbol": "000300", "name": "CSI300", "close": 100},
                 ]
             ),
+        )
+        fresh_stocks = pd.DataFrame(
+            [
+                {
+                    "symbol": "000001",
+                    "name": "renamed",
+                    "board": "main",
+                    "industry": "technology",
+                    "list_date": "2020-01-01",
+                    "is_st": True,
+                },
+                {
+                    "symbol": "000002",
+                    "name": "new",
+                    "board": "main",
+                    "industry": "technology",
+                    "list_date": "2026-01-03",
+                    "is_st": False,
+                },
+            ]
         )
         fresh_prices = pd.DataFrame(
             [
@@ -492,14 +542,36 @@ class DataFetchTests(unittest.TestCase):
             ]
         )
 
-        _, prices, benchmark = merge_fetched_cache(
+        merged_stocks, prices, benchmark = merge_fetched_cache(
             store,
-            stocks,
+            fresh_stocks,
             fresh_prices,
             fresh_benchmark,
             config,
         )
+        fundamentals = merge_generated_fundamentals_cache(
+            store,
+            pd.DataFrame(
+                [
+                    {"date": "2026-01-02", "symbol": "000001", "pe": 99, "pb": 9, "roe": 0.9},
+                    {"date": "2026-01-03", "symbol": "000001", "pe": 10, "pb": 2, "roe": 0.2},
+                ]
+            ),
+            config,
+        )
 
+        pd.testing.assert_frame_equal(
+            normalize_stocks(merged_stocks),
+            normalize_stocks(stocks),
+        )
+        self.assertEqual(
+            float(fundamentals.loc[fundamentals["date"] == date(2026, 1, 2), "pe"].iloc[0]),
+            9.0,
+        )
+        self.assertEqual(
+            float(fundamentals.loc[fundamentals["date"] == date(2026, 1, 3), "pe"].iloc[0]),
+            10.0,
+        )
         self.assertEqual(immutable_candidate_freeze_date(config), date(2026, 1, 2))
         self.assertEqual(immutable_fetch_start(config, date(2024, 1, 1)), date(2026, 1, 3))
         merged_benchmark = merge_benchmark_cache(store, pd.DataFrame([
@@ -750,6 +822,67 @@ class DataFetchTests(unittest.TestCase):
         )
 
         self.assertEqual(summary.iloc[0]["stage"], "price_checkpoint")
+
+    def test_incremental_subset_preserves_complete_committed_scope(self):
+        root = Path.cwd() / "test_outputs" / "incremental_scope_manifest"
+        config = {
+            "paths": {
+                "cache_dir": str(root / "cache"),
+                "state_db": str(root / "state.sqlite3"),
+            }
+        }
+        store = DataStore.from_config(config)
+        store.write_frame(
+            "fetch_history_provenance",
+            pd.DataFrame(
+                [
+                    {"symbol": "000001", "source": "baostock"},
+                    {"symbol": "000002", "source": "baostock"},
+                ],
+                columns=["symbol", "source"],
+            ),
+        )
+        stocks = pd.DataFrame(
+            [
+                {"symbol": symbol, "name": symbol, "board": "main", "industry": "bank", "list_date": "2020-01-01", "is_st": False}
+                for symbol in ["000001", "000002"]
+            ]
+        )
+        prices = pd.DataFrame(
+            [
+                {"date": "2026-01-02", "symbol": symbol, "open": 1, "high": 1, "low": 1, "close": 1, "volume": 1, "amount": 10}
+                for symbol in ["000001", "000002"]
+            ]
+        )
+        write_fetch_outputs(
+            store,
+            stocks,
+            prices,
+            pd.DataFrame(
+                [
+                    {"date": "2026-01-02", "symbol": symbol, "pe": 10, "pb": 1, "roe": 0.1}
+                    for symbol in ["000001", "000002"]
+                ]
+            ),
+            pd.DataFrame([{"date": "2026-01-02", "symbol": "000300", "name": "沪深300", "close": 100}]),
+            ["000002"],
+            [prices[prices["symbol"] == "000002"]],
+            [],
+            0,
+            {"000002": date(2026, 1, 1)},
+            True,
+            "complete",
+            history_provenance=[{"symbol": "000002", "source": "baostock"}],
+            scope_symbols=["000001", "000002"],
+        )
+
+        summary = store.read_frame("fetch_summary").iloc[0]
+        provenance = store.read_frame("fetch_history_provenance")
+        self.assertEqual(int(summary["requested_symbols"]), 2)
+        self.assertEqual(int(summary["fetched_symbols"]), 2)
+        self.assertEqual(int(summary["attempted_symbols"]), 1)
+        self.assertEqual(int(summary["refreshed_symbols"]), 1)
+        self.assertEqual(set(provenance["symbol"]), {"000001", "000002"})
 
     def test_write_fetch_outputs_persists_price_checkpoint(self):
         root = Path.cwd() / "test_outputs" / "write_fetch_outputs_checkpoint"

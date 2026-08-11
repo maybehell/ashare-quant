@@ -101,6 +101,11 @@ def run_paper(
     stocks, prices, fundamentals, fetch_scope_passed, fetch_scope_value = (
         scope_market_frames_to_committed_fetch(store, stocks, prices, fundamentals)
     )
+    if not fetch_scope_passed:
+        raise RuntimeError(
+            "Signal generation requires a complete committed fetch scope; "
+            f"current scope is invalid: {fetch_scope_value}"
+        )
     data_errors = validate_market_data(stocks, prices, fundamentals)
     if data_errors:
         raise ValueError("; ".join(data_errors))
@@ -238,6 +243,11 @@ def run_shadow_signals(
     stocks, prices, fundamentals, fetch_scope_passed, fetch_scope_value = (
         scope_market_frames_to_committed_fetch(store, stocks, prices, fundamentals)
     )
+    if not fetch_scope_passed:
+        raise RuntimeError(
+            "Signal generation requires a complete committed fetch scope; "
+            f"current scope is invalid: {fetch_scope_value}"
+        )
     data_errors = validate_market_data(stocks, prices, fundamentals)
     if data_errors:
         raise ValueError("; ".join(data_errors))
