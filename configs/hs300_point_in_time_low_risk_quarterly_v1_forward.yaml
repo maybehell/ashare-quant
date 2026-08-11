@@ -1,0 +1,97 @@
+extends: hs300_point_in_time_history_reconstruction.yaml
+
+paths:
+  cache_dir: data/cache_hs300_point_in_time_low_risk_quarterly_v1_forward
+  output_dir: outputs_hs300_point_in_time_low_risk_quarterly_v1_forward
+  state_db: data/state_hs300_point_in_time_low_risk_quarterly_v1_forward.sqlite3
+
+validation:
+  candidate_path: data/live_candidate_hs300_point_in_time_low_risk_quarterly_v1_forward.json
+  research_governance_state_path: data/research_governance_hs300_point_in_time_low_risk_quarterly_v1_forward.json
+  research_only: true
+  optimized_on_current_cache: true
+  experiment_status: rejected
+  experiment_reason: >-
+    Rejected on the first pre-specified historical diagnostic: total excess
+    return -11.15%, last-30% out-of-sample excess -4.38%, information ratio
+    -0.458, and zero positive test folds across three walk-forward folds.
+  rejection_reason: >-
+    The candidate reduced maximum drawdown from 15.66% to 12.31%, but its
+    benchmark-relative evidence failed in-sample, out-of-sample, and every
+    walk-forward fold. No factor-weight or lookback sweep is allowed.
+  research_rationale: >-
+    Test the published China A-share low-risk anomaly with a broad, equal-weighted,
+    industry-neutral portfolio and quarterly rebalancing. Parameters were fixed
+    before this candidate's first historical evaluation and are not part of a sweep.
+  require_frozen_input_evidence: true
+  primary_challenger_config: ""
+  primary_challenger_strict: false
+  research_archive_configs: []
+  comparison_candidate_configs: []
+  forward_only_candidate_configs: []
+  research_time_folds: 3
+
+backtest:
+  rebalance: quarterly
+
+strategy:
+  name: hs300_point_in_time_low_risk120_quarterly_v1_forward
+  top_n: 120
+  max_stock_weight: 0.015
+  max_industry_weight: 0.25
+  weighting: equal
+  benchmark_membership:
+    enabled: true
+    index_symbol: "000300"
+    max_staleness_days: 120
+  reference_anchor:
+    enabled: false
+  turnover_control:
+    enabled: false
+  lookbacks:
+    momentum: 60
+    long_momentum: 120
+    volatility: 120
+    drawdown: 120
+    short_reversal: 20
+    residual_beta: 252
+    residual_momentum: 120
+    residual_momentum_skip: 20
+    idiosyncratic_volatility: 120
+    liquidity: 60
+  required_factors:
+    - low_idiosyncratic_volatility
+  weights:
+    momentum: 0.00
+    long_momentum: 0.00
+    valuation: 0.00
+    quality: 0.00
+    low_volatility: 0.25
+    low_downside_volatility: 0.15
+    low_drawdown: 0.10
+    residual_momentum: 0.00
+    low_idiosyncratic_volatility: 0.45
+    liquidity: 0.05
+  industry_neutralization:
+    enabled: true
+    min_group_size: 5
+  cross_sectional_neutralization:
+    enabled: false
+
+risk_overlay:
+  enabled: false
+
+data:
+  fetch_benchmark_membership_only: true
+  immutable_before_candidate_freeze: true
+  incremental_fetch: true
+  preserve_cached_history_on_fetch: true
+  history_source: baostock
+  enrich_metadata: false
+  min_fetch_success_ratio: 0.99
+  min_fetch_success_symbols: 390
+
+auto_live:
+  enabled: false
+  allow_broker_submit: false
+  emergency_stop: true
