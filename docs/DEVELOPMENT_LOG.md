@@ -5,6 +5,173 @@ added directly below this introduction, newest first. It records verified facts;
 it is not a release-marketing document and does not replace generated audit
 artifacts.
 
+## 2026-08-11 - Dismiss Huatai post-login notices safely
+
+**Objective**
+
+Remove the normal Huatai navigation announcement after login without changing
+notice preferences or granting broader desktop authority.
+
+**Changes**
+
+- Added `huatai_notice.py` as an isolated broker-boundary capability with an
+  atomic redacted `huatai_notice_audit.csv`.
+- Bound dismissal to one SHA-256-pinned Huatai process pair and exactly one
+  visible `xiadan.exe` `#32770` dialog containing the navigation label, both
+  notice-preference labels, and one `CCustomTabCtrl`.
+- The driver sends one `WM_CLOSE` to the identified dialog and confirms it is
+  no longer visible. It never clicks either preference, uses generic keys,
+  discovers a generic close button, or uses screen coordinates.
+- Integrated dismissal after a successful account snapshot and before desktop
+  Canary preview. A blocked or ambiguous notice skips Canary desktop navigation
+  for that refresh.
+- Enabled the capability in both Huatai configurations, added ADR 0015, and
+  updated broker-boundary architecture and artifact ownership.
+
+**Architecture and safety**
+
+- Notice dismissal cannot access credentials, orders, ledger initialization,
+  account import, emergency-stop state, or broker submission.
+- Real audit reported `detected=true`, `close_count=1`, and
+  `dismissal_confirmed=true`.
+- The subsequent buy/sell previews and order/trade/cancel empty monitors all
+  passed with `submit_invoked=false` and `cancel_invoked=false`.
+- The live SQLite ledger, live orders, RPA orders, and auto-live orders remained
+  absent. Emergency stop remained active and broker submission remained
+  disabled.
+- Current desktop Canary sandbox certification passed after fresh evidence, but
+  it does not authorize submission or weaken any independent live gate.
+
+**Verification**
+
+- `.\\.venv\\Scripts\\python.exe -m pytest tests\\test_huatai_notice.py tests\\test_huatai_login.py tests\\test_cli.py -q`:
+  `115 passed in 1.92s`.
+- Real `broker-refresh --live-config configs/huatai_desktop_canary.yaml`:
+  completed without broker submission; the notice was closed once, buy/sell
+  preview passed, and all three empty monitors passed.
+- `.\\.venv\\Scripts\\python.exe -m pytest -q`:
+  `1116 passed, 39 subtests passed in 311.25s`.
+
+**Remaining work**
+
+- The notice-close path is complete for the currently observed Huatai dialog.
+  Any future marker/layout change intentionally blocks until reviewed.
+
+## 2026-08-11 - Validate Huatai automatic login read-only recovery
+
+**Objective**
+
+Repair the login-control Unicode contract and verify one real DPAPI-backed
+Huatai login without creating orders or initializing the live ledger.
+
+**Changes**
+
+- Replaced the corrupted login-button literals with ASCII Python Unicode
+  escapes for the exact `ç»å½` and `ç¨æ·ç»å½` UIA names.
+- Added a regression test that binds both runtime constants to their exact
+  Unicode values.
+- Kept strict process, root-window, parent-control, readback, and single-click
+  requirements unchanged.
+
+**Architecture and safety**
+
+- The first refresh observed only the market window and exhausted bounded
+  trading-module readiness with `login_attempted=false`; it did not access
+  credentials or click login.
+- One F12 navigation was sent to the unique SHA-256-pinned market window. The
+  next snapshot explicitly classified `broker_authentication_required`.
+- The controlled refresh verified account-field readback, entered the
+  current-user DPAPI credential, clicked the exact login control once, and
+  confirmed `account_snapshot_ready` after three snapshots.
+- The login audit contains neither password nor account fields. The live SQLite
+  ledger, live orders, RPA orders, and auto-live orders remained absent.
+- Emergency stop stayed active and broker submission stayed disabled. Canary
+  remained blocked because current order-form preview/monitor certification did
+  not pass; this was not bypassed.
+
+**Verification**
+
+- Real `broker-refresh --live-config configs/huatai_desktop_canary.yaml`:
+  completed without broker submission; login audit reported
+  `attempted=true`, `account_field_verified=true`,
+  `login_click_count=1`; refresh reported `status=ok` and
+  `login_status=authenticated`.
+- `.\\.venv\\Scripts\\python.exe -m pytest tests\\test_huatai_login.py tests\\test_cli.py tests\\test_live_secrets.py tests\\test_local_operator.py -q`:
+  `140 passed in 3.28s`.
+- `.\\.venv\\Scripts\\python.exe -m pytest -q`:
+  `1109 passed, 39 subtests passed in 313.58s`.
+
+**Remaining work**
+
+- Repair and separately re-certify the current Huatai order-form preview and
+  monitor contracts before any future Canary review. Automatic login success
+  grants no submission authority.
+
+## 2026-08-11 - Add constrained Huatai automatic login
+
+**Objective**
+
+Allow an expired Huatai desktop trading session to recover during read-only
+broker refresh without granting order, ledger, or submission authority.
+
+**Changes**
+
+- Added `huatai_login.py` as a login-only broker-boundary module. It validates
+  the pinned Huatai processes and exact UIA login signature, verifies account
+  readback, enters a DPAPI-protected password, and clicks the exact login button
+  at most once.
+- Added `broker-login-enroll`, which accepts the trading password only through
+  two matching hidden prompts and preserves existing SMTP and integrity secrets
+  in the current-user DPAPI payload.
+- Integrated one bounded login attempt into `broker-refresh` only when the
+  current collector output explicitly reports authentication and the structured
+  desktop stage agrees. Snapshot polling confirms success without another click.
+- Added redacted `huatai_login_audit.csv` evidence and login fields to the
+  read-only refresh status. Updated both Huatai configs and the local operator
+  guidance.
+- Added ADR 0014 and updated the broker-boundary architecture and artifact
+  ownership table.
+
+**Architecture and safety**
+
+- ADR 0014 supersedes only ADR 0005's manual-authentication requirement. Window
+  identity, duplicate-process blocking, and all order safety rules remain.
+- Captcha, second factor, unexpected controls, process/window ambiguity, missing
+  credentials, account mismatch, and confirmation timeout fail closed.
+- The login module has no order, cancel, ledger-initialization, account-import,
+  emergency-stop, or submission-switch capability.
+- Configuration remains `emergency_stop=true` and
+  `allow_broker_submit=false`. The live SQLite ledger, live order CSV, RPA order
+  CSV, and auto-live order CSV were verified absent after the change.
+- Changing the live configs invalidates stale Canary certification by design;
+  no re-certification, live ledger initialization, or broker order was performed.
+
+**Verification**
+
+- `.\\.venv\\Scripts\\python.exe -m pytest tests\\test_huatai_login.py tests\\test_live_secrets.py tests\\test_local_operator.py -q`:
+  `38 passed in 3.30s`.
+- The first CLI regression exposed a stale-snapshot login trigger in three
+  existing offline/error tests. The trigger was bound to explicit current
+  collector authentication output; the rerun of login and CLI tests produced
+  `107 passed in 2.59s`.
+- `.\\.venv\\Scripts\\python.exe -m pytest -q`:
+  `1108 passed, 39 subtests passed in 335.72s`.
+- One preceding full run had a single host-level Windows `os.replace` access
+  denial in an existing recovery test (`1107 passed`); that test passed alone
+  in `1.13s`, and the final full rerun above passed cleanly.
+- `load_config('configs/huatai_desktop_canary.yaml')` audit:
+  `login_enabled=true`, `emergency_stop=true`,
+  `allow_broker_submit=false`.
+- `git diff --check`: passed after newline normalization.
+
+**Remaining work**
+
+- The operator must run the hidden-prompt enrollment command locally before the
+  first automatic login. No trading password was requested in chat or written
+  during development.
+- Perform a separately observed read-only login recovery after enrollment.
+  Captcha/MFA and future Huatai UI changes remain intentionally manual.
+
 ## 2026-08-11 - Preserve frozen candidate inputs and committed market scope
 
 **Objective**
@@ -906,7 +1073,7 @@ trading authentication quickly without automating login or orders.
 
 **Remaining work**
 
-- Manually complete Huatai trading authentication and open “资金股票”, then run
+- Manually complete Huatai trading authentication and open ÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂ¨ÃÂÃÂµÃÂÃÂÃÂÃÂ©ÃÂÃÂÃÂÃÂÃÂÃÂ¨ÃÂÃÂÃÂÃÂ¡ÃÂÃÂ§ÃÂÃÂ¥ÃÂÃÂ¨ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ, then run
   `broker-refresh` again to refresh current account/capital evidence.
 - Keep live submission disabled. Strategy promotion still requires the untuned
   forward window and independent historical validation; no current research

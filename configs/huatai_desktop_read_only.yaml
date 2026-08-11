@@ -16,6 +16,16 @@ desktop_client:
   window_ready_poll_seconds: 2
   window_ready_max_attempts: 10
 
+desktop_login:
+  enabled: true
+  confirmation_timeout_seconds: 15
+  confirmation_poll_seconds: 0.5
+
+desktop_notice:
+  enabled: true
+  confirmation_timeout_seconds: 3
+  confirmation_poll_seconds: 0.1
+
 security:
   live_secret_file: data/secrets/live_credentials.dpapi
   required: true

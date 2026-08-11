@@ -195,7 +195,7 @@ class LocalOperatorTests(unittest.TestCase):
         self.assertIn("交易模块", message)
         self.assertIn("资金股票", message)
 
-    def test_broker_authentication_required_is_explicit_and_manual(self):
+    def test_broker_authentication_required_explains_bounded_auto_login(self):
         passed, value, message = _broker_refresh_status(
             pd.DataFrame([{
                 "status": "failed",
@@ -207,8 +207,9 @@ class LocalOperatorTests(unittest.TestCase):
 
         self.assertFalse(passed)
         self.assertIn("broker_authentication_required", value)
+        self.assertIn("DPAPI", message)
+        self.assertIn("尝试一次", message)
         self.assertIn("手动", message)
-        self.assertIn("不会自动填写凭据", message)
 
     def test_formal_candidate_daemon_and_broker_stages_are_visible(self):
         candidate = pd.DataFrame(

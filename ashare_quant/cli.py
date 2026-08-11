@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
 from decimal import Decimal, InvalidOperation
 import subprocess
@@ -78,6 +79,8 @@ from .forward_selection import write_forward_candidate_selection
 from .fills import import_fills, write_fill_import_template
 from .huatai_certification import arm_huatai_desktop_canary, write_huatai_canary_arming_audit, write_huatai_execution_sandbox_summary
 from .huatai_client import request_huatai_client_window_wake, write_huatai_client_status
+from .huatai_login import attempt_huatai_auto_login, enroll_huatai_credentials
+from .huatai_notice import dismiss_huatai_notice
 from .history_validation import run_extended_history_validation
 from .io_utils import atomic_to_csv
 from .live_evidence import sync_live_strategy_evidence
@@ -277,6 +280,9 @@ def main(argv: list[str] | None = None) -> None:
 
     broker_refresh = sub.add_parser("broker-refresh", help="Retry only the Huatai read-only account refresh; never submits orders")
     broker_refresh.add_argument("--live-config", default="configs/huatai_desktop_canary.yaml", help="Huatai read-only/Canary audit configuration")
+    broker_login_enroll = sub.add_parser("broker-login-enroll", help="Store Huatai login credentials with Windows DPAPI; never logs in or submits orders")
+    broker_login_enroll.add_argument("--live-config", default="configs/huatai_desktop_canary.yaml", help="Huatai read-only/Canary audit configuration")
+    broker_login_enroll.add_argument("--account-id", help="Huatai account ID; password is always read from a hidden prompt")
     broker_init = sub.add_parser("broker-account-init", help="Audit or explicitly initialize an absent live SQLite ledger from the current broker snapshot")
     broker_init.add_argument("--snapshot-run-id", required=True, help="Exact current snapshot_run_id shown in the broker account report")
     broker_init.add_argument("--account-id", required=True, help="Exact stable masked account_id shown in the broker account report")
@@ -604,6 +610,14 @@ def run_command(args: argparse.Namespace, config: dict) -> None:
         print_paths(write_broker_canary_capital_feasibility(config).values())
     elif args.command == "broker-refresh":
         print_paths(run_broker_refresh(config, args).values())
+    elif args.command == "broker-login-enroll":
+        live_config = load_config(str(args.live_config))
+        account_id = str(args.account_id or input("华泰资金账号: ")).strip()
+        password = getpass.getpass("华泰交易密码: ")
+        confirmation = getpass.getpass("再次输入华泰交易密码: ")
+        if password != confirmation:
+            raise RuntimeError("Huatai trading password confirmation does not match")
+        print(enroll_huatai_credentials(live_config, account_id, password).resolve())
     elif args.command == "observation-alert":
         print_paths(write_observation_alert_status(config, args.strategy_output).values())
     elif args.command == "broker-account-init":
@@ -1984,6 +1998,9 @@ HUATAI_READ_ONLY_REFRESH_COLUMNS = [
     "window_wake_attempted",
     "window_wake_message",
     "snapshot_attempts",
+    "login_attempted",
+    "login_status",
+    "login_message",
     "generated_at",
 ]
 
@@ -2227,6 +2244,9 @@ def run_huatai_read_only_refresh(
     window_wake_attempted = False
     window_wake_message = ""
     snapshot_attempts = 0
+    login_attempted = False
+    login_status = "not_needed"
+    login_message = ""
     canary_messages: list[str] = []
     wakeable_desktop_stages = {"client_window_absent", "client_window_minimized"}
     retryable_after_wake_stages = wakeable_desktop_stages | {
@@ -2297,17 +2317,58 @@ def run_huatai_read_only_refresh(
             )
             if window_wake_message and not window_wake_attempted:
                 output = f"{output}; wake not attempted: {window_wake_message}".strip("; ")
+        authentication_reported = any(
+            marker in output.lower()
+            for marker in ("huatai trading authentication is required", "broker_authentication_required")
+        )
+        if (
+            completed.returncode != 0
+            and desktop_stage == "broker_authentication_required"
+            and authentication_reported
+        ):
+            login_result = attempt_huatai_auto_login(live_config)
+            paths["broker:huatai_login_audit.csv"] = login_result.audit_path
+            login_attempted = login_result.attempted
+            login_status = login_result.status
+            login_message = login_result.message
+            if login_result.status != "login_submitted":
+                raise RuntimeError(login_result.message)
+            login_config = live_config.get("desktop_login", {}) if isinstance(live_config.get("desktop_login"), dict) else {}
+            timeout_seconds = max(float(login_config.get("confirmation_timeout_seconds", 15)), 0.0)
+            poll_seconds = max(float(login_config.get("confirmation_poll_seconds", 0.5)), 0.1)
+            deadline = time.monotonic() + timeout_seconds
+            while True:
+                time.sleep(min(poll_seconds, max(deadline - time.monotonic(), 0.0)))
+                completed, output, payload, desktop_stage = collect_desktop_snapshot()
+                snapshot_attempts += 1
+                if completed.returncode == 0 or desktop_stage != "broker_authentication_required":
+                    break
+                if time.monotonic() >= deadline:
+                    break
+            if completed.returncode == 0:
+                login_status = "authenticated"
+                login_message = "Huatai login was confirmed by a successful read-only desktop snapshot."
+            else:
+                raise RuntimeError("Huatai automatic login was not confirmed before timeout; manual login is required")
         if completed.returncode != 0:
             raise RuntimeError(output or f"snapshot collector exited {completed.returncode}")
         if str(payload.get("status", "")).lower() != "ok":
             raise RuntimeError(str(payload.get("message", "")) or "snapshot payload is not successful")
 
+        stage = "post_login_notice"
+        notice_result = dismiss_huatai_notice(live_config)
+        paths["broker:huatai_notice_audit.csv"] = notice_result.audit_path
+        canary_desktop_ready = notice_result.status != "blocked"
+        if not canary_desktop_ready:
+            canary_messages.append(f"Huatai post-login notice blocked desktop navigation: {notice_result.message}")
+
         stage = "canary_read_only_evidence"
-        try:
-            for name, result_path in refresh_huatai_canary_read_only_evidence(live_config).items():
-                paths[f"broker:{name}"] = result_path
-        except RuntimeError as exc:
-            canary_messages.append(str(exc))
+        if canary_desktop_ready:
+            try:
+                for name, result_path in refresh_huatai_canary_read_only_evidence(live_config).items():
+                    paths[f"broker:{name}"] = result_path
+            except RuntimeError as exc:
+                canary_messages.append(str(exc))
 
         stage = "account_audit"
         for name, result_path in query_auto_live_account(live_config, raise_on_blocked=False).items():
@@ -2363,7 +2424,7 @@ def run_huatai_read_only_refresh(
         if canary_messages:
             message += " Canary remains blocked: " + " | ".join(canary_messages)
         atomic_to_csv(
-            pd.DataFrame([huatai_read_only_refresh_row("ok", "completed", message, snapshot_path, payload, window_wake_attempted=window_wake_attempted, window_wake_message=window_wake_message, snapshot_attempts=snapshot_attempts)], columns=HUATAI_READ_ONLY_REFRESH_COLUMNS),
+            pd.DataFrame([huatai_read_only_refresh_row("ok", "completed", message, snapshot_path, payload, window_wake_attempted=window_wake_attempted, window_wake_message=window_wake_message, snapshot_attempts=snapshot_attempts, login_attempted=login_attempted, login_status=login_status, login_message=login_message)], columns=HUATAI_READ_ONLY_REFRESH_COLUMNS),
             refresh_path,
             index=False,
             encoding="utf-8-sig",
@@ -2379,7 +2440,7 @@ def run_huatai_read_only_refresh(
             ).items():
                 paths[f"broker:{name}"] = result_path
         atomic_to_csv(
-            pd.DataFrame([huatai_read_only_refresh_row("failed", stage, f"{type(exc).__name__}: {exc}", snapshot_path, payload, window_wake_attempted=window_wake_attempted, window_wake_message=window_wake_message, snapshot_attempts=snapshot_attempts)], columns=HUATAI_READ_ONLY_REFRESH_COLUMNS),
+            pd.DataFrame([huatai_read_only_refresh_row("failed", stage, f"{type(exc).__name__}: {exc}", snapshot_path, payload, window_wake_attempted=window_wake_attempted, window_wake_message=window_wake_message, snapshot_attempts=snapshot_attempts, login_attempted=login_attempted, login_status=login_status, login_message=login_message)], columns=HUATAI_READ_ONLY_REFRESH_COLUMNS),
             refresh_path,
             index=False,
             encoding="utf-8-sig",
@@ -2402,6 +2463,9 @@ def huatai_read_only_refresh_row(
     window_wake_attempted: bool = False,
     window_wake_message: str = "",
     snapshot_attempts: int = 1,
+    login_attempted: bool = False,
+    login_status: str = "not_needed",
+    login_message: str = "",
 ) -> dict[str, object]:
     diagnostics = payload.get("diagnostics", {}) if isinstance(payload.get("diagnostics"), dict) else {}
     return {
@@ -2424,6 +2488,9 @@ def huatai_read_only_refresh_row(
         "window_wake_attempted": bool(window_wake_attempted),
         "window_wake_message": str(window_wake_message or ""),
         "snapshot_attempts": max(int(snapshot_attempts), 0),
+        "login_attempted": bool(login_attempted),
+        "login_status": str(login_status or "not_needed"),
+        "login_message": str(login_message or ""),
         "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
     }
 

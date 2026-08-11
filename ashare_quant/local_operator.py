@@ -889,7 +889,7 @@ def _broker_refresh_status(frame: pd.DataFrame) -> tuple[bool, str, str]:
     if desktop_stage == "trading_module_ui_not_loaded":
         return False, value, "华泰主程序和交易进程已运行，但交易模块界面尚未加载；进入交易账户并打开“资金股票”页面，再运行 broker-refresh。"
     if desktop_stage == "broker_authentication_required":
-        return False, value, "华泰交易登录页已打开，但交易会话尚未认证；请手动完成交易登录并打开“资金股票”页面，系统不会自动填写凭据或点击登录。"
+        return False, value, "华泰交易会话尚未认证；运行 broker-refresh 将在已启用且已注册 DPAPI 凭据时严格尝试一次自动登录，否则请手动登录。"
     message = str(row.get("message", "") or "").strip() or "华泰只读刷新失败。"
     return False, value, f"{message}；登录客户端并打开资金/持仓页面后运行 broker-refresh。"
 

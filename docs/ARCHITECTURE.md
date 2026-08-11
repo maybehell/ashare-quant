@@ -267,8 +267,17 @@ Rules:
 - Read-only refresh cannot submit orders or initialize the live ledger.
 - Unattended desktop recovery may restore one uniquely identified pinned trading
   window or send one navigation key to one uniquely identified pinned market
-  window. It never fills credentials, confirms login, or invokes an order
-  action; a visible login page is classified as manual authentication required.
+  window. When explicitly enabled, a separate login-only driver may retrieve an
+  account ID and trading password from the current Windows user's DPAPI store,
+  require one exact pinned login form, verify account-field readback, and click
+  the exact login control once. It never handles a captcha or second factor,
+  initializes a ledger, imports account state, navigates order forms, or invokes
+  submit/cancel; ambiguity and failed snapshot confirmation return to manual login.
+- When explicitly enabled, a separate post-login notice driver may close one
+  uniquely identified pinned `xiadan.exe` `#32770` navigation announcement with
+  one `WM_CLOSE` and bounded disappearance confirmation. It never changes notice
+  preferences or uses generic keys, buttons, or screen coordinates; ambiguity
+  blocks subsequent desktop Canary navigation for that refresh.
 - A stale broker snapshot clears both effective Canary and full-strategy capital
   readiness. Stale capital-sensitivity evidence blocks full-strategy review but
   cannot turn an execution-only Canary into strategy authorization.
@@ -325,6 +334,8 @@ Additional constraints:
 | Active execution strategy/epoch | strategy activation | paper/live order generation | atomic activation/deactivation |
 | Paper SQLite ledger | account/paper domain | reports, reconciliation | transactional |
 | Broker read-only snapshot/history | broker adapter/history | binding, risk, reports | append/audit; no financial writes |
+| Huatai login audit | login-only broker recovery | operator, broker refresh | atomic latest-attempt evidence; excludes account ID and password; grants no order or ledger authority |
+| Huatai notice audit | post-login desktop recovery | operator, broker refresh | atomic latest-attempt evidence; excludes notice body and account data; grants no navigation or order authority |
 | Capital mode assessment | deployment gate | local operator, reports | derived from fresh broker snapshot and manifest-bound sensitivity evidence; never authorizes submit |
 | Live SQLite ledger | broker initialization/fills | risk, settlement | explicit initialization; transactional |
 | Orders/RPA tickets | paper/execution pipeline | preview/live control | `orders.csv` and `rpa_orders.csv` are never written by backtest; provenance-bound, quarantine stale batch |
