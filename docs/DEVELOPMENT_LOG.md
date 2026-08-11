@@ -5,6 +5,90 @@ added directly below this introduction, newest first. It records verified facts;
 it is not a release-marketing document and does not replace generated audit
 artifacts.
 
+## 2026-08-11 - Quantify long-history survivorship exposure
+
+**Objective**
+
+Make the fixed 800-symbol long-history result explicit about current-pool
+survivorship exposure without changing the frozen strategy or weakening any
+execution boundary.
+
+**Changes**
+
+- Added a dedicated survivorship audit that binds the completed per-symbol
+  provenance, all symbols with cached prices in the configured study range,
+  listing-date quality, and annual last-trading-day coverage snapshots.
+- The audit deliberately records point-in-time membership, delisted-security
+  history, and survivorship correction as failed evidence. Cached non-pool
+  symbols are reported as sample restriction, not inferred to be valid
+  historical constituents.
+- Bound the joint SHA-256 of `survivorship_bias_audit.csv` and
+  `survivorship_bias_snapshots.csv` into extended-history validation status.
+  A missing or changed audit prevents completed-state reuse.
+- Added Chinese report sections, field labels, and high-priority evidence-gap
+  warnings for the new audit.
+- Updated the architecture and added ADR 0009 for the durable quantify-but-do-
+  not-correct policy.
+
+**Architecture and safety**
+
+- This change is owned by research validation and presentation. It does not
+  change strategy parameters, candidate identity, account state, broker
+  adapters, order generation, activation, or submission.
+- The frozen strategy, backtest configuration, and formal-price identities
+  remained unchanged. The historical result remains research-only and cannot
+  authorize promotion or execution.
+- Missing authoritative daily membership, delisted securities, and historical
+  risk-warning state remains a high-severity limitation rather than a synthetic
+  pass.
+
+**Verified evidence**
+
+- Current committed pool: 800 symbols. Price cache within the 2018-01-01 through
+  2026-08-07 study request contains 1503 symbols, of which 703 are outside the
+  current pool; current-pool share is 0.532269.
+- Annual snapshots show that every cached symbol with year-end prices in
+  2018-2022 belonged to the current pool. Non-current cached coverage becomes
+  material only from 2023, so the early cross-section is not historical full-
+  market evidence.
+- Refreshed fixed validation completed with the same 1965 effective days,
+  229.0899% total return, 39.5598% benchmark return, 189.5301% excess return,
+  -33.3808% maximum drawdown, and 0.856149 information ratio.
+- The completed status now binds survivorship audit SHA-256
+  `fee17ad5a45833b2fa869f84fb8266d513b15953dd2728872d40f8265a1555dd`.
+  Exact completed-state reuse returned in 4.323465 seconds without rerunning the
+  backtest.
+- Focused survivorship/history/report tests: `45 passed in 3.51s`.
+- Full regression: `1086 passed, 39 subtests passed in 290.82s`, exit code zero.
+- Documentation and research governance: `7 passed in 0.79s`, exit code zero.
+- Playwright loaded the refreshed report at 1440 x 1000, found the Chinese audit
+  section and all four high-priority warnings, and captured
+  `output/playwright/survivorship-audit.png`. The only console error was the
+  existing optional missing `favicon.ico`.
+
+**Protected live-state audit**
+
+- Absent: `data/huatai_live_state.sqlite3`,
+  `outputs_live/huatai_desktop_canary_certification.json`,
+  `data/active_execution_strategy.json`, main and isolated `orders.csv`, and
+  main and isolated `rpa_orders.csv`.
+- `allow_broker_submit=False` in default, extended-history, Huatai read-only,
+  Huatai Canary, and bridge-template configurations. Extended-history emergency
+  stop remains active.
+- No broker action, live-ledger initialization, Canary arm, candidate activation,
+  order creation, or account mutation was performed.
+
+**Remaining work**
+
+- Acquire or construct a separately governed point-in-time universe containing
+  daily membership, delisted securities, and historical ST/risk-warning state;
+  then preregister a new validation rather than rewriting this result.
+- Continue frozen forward and Shadow observation. The strategy remains blocked
+  from strict live use, and its 33.38% historical drawdown remains above the
+  configured 25% live threshold.
+- Do not tune the frozen strategy on this completed cache. Any successor strategy
+  research must use a separate preregistered design and later forward evidence.
+
 ## 2026-08-11 - Complete trust-gated long-history validation
 
 **Objective**

@@ -85,6 +85,7 @@ from .shadow import build_continuous_shadow_portfolios, build_shadow_forward_aud
 from .strategy_health import STRATEGY_HEALTH_COLUMNS, build_strategy_health, configured_promotion_decision
 from .universe import eligible_universe
 from .statistical_validation import EXCESS_BOOTSTRAP_COLUMNS, block_bootstrap_excess
+from .survivorship import survivorship_warnings
 from .validation import filter_complete_market_data
 from .walkforward import empty_folds, empty_summary, walk_forward_report
 
@@ -94,6 +95,15 @@ REPORT_COLUMN_LABELS = {
     "passed": "\u901a\u8fc7",
     "value": "\u5f53\u524d\u503c",
     "threshold": "\u8981\u6c42",
+    "item": "审计项",
+    "note": "解释",
+    "year": "年份",
+    "snapshot_date": "快照日期",
+    "all_cached_priced_symbols": "缓存当日有行情股票数",
+    "current_pool_priced_symbols": "当前池当日有行情股票数",
+    "current_pool_listed_symbols": "当前池已上市股票数",
+    "current_pool_not_yet_listed_symbols": "当前池未上市或上市日期未知数",
+    "current_pool_priced_share_of_cache": "当前池占缓存当日行情比例",
     "candidate_a_id": "\u5019\u9009 A ID",
     "candidate_b_id": "\u5019\u9009 B ID",
     "candidate_a_name": "\u5019\u9009 A \u540d\u79f0",
@@ -132,6 +142,21 @@ REPORT_COLUMN_LABELS = {
 }
 
 REPORT_VALUE_LABELS = {
+    "point_in_time_universe_available": "逐日历史可投资股票池可用",
+    "survivorship_bias_corrected": "幸存者偏差已修正",
+    "committed_universe_source": "冻结股票池来源",
+    "current_pool_symbols": "当前冻结股票数",
+    "all_cached_historical_symbols": "缓存历史股票数",
+    "cached_symbols_excluded_from_current_pool": "未进入当前池的缓存股票数",
+    "current_pool_share_of_cached_symbols": "当前池占缓存股票比例",
+    "earliest_snapshot_current_pool_priced_share": "首年末当前池行情覆盖比例",
+    "unreliable_current_pool_list_date_ratio": "当前池不可靠上市日期比例",
+    "delisted_security_history_available": "退市证券历史可用",
+    "survivorship_risk_level": "幸存者偏差风险等级",
+    "study_range": "审计研究区间",
+    "fetch_history_provenance": "逐股票历史抓取来源清单",
+    "fallback_all_cached_symbols": "回退为全部缓存股票",
+    "high": "高",
     "risk_cash_buffer_policy": "\u5206\u9636\u6bb5\u73b0\u91d1\u7f13\u51b2\u7b56\u7565",
     "query_source_integrity": "\u67e5\u8be2\u6062\u590d\u6e90\u5b8c\u6574\u6027",
     "cancel_source_preflight": "\u64a4\u5355\u6e90\u9884\u68c0",
@@ -1271,7 +1296,7 @@ def write_html_report(path: Path, **kwargs: Any) -> Path:
     frame_keys = [
         "daily_observation_summary", "daily_observation_audit",
         "daily_observation_progress", "daily_observation_progress_audit",
-        "equity", "orders", "positions", "exposure", "industry_risk_audit", "comparison", "excess_bootstrap", "data_quality", "data_source_health",
+        "equity", "orders", "positions", "exposure", "industry_risk_audit", "comparison", "excess_bootstrap", "data_quality", "survivorship_bias_audit", "survivorship_bias_snapshots", "data_source_health",
         "robustness", "annual", "rolling", "regime_validation", "strategy_reliability", "strategy_health",
         "strategy_candidate_stability", "strategy_promotion", "research_candidate_observation", "forward_only_candidate_observation", "forward_candidate_attribution", "forward_candidate_selection", "forward_candidate_selection_summary", "candidate_failure_history", "risk_exposure", "walk_forward", "walk_forward_summary",
         "execution_model_reconciliation", "execution_model_reconciliation_summary",
@@ -1305,6 +1330,7 @@ def write_html_report(path: Path, **kwargs: Any) -> Path:
 
     warning_items = (
         bias_warnings(frames["data_quality"], frames["robustness"])
+        + survivorship_warnings(frames["survivorship_bias_audit"])
         + rolling_warnings(frames["rolling"])
         + regime_validation_warnings(frames["regime_validation"])
         + walk_forward_warnings(frames["walk_forward_summary"])
@@ -1494,6 +1520,8 @@ def write_html_report(path: Path, **kwargs: Any) -> Path:
         ("订单流动性与容量审计", frames["order_liquidity_audit"], "暂无订单流动性审计。运行 aq order-audit 或 export-orders 后生成。"),
         ("数据源健康", frames["data_source_health"], "暂无数据源健康诊断。运行 aq source-health 后生成。"),
         ("数据质量诊断", frames["data_quality"], "暂无数据质量诊断。"),
+        ("幸存者偏差审计", frames["survivorship_bias_audit"], "暂无幸存者偏差审计；长期结果不能据此视为无偏。"),
+        ("幸存者偏差年度快照", frames["survivorship_bias_snapshots"], "暂无年度股票池覆盖快照。"),
         ("样本内 / 样本外拆分", frames["robustness"], "暂无拆分数据。"),
         ("市场状态分段验证", frames["regime_validation"], "暂无市场状态分段验证。"),
         ("走步参数冻结验证", frames["walk_forward_summary"], "暂无走步汇总。"),
@@ -2082,6 +2110,8 @@ def regenerate_report(config: dict[str, Any]) -> Path:
         excess_bootstrap=read_csv(output_dir / "excess_bootstrap.csv"),
         metrics=metrics,
         data_quality=data_quality,
+        survivorship_bias_audit=read_csv(output_dir / "survivorship_bias_audit.csv"),
+        survivorship_bias_snapshots=read_csv(output_dir / "survivorship_bias_snapshots.csv"),
         data_source_health=data_source_health,
         robustness=robustness,
         annual=read_csv(output_dir / "annual_performance.csv"),

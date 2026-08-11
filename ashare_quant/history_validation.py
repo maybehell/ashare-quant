@@ -14,6 +14,7 @@ from .config import project_path
 from .data import DataStore, history_staging_frame_name
 from .io_utils import atomic_to_csv
 from .report import regenerate_report
+from .survivorship import survivorship_evidence_sha256, write_survivorship_bias_audit
 
 
 STATUS_COLUMNS = [
@@ -27,6 +28,7 @@ STATUS_COLUMNS = [
     "formal_prices_sha256",
     "backtest_config_sha256",
     "strategy_sha256",
+    "survivorship_audit_sha256",
     "effective_trading_days",
     "minimum_trading_days",
     "total_return",
@@ -51,6 +53,13 @@ def run_extended_history_validation(config: dict[str, Any]) -> dict[str, Path]:
     prices_sha256 = file_sha256(prices_path)
     config_sha256 = backtest_config_sha256(config)
     strategy_sha256 = live_strategy_hash(config)
+    survivorship_paths = write_survivorship_bias_audit(config)
+    survivorship_audit = read_optional_csv(survivorship_paths["survivorship_bias_audit.csv"])
+    survivorship_snapshots = read_optional_csv(survivorship_paths["survivorship_bias_snapshots.csv"])
+    survivorship_sha256 = survivorship_evidence_sha256(
+        survivorship_audit,
+        survivorship_snapshots,
+    )
     minimum_trading_days = max(
         0,
         int(config.get("validation", {}).get("min_backtest_trading_days", 0)),
@@ -62,16 +71,19 @@ def run_extended_history_validation(config: dict[str, Any]) -> dict[str, Path]:
         prices_sha256,
         config_sha256,
         strategy_sha256,
+        survivorship_sha256,
         minimum_trading_days,
         str(progress["generated_at"]),
     ):
         return {
+            **survivorship_paths,
             "history_validation_status.csv": status_path,
             "report.html": report_path,
         }
 
     base = {
         **status_base(progress, prices_sha256, config_sha256, strategy_sha256),
+        "survivorship_audit_sha256": survivorship_sha256,
         "minimum_trading_days": minimum_trading_days,
     }
     effective_trading_days = 0
@@ -113,6 +125,7 @@ def run_extended_history_validation(config: dict[str, Any]) -> dict[str, Path]:
         write_status(status_path, completed)
         return {
             **paths,
+            **survivorship_paths,
             "history_validation_status.csv": status_path,
             "report.html": report_path,
         }
@@ -217,6 +230,7 @@ def reusable_completed_validation(
     prices_sha256: str,
     config_sha256: str,
     strategy_sha256: str,
+    survivorship_audit_sha256: str,
     minimum_trading_days: int,
     progress_generated_at: str,
 ) -> bool:
@@ -229,6 +243,7 @@ def reusable_completed_validation(
         and str(row.get("formal_prices_sha256", "")) == prices_sha256
         and str(row.get("backtest_config_sha256", "")) == config_sha256
         and str(row.get("strategy_sha256", "")) == strategy_sha256
+        and str(row.get("survivorship_audit_sha256", "")) == survivorship_audit_sha256
         and pd.notna(
             pd.to_numeric(row.get("effective_trading_days", 0), errors="coerce")
         )

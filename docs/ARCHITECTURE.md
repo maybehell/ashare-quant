@@ -161,9 +161,12 @@ Rules:
 - Every formal result binds configuration, input data, benchmark, and code-level
   assumptions through manifests or hashes.
 - Extended-history validation requires an authoritative zero-remaining,
-  zero-failure completion record, isolated research outputs, and a formal-price
-  file hash. Its completed status is evidence only and grants no strategy
-  authority.
+  zero-failure completion record, isolated research outputs, a formal-price
+  file hash, and a bound survivorship-exposure audit. The audit compares the
+  current committed pool with available cached history but must remain failed
+  for point-in-time completeness until authoritative daily membership, delisted
+  securities, and historical eligibility state exist. Completed validation is
+  evidence only and grants no strategy authority.
 
 ### 3.4 Strategy governance and promotion
 
@@ -285,7 +288,7 @@ Additional constraints:
 |---|---|---|---|
 | Parquet market cache and provenance | data layer | research, valuation | atomic refresh, source/date audit |
 | Namespaced historical backfill staging and progress | data layer and research-only daemon | data refresh, operator | resumable and replaceable; provenance precedes price checkpoints; source status, trust metrics, source-plan identity, and restart-safe backoff are audited; never authoritative until complete formal-cache commit |
-| Extended-history validation status | history validation workflow | operator, later research review | bind completed progress, fixed backtest config, and formal-price hash; never promotes or authorizes execution |
+| Extended-history validation status and survivorship audit | history validation workflow | operator, later research review | bind completed progress, fixed backtest config, formal-price hash, and annual current-pool/cache coverage evidence; explicitly does not claim point-in-time correction; never promotes or authorizes execution |
 | Research/backtest outputs | research workflow | governance, reports | replace by run; bind manifest; simulated orders use `backtest_orders.csv` only |
 | Frozen candidate and sealed inputs | candidate governance | forward observer, activation | immutable identity |
 | Active execution strategy/epoch | strategy activation | paper/live order generation | atomic activation/deactivation |
