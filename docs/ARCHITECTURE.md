@@ -55,6 +55,8 @@ Responsibilities:
   report/status/alert rendering, preserving broker failure as the current
   operator evidence without rerunning the market workflow.
 - Return explicit exit status and artifact paths.
+- Recompute strategy, backtest, and formal-price identities before exposing a
+  completed long-history validation in the operator status or report.
 
 Rules:
 
@@ -99,10 +101,20 @@ Rules:
   symbol-level failures. A source-wide outage returns a non-success audit code
   and enters a persisted restart-safe backoff; it never advances completion or
   replaces the formal cache.
-- Historical source failover is ordered and provenance preserving. The isolated
-  extended-history job may use Eastmoney, Sina, and Tencent through AkShare;
-  Sina rows are accepted only after recent overlap validation, and the fixed
+- Historical source failover is ordered and provenance preserving. Every
+  candidate source must pass normalized price-structure validation before it is
+  selected; a non-empty but invalid primary response continues to the next
+  source. The isolated extended-history job may use Eastmoney, Sina, and Tencent
+  through AkShare; Sina rows are accepted only after recent overlap validation.
+  If committed overlap is missing, insufficient, or inconsistent, a second
+  alternate provider must pass the same close, volume, and amount thresholds;
+  verifier identity and errors are persisted. Tencent STAR Market volume is
+  normalized as shares while its other supported A-share boards are normalized
+  from lots; Tencent estimated turnover remains verifier-only. The fixed
   validation job rejects estimated amount and untrusted resumed provenance.
+- The isolated AkShare auto-failover history job serializes provider requests
+  because its in-process V8 decoder is not safe under the observed threaded
+  workload; the default BaoStock daily worker setting is unaffected.
 - Partial checkpoints write source provenance before corresponding prices so a
   crash can lose recoverable work but cannot leave unproven prices eligible for
   resume. Persisted source-outage backoff is reused only when the effective
@@ -294,7 +306,9 @@ Additional constraints:
    bounded research-only daemon; persist source-outage backoff across restarts
    and retain the current formal cache until the full requested scope and final
    fetch stages complete with zero failures. Then run
-   the fixed strategy in isolated outputs and record hash-bound validation
+   the explicitly declared fixed strategy in isolated outputs, reject any
+   strategy-hash mismatch, require the configured absolute daily cross-section
+   and minimum effective trading-day evidence, and record hash-bound validation
    evidence without promotion.
 1. Refresh and audit normalized data.
 2. Preregister candidate family and evaluation policy.

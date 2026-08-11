@@ -117,3 +117,28 @@ that the persisted dates still match the current request and price frame.
 Missing or contradictory evidence fails closed and the symbol remains pending.
 This avoids both silent truncation and permanent retry of legitimate long
 suspensions.
+
+## 2026-08-11 structural failover and runtime isolation
+
+Each ordered AkShare response is now normalized and structurally validated
+before source selection. A non-empty response with invalid OHLC values is
+recorded as a source failure and the same retry continues to the next provider.
+The isolated auto-failover configuration uses one history worker because the
+provider stack's in-process V8 decoder has failed under the observed threaded
+workload. This does not change the ordinary BaoStock-oriented worker setting.
+
+After a non-zero batch exit, the daemon publishes `retry_wait` together with the
+exit code and retains the regular bounded retry interval. It no longer presents
+that state as an ordinary healthy wait. Staged progress and the formal cache are
+left unchanged. Completion still requires all requested symbols, zero failures,
+and an isolated validation whose fixed strategy, backtest configuration, and
+formal prices hashes all match the current artifacts.
+
+When the committed overlap is insufficient or internally inconsistent, a
+reported-amount Sina candidate may replace that evidence only after an
+independent Tencent series also passes the configured close, volume, and amount
+overlap thresholds. The verifier identity and errors are persisted with source
+provenance. Tencent volume is normalized by its observed market convention:
+STAR Market rows are already shares, while the other supported A-share boards
+are lots. Estimated Tencent turnover remains verifier-only and cannot become the
+accepted fixed-validation source.

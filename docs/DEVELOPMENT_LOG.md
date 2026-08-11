@@ -5,6 +5,135 @@ added directly below this introduction, newest first. It records verified facts;
 it is not a release-marketing document and does not replace generated audit
 artifacts.
 
+## 2026-08-11 - Complete trust-gated long-history validation
+
+**Objective**
+
+Complete the frozen 800-symbol history acquisition and fixed-strategy validation
+without weakening source quality, execution isolation, or live-trading gates.
+
+**Changes**
+
+- Changed AkShare history selection so each non-empty provider response is
+  normalized and structurally validated before selection. An invalid Eastmoney
+  response now continues to Sina and then Tencent within the same retry.
+- Preserved reported-amount requirements. A Sina candidate whose committed
+  overlap is missing, insufficient, or inconsistent is accepted only after an
+  independently requested Tencent series passes the same close, volume, and
+  amount thresholds; verifier identity and errors are persisted.
+- Normalized Tencent STAR Market volume as shares while retaining lot-to-share
+  conversion for its other supported A-share boards. Tencent turnover remains
+  estimated and verifier-only.
+- Serialized the isolated AkShare history job with `history_workers: 1` after
+  the provider's in-process V8 decoder crashed under the observed threaded
+  workload. A non-zero batch exit now publishes `retry_wait` instead of a
+  healthy-looking wait.
+- Added `ProgressFile` injection to the daemon for hermetic dry-run tests; the
+  production default progress path is unchanged.
+- Bound history validation to the exact declared fixed-strategy SHA-256 and made
+  operator status recompute the strategy, backtest configuration, and formal
+  prices identities before displaying completed evidence.
+- Added an absolute 500-symbol complete-market threshold for the isolated
+  100-position validation and enforced the preregistered 1500 post-warmup
+  trading-day minimum. Completed evidence cannot be reused below the current
+  minimum.
+- Refreshed the Chinese main report and exposed the isolated long-history result
+  as research evidence only. It does not replace the current strategy report or
+  authorize promotion.
+
+**Architecture and safety**
+
+- This change owns data acquisition, research validation, operator presentation,
+  and unattended research scheduling. It does not change strategy weights,
+  broker adapters, account state, order generation, activation, or submission.
+- Incomplete and failed staging remained isolated until all 800 symbols and the
+  final benchmark fetch completed with zero failures.
+- The first 834-day validation artifact was explicitly treated as invalid
+  evidence: relative 90% daily coverage had silently removed most of the
+  requested history. The minimum-day gate and absolute cross-section policy were
+  added before rerunning; no strategy parameter was tuned from either result.
+- Research-only validation continues to forbid `orders.csv` and
+  `rpa_orders.csv`. Backtest orders remain simulated research output.
+- The current 800-symbol pool is selected using current membership/liquidity and
+  therefore retains survivorship bias. The long-history result is stronger
+  stress evidence, not a claim of point-in-time investable-universe purity.
+
+**Verification**
+
+- Real `600256` diagnosis: Eastmoney returned 2073 rows with 43 nonpositive
+  OHLC rows; Sina returned the same 2018-01-02 through 2026-08-07 range with
+  2073 rows, reported amount, and zero price issues. The fixed function selected
+  `stock_zh_a_daily`.
+- Real fallback verification:
+  - `003816`: 1685 Sina rows; committed overlap was only 3 rows, while the
+    10-row Tencent check passed with close error 0, volume error
+    0.0000000344, and amount error 0.003476.
+  - `688318`: 1524 Sina rows; the committed tail exposed a 100x volume-unit
+    error, while normalized Tencent verification passed with close and volume
+    error 0 and amount error 0.007621.
+- Trusted progress advanced 708 -> 733 -> 758 -> 783. A threaded V8 fatal at
+  783 left authoritative progress unchanged. Serial recovery then advanced
+  783 -> 798 and, after the two cross-source fixes, 798 -> 800 with zero final
+  failures.
+- The daemon was restarted only at its persisted retry times. The earlier
+  identity-changing restart occurred 12 seconds before its prior target and is
+  retained as an audit exception; subsequent retries were not compressed.
+- The superseded first validation had 834 effective days and was not accepted as
+  long-history evidence after review.
+- Final validation status:
+  - scope `800/800`, failures `0`
+  - effective/minimum trading days `1965/1500`
+  - requested data range `2018-01-01..2026-08-07`; effective equity range
+    `2018-07-04..2026-08-07`
+  - strategy SHA-256
+    `26df6a8b70566c434d9b02c0a2d90d5229fe50a7d7b78aa37d6739504451b5b3`
+  - formal prices SHA-256
+    `b1eb8529bcd3b948e705bdac27859bf6a21b6f91921c05329f4479f553b84c5c`
+  - backtest configuration SHA-256
+    `8cd6605f024765150ebe9377166498ab3519ca7f2a0440f312af8982d73fe09a`
+  - total return `2.290899`, benchmark return `0.395598`, excess return
+    `1.895301`, max drawdown `-0.333808`, information ratio `0.856149`
+  - 13 non-overlapping walk-forward folds, positive-test ratio `0.615385`,
+    worst fold excess `-0.071798`
+  - reliability `69/100`, observation grade; 2024-03-05 onward contributes
+    62.44% of full-period excess and `optimized_on_current_cache=True`
+    remains unresolved.
+- Focused data tests: `61 passed in 2.29s`.
+- Focused history/daemon/operator tests after final gate changes:
+  `46 passed in 3.56s`.
+- Final full regression: `1084 passed, 39 subtests passed in 162.73s`, exit
+  code zero.
+- Playwright loaded the refreshed Chinese report successfully. The viewport had
+  no overlap or mojibake; the only console error was an optional missing
+  `favicon.ico`.
+- Current daemon status is complete and bound to the current script/startup
+  entry. The main operator row reports `days=1965` with strategy, backtest,
+  and prices identities all current.
+
+**Protected live-state audit**
+
+- Absent: `data/huatai_live_state.sqlite3`,
+  `outputs_live/huatai_desktop_canary_certification.json`,
+  `data/active_execution_strategy.json`, all main/live/isolated
+  `orders.csv`, and all `rpa_orders.csv`.
+- `allow_broker_submit=False` in default, extended, read-only, Canary, and
+  bridge configurations. Default/bridge auto-live is disabled; read-only and
+  Canary configurations retain `emergency_stop=True`.
+- Main operator status remains `strict_live_allowed=False`. No broker
+  submission, Canary certification, live-ledger initialization, or account
+  mutation was performed.
+
+**Remaining work**
+
+- Do not promote from this historical result. Continue frozen forward and
+  shadow observation; current main evidence still reports negative forward
+  excess and strict-live failure.
+- Build a point-in-time universe or constituent-history study to quantify the
+  survivorship bias of the current 800-symbol pool.
+- Treat the 2025-2026 excess concentration and 33.38% drawdown as material
+  stability risks. Any successor research must be preregistered and must not
+  tune the frozen strategy on this completed sample.
+
 ## 2026-08-11 - Bind unattended history status to current runtime
 
 **Objective**

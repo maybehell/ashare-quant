@@ -57,6 +57,25 @@ strategy validation.
     status are persisted. Resume revalidates those dates against the current
     request; missing, stale, or contradictory evidence fails closed.
 
+11. Source selection treats a non-empty response as only a candidate. Normalized
+    price-structure validation runs before selection; an invalid candidate is
+    recorded with its source and the next ordered provider is attempted within
+    the same retry. Retry begins only after every provider candidate fails.
+12. The isolated AkShare auto-failover job uses one history worker because the
+    provider stack invokes an in-process V8 decoder that is not safe under the
+    observed threaded workload. The default BaoStock-oriented daily setting is
+    unchanged.
+13. A reported-amount Sina candidate whose committed overlap is unavailable,
+    insufficient, or outside the configured thresholds is accepted only when a
+    separately requested Tencent series passes those same close, volume, and
+    amount thresholds. The verifier source, row count, and median errors are
+    persisted; unavailable or divergent verifier evidence fails closed.
+14. Tencent history volume is normalized using its observed market convention:
+    STAR Market rows are already shares, while the other supported A-share
+    boards are lots. Tencent turnover remains estimated from close and normalized
+    volume, so it may corroborate a reported-amount candidate but cannot itself
+    become the accepted source for fixed validation.
+
 ## Consequences
 
 Positive:
@@ -87,6 +106,10 @@ Costs:
 - A late-start series may require one additional provider request. Provider
   agreement is evidence of the observed trading boundary, not proof that the
   providers are operationally independent in every upstream dependency.
+- A failed or insufficient committed overlap may require another Tencent
+  request. Cross-provider agreement detects field-unit and recent-series
+  divergence, but does not prove independence from every shared upstream data
+  dependency.
 
 ## Alternatives considered
 

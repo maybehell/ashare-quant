@@ -32,6 +32,7 @@ from ashare_quant.data import (
     normalize_trade_calendar,
     normalize_stocks,
     history_from_tx,
+    history_alternate_overlap_quality,
     history_overlap_quality,
     history_start_coverage_quality,
     historical_backfill_required,
@@ -1136,6 +1137,158 @@ class DataFetchTests(unittest.TestCase):
         self.assertEqual(out["amount"].iloc[0], 110000)
         self.assertEqual(tx_symbol("600000"), "sh600000")
         self.assertEqual(tx_symbol("000001"), "sz000001")
+
+    def test_tx_history_keeps_star_market_volume_in_shares(self):
+        hist = pd.DataFrame(
+            [{
+                "date": "2026-08-07",
+                "open": 80,
+                "close": 81,
+                "high": 82,
+                "low": 79,
+                "amount": 8957688,
+            }]
+        )
+
+        out = history_from_tx(hist, "688318")
+
+        self.assertEqual(out["volume"].iloc[0], 8957688)
+        self.assertEqual(out["amount"].iloc[0], 725572728)
+
+    def test_alternate_overlap_can_verify_reported_candidate(self):
+        dates = pd.bdate_range("2026-07-27", periods=10).date
+        candidate = pd.DataFrame(
+            [
+                {
+                    "date": value,
+                    "symbol": "688318",
+                    "open": 80,
+                    "high": 82,
+                    "low": 79,
+                    "close": 81,
+                    "volume": 8957688,
+                    "amount": 722158799,
+                }
+                for value in dates
+            ]
+        )
+
+        class FakeAk:
+            @staticmethod
+            def stock_zh_a_hist_tx(**kwargs):
+                return pd.DataFrame(
+                    [
+                        {
+                            "date": value,
+                            "open": 80,
+                            "high": 82,
+                            "low": 79,
+                            "close": 81,
+                            "amount": 8957688,
+                        }
+                        for value in dates
+                    ]
+                )
+
+        metrics, issues = history_alternate_overlap_quality(
+            FakeAk(),
+            "688318",
+            candidate,
+            "stock_zh_a_daily",
+            dates[0],
+            dates[-1],
+            {
+                "data": {
+                    "history_overlap_tail_rows": 10,
+                    "history_overlap_min_rows": 10,
+                }
+            },
+        )
+
+        self.assertFalse(issues)
+        self.assertEqual(metrics["alternate_overlap_status"], "passed")
+        self.assertEqual(
+            metrics["alternate_overlap_source"], "stock_zh_a_hist_tx"
+        )
+        self.assertEqual(metrics["alternate_overlap_rows"], 10)
+
+    def test_alternate_overlap_rejects_volume_divergence(self):
+        dates = pd.bdate_range("2026-07-27", periods=10).date
+        candidate = pd.DataFrame(
+            [
+                {
+                    "date": value,
+                    "symbol": "688318",
+                    "open": 80,
+                    "high": 82,
+                    "low": 79,
+                    "close": 81,
+                    "volume": 8957688,
+                    "amount": 722158799,
+                }
+                for value in dates
+            ]
+        )
+
+        class FakeAk:
+            @staticmethod
+            def stock_zh_a_hist_tx(**kwargs):
+                return pd.DataFrame(
+                    [
+                        {
+                            "date": value,
+                            "open": 80,
+                            "high": 82,
+                            "low": 79,
+                            "close": 81,
+                            "amount": 1,
+                        }
+                        for value in dates
+                    ]
+                )
+
+        metrics, issues = history_alternate_overlap_quality(
+            FakeAk(),
+            "688318",
+            candidate,
+            "stock_zh_a_daily",
+            dates[0],
+            dates[-1],
+            {
+                "data": {
+                    "history_overlap_tail_rows": 10,
+                    "history_overlap_min_rows": 10,
+                }
+            },
+        )
+
+        self.assertTrue(issues)
+        self.assertEqual(metrics["alternate_overlap_status"], "failed")
+        self.assertTrue(
+            any("volume median relative error" in issue for issue in issues)
+        )
+
+    def test_history_overlap_requires_reference_evidence(self):
+        candidate = pd.DataFrame(
+            [{
+                "date": date(2026, 8, 7),
+                "symbol": "600000",
+                "open": 10,
+                "high": 11,
+                "low": 9,
+                "close": 10,
+                "volume": 100,
+                "amount": 1000,
+            }]
+        )
+
+        metrics, issues = history_overlap_quality(
+            candidate, pd.DataFrame(), {"data": {}}
+        )
+
+        self.assertEqual(metrics["overlap_status"], "not_available")
+        self.assertEqual(issues, ["overlap reference is unavailable"])
+
     def test_history_overlap_quality_passes_recent_reported_series(self):
         dates = pd.bdate_range("2026-01-01", periods=25).date
         reference = pd.DataFrame(
@@ -1528,6 +1681,37 @@ class DataFetchTests(unittest.TestCase):
         self.assertEqual(provenance["source"], "stock_zh_a_daily")
         self.assertEqual(provenance["amount_quality"], "reported")
 
+    def test_fetch_symbol_history_falls_back_after_structural_quality_failure(self):
+        class FakeAk:
+            tx_called = False
+
+            def stock_zh_a_hist(self, **kwargs):
+                return pd.DataFrame(
+                    [{"date": "2020-01-02", "open": 0, "high": 1, "low": -1, "close": 0, "volume": 100, "amount": 1000}]
+                )
+
+            def stock_zh_a_daily(self, **kwargs):
+                return pd.DataFrame(
+                    [{"date": "2020-01-02", "open": 10, "high": 11, "low": 9, "close": 10, "volume": 100, "amount": 1000}]
+                )
+
+            def stock_zh_a_hist_tx(self, **kwargs):
+                self.tx_called = True
+                raise AssertionError("Tencent should not run after valid Sina fallback")
+
+        client = FakeAk()
+        frame, provenance = fetch_symbol_history(
+            client,
+            "600256",
+            pd.Timestamp("2020-01-01").date(),
+            pd.Timestamp("2020-01-03").date(),
+            retries=1,
+        )
+
+        self.assertFalse(client.tx_called)
+        self.assertFalse(price_frame_issues(frame))
+        self.assertEqual(provenance["source"], "stock_zh_a_daily")
+        self.assertEqual(provenance["amount_quality"], "reported")
     def test_fetch_symbol_history_retries_and_returns_provenance(self):
         class FakeAk:
             calls = 0

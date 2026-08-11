@@ -11,6 +11,7 @@ from ashare_quant.local_operator import (
     _broker_refresh_status,
     _challenger_observation_set_status,
     _formal_candidate_observation_status,
+    _current_extended_history_validation_status,
     _history_backfill_daemon_status,
     _observation_daemon_status,
     _observation_startup_status,
@@ -25,6 +26,38 @@ from ashare_quant.local_operator import (
 
 class LocalOperatorTests(unittest.TestCase):
 
+    def test_extended_history_validation_requires_current_bound_identities(self):
+        frame = pd.DataFrame([{
+            "status": "completed",
+            "requested_symbols": 800,
+            "completed_symbols": 800,
+            "effective_trading_days": 2000,
+            "excess_total_return": 0.1,
+            "information_ratio": 0.5,
+            "max_drawdown": -0.2,
+            "strategy_sha256": "strategy",
+            "backtest_config_sha256": "backtest",
+            "formal_prices_sha256": "prices",
+        }])
+        expectations = {
+            "expected_strategy_sha256": "strategy",
+            "expected_backtest_config_sha256": "backtest",
+            "current_prices_sha256": "prices",
+        }
+
+        passed, value, message = _current_extended_history_validation_status(
+            frame, **expectations
+        )
+        stale, stale_value, _ = _current_extended_history_validation_status(
+            frame.assign(strategy_sha256="stale"), **expectations
+        )
+
+        self.assertTrue(passed)
+        self.assertIn("scope=800/800", value)
+        self.assertIn("strategy=current", value)
+        self.assertIn("\u4ecd\u4e0d\u81ea\u52a8\u6388\u6743", message)
+        self.assertFalse(stale)
+        self.assertIn("strategy=stale", stale_value)
     def test_history_backfill_source_outage_is_visible_without_claiming_completion(self):
         passed, value, message = _history_backfill_daemon_status({
             "state": "source_unavailable",
@@ -84,6 +117,13 @@ class LocalOperatorTests(unittest.TestCase):
         self.assertIn("startup=missing", missing_value)
         self.assertFalse(stale_ok)
         self.assertIn("script=current", stale_value)
+        retry_ok, retry_value, retry_message = _history_backfill_daemon_status(
+            {**payload, "state": "retry_wait", "last_exit_code": -1073741819},
+            startup_path=launcher,
+        )
+        self.assertFalse(retry_ok)
+        self.assertIn("exit=-1073741819", retry_value)
+        self.assertIn("\u4e0a\u4e00\u6279\u6267\u884c\u5931\u8d25", retry_message)
 
     def test_observation_startup_status_requires_current_safe_launcher(self):
         output = Path("test_outputs") / "observation_startup_status"

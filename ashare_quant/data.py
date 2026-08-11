@@ -38,6 +38,11 @@ HISTORY_PROVENANCE_COLUMNS = [
     "overlap_close_median_relative_error",
     "overlap_volume_median_relative_error",
     "overlap_amount_median_relative_error",
+    "alternate_overlap_status", "alternate_overlap_source",
+    "alternate_overlap_rows",
+    "alternate_overlap_close_median_relative_error",
+    "alternate_overlap_volume_median_relative_error",
+    "alternate_overlap_amount_median_relative_error",
     "start_coverage_status", "start_coverage_expected_date",
     "start_coverage_observed_date", "start_coverage_verifier_source",
     "start_coverage_verifier_first_date",
@@ -546,6 +551,30 @@ def fetch_akshare(store: DataStore, config: dict[str, Any]) -> list[Path]:
                     )
                 )
                 alternate_source_issues = list(overlap_issues)
+                if (
+                    alternate_source_issues
+                    and provenance.get("source") == "stock_zh_a_daily"
+                    and provenance.get("amount_quality") == "reported"
+                ):
+                    alternate_overlap, alternate_overlap_issues = (
+                        history_alternate_overlap_quality(
+                            ak,
+                            symbol,
+                            normalized,
+                            str(provenance.get("source", "")),
+                            fetch_starts[str(symbol)],
+                            end,
+                            config,
+                        )
+                    )
+                    provenance.update(alternate_overlap)
+                    if not alternate_overlap_issues:
+                        alternate_source_issues = []
+                    else:
+                        alternate_source_issues.extend(
+                            f"alternate source validation: {issue}"
+                            for issue in alternate_overlap_issues
+                        )
                 if provenance.get("amount_quality") != "reported" and not allow_estimated:
                     alternate_source_issues.append(
                         f"amount quality {provenance.get('amount_quality')} is not allowed"
@@ -1575,38 +1604,64 @@ def benchmark_membership_fetch_symbols(store: DataStore, config: dict[str, Any])
     )
 
 
-def fetch_history_frame(ak: Any, symbol: str, start: date, end: date) -> tuple[pd.DataFrame, str]:
+HISTORY_AKSHARE_SOURCES = (
+    "stock_zh_a_hist",
+    "stock_zh_a_daily",
+    "stock_zh_a_hist_tx",
+)
+
+
+def fetch_history_source_frame(
+    ak: Any,
+    source: str,
+    symbol: str,
+    start: date,
+    end: date,
+) -> pd.DataFrame:
     start_text = start.strftime("%Y%m%d")
     end_text = end.strftime("%Y%m%d")
-    errors = []
-    try:
-        hist = ak.stock_zh_a_hist(symbol=symbol, period="daily", start_date=start_text, end_date=end_text, adjust="qfq")
-        if not hist.empty:
-            return hist, "stock_zh_a_hist"
-        errors.append("stock_zh_a_hist: empty")
-    except Exception as exc:
-        errors.append(f"stock_zh_a_hist: {exc}")
-    try:
-        hist = ak.stock_zh_a_daily(
+    if source == "stock_zh_a_hist":
+        return ak.stock_zh_a_hist(
+            symbol=symbol,
+            period="daily",
+            start_date=start_text,
+            end_date=end_text,
+            adjust="qfq",
+        )
+    if source == "stock_zh_a_daily":
+        return ak.stock_zh_a_daily(
             symbol=tx_symbol(symbol),
             start_date=start_text,
             end_date=end_text,
             adjust="qfq",
         )
-        if not hist.empty:
-            return hist, "stock_zh_a_daily"
-        errors.append("stock_zh_a_daily: empty")
-    except Exception as exc:
-        errors.append(f"stock_zh_a_daily: {exc}")
-    try:
-        hist = ak.stock_zh_a_hist_tx(symbol=tx_symbol(symbol), start_date=start_text, end_date=end_text, adjust="qfq")
-        if not hist.empty:
-            return hist, "stock_zh_a_hist_tx"
+    if source == "stock_zh_a_hist_tx":
+        return ak.stock_zh_a_hist_tx(
+            symbol=tx_symbol(symbol),
+            start_date=start_text,
+            end_date=end_text,
+            adjust="qfq",
+        )
+    raise ValueError(f"unsupported history source: {source}")
 
-        errors.append("stock_zh_a_hist_tx: empty")
-    except Exception as exc:
-        errors.append(f"stock_zh_a_hist_tx: {exc}")
+
+def fetch_history_frame(
+    ak: Any,
+    symbol: str,
+    start: date,
+    end: date,
+) -> tuple[pd.DataFrame, str]:
+    errors = []
+    for source in HISTORY_AKSHARE_SOURCES:
+        try:
+            hist = fetch_history_source_frame(ak, source, symbol, start, end)
+            if not hist.empty:
+                return hist, source
+            errors.append(f"{source}: empty")
+        except Exception as exc:
+            errors.append(f"{source}: {exc}")
     raise RuntimeError("; ".join(errors))
+
 
 def fetch_symbol_history(
     ak: Any,
@@ -1616,38 +1671,47 @@ def fetch_symbol_history(
     retries: int = 1,
 ) -> tuple[pd.DataFrame, dict[str, object]]:
     errors: list[str] = []
+    reported_amount_sources = {"stock_zh_a_hist", "stock_zh_a_daily"}
     for attempt in range(1, max(1, retries) + 1):
-        try:
-            hist, source = fetch_history_frame(ak, symbol, start, end)
-            if hist.empty:
-                raise ValueError("empty history")
-            reported_amount_sources = {"stock_zh_a_hist", "stock_zh_a_daily"}
-            normalized = (
-                history_from_akshare(hist, symbol)
-                if source in reported_amount_sources
-                else history_from_tx(hist, symbol)
-            )
-            issues = price_frame_issues(normalized)
-            if issues and source == "stock_zh_a_hist_tx":
-                normalized = repair_tx_history_with_hfq(ak, symbol, start, end, normalized)
-                source = "stock_zh_a_hist_tx_hfq_rebased"
+        for requested_source in HISTORY_AKSHARE_SOURCES:
+            source = requested_source
+            try:
+                hist = fetch_history_source_frame(
+                    ak, requested_source, symbol, start, end
+                )
+                if hist.empty:
+                    raise ValueError("empty history")
+                normalized = (
+                    history_from_akshare(hist, symbol)
+                    if requested_source in reported_amount_sources
+                    else history_from_tx(hist, symbol)
+                )
                 issues = price_frame_issues(normalized)
-            if issues:
-                raise ValueError("; ".join(issues))
-            return normalized, {
-                "symbol": str(symbol),
-                "source": source,
-                "first_date": normalized["date"].min(),
-                "last_date": normalized["date"].max(),
-                "rows": len(normalized),
-                "amount_quality": "reported" if source in reported_amount_sources else "estimated_close_x_volume",
-            }
-        except Exception as exc:
-            errors.append(f"attempt {attempt}: {exc}")
-            if attempt < retries:
-                time.sleep(min(2.0, 0.5 * attempt))
+                if issues and requested_source == "stock_zh_a_hist_tx":
+                    normalized = repair_tx_history_with_hfq(
+                        ak, symbol, start, end, normalized
+                    )
+                    source = "stock_zh_a_hist_tx_hfq_rebased"
+                    issues = price_frame_issues(normalized)
+                if issues:
+                    raise ValueError("; ".join(issues))
+                return normalized, {
+                    "symbol": str(symbol),
+                    "source": source,
+                    "first_date": normalized["date"].min(),
+                    "last_date": normalized["date"].max(),
+                    "rows": len(normalized),
+                    "amount_quality": (
+                        "reported"
+                        if requested_source in reported_amount_sources
+                        else "estimated_close_x_volume"
+                    ),
+                }
+            except Exception as exc:
+                errors.append(f"attempt {attempt} {requested_source}: {exc}")
+        if attempt < retries:
+            time.sleep(min(2.0, 0.5 * attempt))
     raise RuntimeError("; ".join(errors))
-
 
 def tx_symbol(symbol: str) -> str:
     clean = normalize_symbol(symbol)
@@ -1845,7 +1909,9 @@ def history_from_tx(hist: pd.DataFrame, symbol: str) -> pd.DataFrame:
     out["high"] = pick_column(hist, ["high", "最高"], 3)
     out["low"] = pick_column(hist, ["low", "最低"], 4)
     raw_volume = pd.to_numeric(pick_column(hist, ["amount", "成交量", "volume"], 5), errors="coerce").fillna(0)
-    out["volume"] = raw_volume * 100
+    # Tencent reports STAR Market volume in shares and other supported boards in lots.
+    volume_multiplier = 1 if normalize_symbol(symbol).startswith("688") else 100
+    out["volume"] = raw_volume * volume_multiplier
     out["amount"] = out["volume"] * pd.to_numeric(out["close"], errors="coerce").fillna(0)
     out["symbol"] = symbol
     return out[PRICE_COLUMNS]
@@ -1863,8 +1929,12 @@ def history_overlap_quality(
         "overlap_volume_median_relative_error": None,
         "overlap_amount_median_relative_error": None,
     }
-    if candidate.empty or reference.empty:
-        return metrics, []
+    if candidate.empty:
+        return {**metrics, "overlap_status": "invalid_candidate_scope"}, [
+            "candidate history is empty"
+        ]
+    if reference.empty:
+        return metrics, ["overlap reference is unavailable"]
     symbols = candidate["symbol"].map(normalize_symbol).dropna().unique()
     if len(symbols) != 1:
         return {**metrics, "overlap_status": "invalid_candidate_scope"}, [
@@ -1873,7 +1943,7 @@ def history_overlap_quality(
     symbol = str(symbols[0])
     baseline = reference[reference["symbol"].map(normalize_symbol).eq(symbol)].copy()
     if baseline.empty:
-        return metrics, []
+        return metrics, [f"overlap reference has no rows for {symbol}"]
     left = normalize_prices(candidate)
     right = normalize_prices(baseline)
     joined = left.merge(right, on=["date", "symbol"], suffixes=("_new", "_reference"))
@@ -1907,6 +1977,70 @@ def history_overlap_quality(
             )
     metrics["overlap_status"] = "failed" if issues else "passed"
     return metrics, issues
+
+
+def history_alternate_overlap_quality(
+    ak: Any,
+    symbol: str,
+    candidate: pd.DataFrame,
+    source: str,
+    start: date,
+    end: date,
+    config: dict[str, Any],
+) -> tuple[dict[str, object], list[str]]:
+    metrics: dict[str, object] = {
+        "alternate_overlap_status": "not_available",
+        "alternate_overlap_source": "",
+        "alternate_overlap_rows": 0,
+        "alternate_overlap_close_median_relative_error": None,
+        "alternate_overlap_volume_median_relative_error": None,
+        "alternate_overlap_amount_median_relative_error": None,
+    }
+    verifier_sources = (
+        ("stock_zh_a_hist_tx",)
+        if source == "stock_zh_a_daily"
+        else ("stock_zh_a_daily",)
+    )
+    errors: list[str] = []
+    for verifier_source in verifier_sources:
+        try:
+            raw = fetch_history_source_frame(
+                ak, verifier_source, symbol, start, end
+            )
+            if raw.empty:
+                raise ValueError("empty history")
+            verifier = (
+                history_from_tx(raw, symbol)
+                if verifier_source == "stock_zh_a_hist_tx"
+                else history_from_akshare(raw, symbol)
+            )
+            structural_issues = price_frame_issues(verifier)
+            if structural_issues:
+                raise ValueError("; ".join(structural_issues))
+            overlap, issues = history_overlap_quality(candidate, verifier, config)
+            metrics.update(
+                {
+                    "alternate_overlap_status": overlap["overlap_status"],
+                    "alternate_overlap_source": verifier_source,
+                    "alternate_overlap_rows": overlap["overlap_rows"],
+                    "alternate_overlap_close_median_relative_error": overlap[
+                        "overlap_close_median_relative_error"
+                    ],
+                    "alternate_overlap_volume_median_relative_error": overlap[
+                        "overlap_volume_median_relative_error"
+                    ],
+                    "alternate_overlap_amount_median_relative_error": overlap[
+                        "overlap_amount_median_relative_error"
+                    ],
+                }
+            )
+            if not issues:
+                return metrics, []
+            errors.extend(f"{verifier_source}: {issue}" for issue in issues)
+        except Exception as exc:
+            errors.append(f"{verifier_source}: {exc}")
+    metrics["alternate_overlap_status"] = "failed"
+    return metrics, errors or ["no independent alternate source was available"]
 
 
 def history_start_coverage_quality(

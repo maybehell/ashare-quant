@@ -34,6 +34,18 @@ def test_history_daemon_has_audited_source_outage_backoff():
     assert '"submit"' not in text.lower()
 
 
+def test_extended_history_serializes_akshare_v8_requests():
+    import json
+
+    config = json.loads(
+        (ROOT / "configs" / "extended_history_validation.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert config["data"]["history_source"] == "auto"
+    assert config["data"]["history_workers"] == 1
+
 def test_history_daemon_accelerates_only_zero_failure_healthy_batches():
     text = DAEMON.read_text(encoding="utf-8")
 
@@ -45,6 +57,9 @@ def test_history_daemon_accelerates_only_zero_failure_healthy_batches():
     assert "$Progress.attempted_symbols -gt 0" in text
     assert "$Progress.successful_symbols -eq [int]$Progress.attempted_symbols" in text
     assert "Healthy zero-failure batch completed" in text
+    assert '$nextState = if ($exitCode -eq 0) { "waiting" } else { "retry_wait" }' in text
+    assert "History batch failed; waiting before the regular bounded retry." in text
+    assert '[string]$ProgressFile = ""' in text
 
 
 def source_plan_identity() -> str:
@@ -70,6 +85,8 @@ def run_dry_daemon(
             "configs/extended_history_validation.yaml",
             "-OutputDir",
             str(output_dir),
+            "-ProgressFile",
+            str(output_dir / "isolated-progress.parquet"),
             "-RunOnce",
             "-DryRun",
             "-QuietStart",

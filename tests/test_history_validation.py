@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 import pandas as pd
 
+from ashare_quant.candidate import live_strategy_hash
 from ashare_quant.data import DataStore
 from ashare_quant.history_validation import (
     assert_research_only_history_config,
@@ -40,6 +41,9 @@ class ExtendedHistoryValidationTests(unittest.TestCase):
                 "emergency_stop": True,
             },
         }
+        self.config["validation"]["fixed_strategy_sha256"] = live_strategy_hash(
+            self.config
+        )
         self.store = DataStore.from_config(self.config)
         self.store.write_frame(
             "prices",
@@ -85,6 +89,16 @@ class ExtendedHistoryValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "failures=1"):
             require_completed_history_progress(self.store, self.config)
 
+    def test_research_only_boundary_rejects_strategy_identity_mismatch(self):
+        mismatched = {
+            **self.config,
+            "validation": {
+                **self.config["validation"],
+                "fixed_strategy_sha256": "0" * 64,
+            },
+        }
+        with self.assertRaisesRegex(ValueError, "does not match current strategy"):
+            assert_research_only_history_config(mismatched)
     def test_research_only_boundary_rejects_execution_capability(self):
         unsafe = {
             **self.config,
@@ -139,6 +153,60 @@ class ExtendedHistoryValidationTests(unittest.TestCase):
         self.assertAlmostEqual(float(status["excess_total_return"]), 0.07)
         self.assertIn("history_validation_status.csv", paths)
         self.assertEqual(paths_again["report.html"], output_dir / "report.html")
+        self.assertFalse((output_dir / "orders.csv").exists())
+        self.assertFalse((output_dir / "rpa_orders.csv").exists())
+
+    def test_rejects_effective_history_below_preregistered_minimum(self):
+        self.config["validation"]["min_backtest_trading_days"] = 3
+        self.config["validation"]["fixed_strategy_sha256"] = live_strategy_hash(
+            self.config
+        )
+        self.write_progress()
+        output_dir = Path(self.config["paths"]["output_dir"])
+
+        def fake_backtest(config):
+            output_dir.mkdir(parents=True, exist_ok=True)
+            pd.DataFrame(
+                [
+                    {"metric": "total_return", "value": 0.25},
+                    {"metric": "benchmark_total_return", "value": 0.18},
+                    {"metric": "excess_total_return", "value": 0.07},
+                    {"metric": "max_drawdown", "value": -0.12},
+                    {"metric": "information_ratio", "value": 0.8},
+                ]
+            ).to_csv(output_dir / "performance_metrics.csv", index=False)
+            pd.DataFrame(
+                [
+                    {"date": "2026-08-06", "equity": 1000000},
+                    {"date": "2026-08-07", "equity": 1010000},
+                ]
+            ).to_csv(output_dir / "equity_curve.csv", index=False)
+            return {"performance_metrics.csv": output_dir / "performance_metrics.csv"}
+
+        def fake_report(config):
+            target = output_dir / "report.html"
+            target.write_text("<html lang='zh-CN'></html>", encoding="utf-8")
+            return target
+
+        with (
+            patch(
+                "ashare_quant.history_validation.run_backtest",
+                side_effect=fake_backtest,
+            ),
+            patch(
+                "ashare_quant.history_validation.regenerate_report",
+                side_effect=fake_report,
+            ),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "minimum is 3"):
+                run_extended_history_validation(self.config)
+
+        status = pd.read_csv(
+            output_dir / "history_validation_status.csv"
+        ).iloc[0]
+        self.assertEqual(status["status"], "failed")
+        self.assertEqual(int(status["effective_trading_days"]), 2)
+        self.assertEqual(int(status["minimum_trading_days"]), 3)
         self.assertFalse((output_dir / "orders.csv").exists())
         self.assertFalse((output_dir / "rpa_orders.csv").exists())
 

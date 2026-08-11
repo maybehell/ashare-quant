@@ -9,6 +9,7 @@ import pandas as pd
 
 from .audit import backtest_config_sha256
 from .backtest import run_backtest
+from .candidate import live_strategy_hash
 from .config import project_path
 from .data import DataStore, history_staging_frame_name
 from .io_utils import atomic_to_csv
@@ -25,7 +26,9 @@ STATUS_COLUMNS = [
     "requested_end",
     "formal_prices_sha256",
     "backtest_config_sha256",
+    "strategy_sha256",
     "effective_trading_days",
+    "minimum_trading_days",
     "total_return",
     "benchmark_total_return",
     "excess_total_return",
@@ -47,12 +50,19 @@ def run_extended_history_validation(config: dict[str, Any]) -> dict[str, Path]:
     prices_path = formal_prices_path(store)
     prices_sha256 = file_sha256(prices_path)
     config_sha256 = backtest_config_sha256(config)
+    strategy_sha256 = live_strategy_hash(config)
+    minimum_trading_days = max(
+        0,
+        int(config.get("validation", {}).get("min_backtest_trading_days", 0)),
+    )
 
     if reusable_completed_validation(
         status_path,
         report_path,
         prices_sha256,
         config_sha256,
+        strategy_sha256,
+        minimum_trading_days,
         str(progress["generated_at"]),
     ):
         return {
@@ -60,7 +70,11 @@ def run_extended_history_validation(config: dict[str, Any]) -> dict[str, Path]:
             "report.html": report_path,
         }
 
-    base = status_base(progress, prices_sha256, config_sha256)
+    base = {
+        **status_base(progress, prices_sha256, config_sha256, strategy_sha256),
+        "minimum_trading_days": minimum_trading_days,
+    }
+    effective_trading_days = 0
     write_status(status_path, {**base, "status": "running", "message": "fixed_strategy_validation_started"})
     try:
         paths = run_backtest(config)
@@ -77,10 +91,17 @@ def run_extended_history_validation(config: dict[str, Any]) -> dict[str, Path]:
             )
         metrics = read_metrics(output_dir / "performance_metrics.csv")
         equity = read_optional_csv(output_dir / "equity_curve.csv")
+        effective_trading_days = len(equity)
+        if effective_trading_days < minimum_trading_days:
+            raise RuntimeError(
+                "Fixed strategy validation has "
+                f"{effective_trading_days} effective trading days; "
+                f"minimum is {minimum_trading_days}."
+            )
         completed = {
             **base,
             "status": "completed",
-            "effective_trading_days": len(equity),
+            "effective_trading_days": effective_trading_days,
             "total_return": metrics.get("total_return", ""),
             "benchmark_total_return": metrics.get("benchmark_total_return", ""),
             "excess_total_return": metrics.get("excess_total_return", ""),
@@ -101,6 +122,7 @@ def run_extended_history_validation(config: dict[str, Any]) -> dict[str, Path]:
             {
                 **base,
                 "status": "failed",
+                "effective_trading_days": effective_trading_days,
                 "message": str(exc)[:1000],
             },
         )
@@ -125,6 +147,16 @@ def assert_research_only_history_config(config: dict[str, Any]) -> None:
         errors.append("auto_live.allow_broker_submit must be false")
     if not bool(auto_live.get("emergency_stop", True)):
         errors.append("auto_live.emergency_stop must remain true")
+    expected_strategy_sha256 = str(
+        validation.get("fixed_strategy_sha256", "") or ""
+    ).strip().lower()
+    current_strategy_sha256 = live_strategy_hash(config)
+    if not expected_strategy_sha256:
+        errors.append("validation.fixed_strategy_sha256 is required")
+    elif current_strategy_sha256 != expected_strategy_sha256:
+        errors.append(
+            "validation.fixed_strategy_sha256 does not match current strategy"
+        )
     if output_dir in forbidden_outputs:
         errors.append("history validation output_dir must be isolated")
     if state_db == project_path("data/huatai_live_state.sqlite3").resolve():
@@ -184,6 +216,8 @@ def reusable_completed_validation(
     report_path: Path,
     prices_sha256: str,
     config_sha256: str,
+    strategy_sha256: str,
+    minimum_trading_days: int,
     progress_generated_at: str,
 ) -> bool:
     frame = read_optional_csv(status_path)
@@ -194,6 +228,14 @@ def reusable_completed_validation(
         str(row.get("status", "")) == "completed"
         and str(row.get("formal_prices_sha256", "")) == prices_sha256
         and str(row.get("backtest_config_sha256", "")) == config_sha256
+        and str(row.get("strategy_sha256", "")) == strategy_sha256
+        and pd.notna(
+            pd.to_numeric(row.get("effective_trading_days", 0), errors="coerce")
+        )
+        and float(
+            pd.to_numeric(row.get("effective_trading_days", 0), errors="coerce")
+        )
+        >= minimum_trading_days
         and str(row.get("progress_generated_at", "")) == progress_generated_at
     )
 
@@ -202,6 +244,7 @@ def status_base(
     progress: pd.Series,
     prices_sha256: str,
     config_sha256: str,
+    strategy_sha256: str,
 ) -> dict[str, object]:
     return {
         "generated_at": datetime.now().isoformat(timespec="seconds"),
@@ -212,6 +255,7 @@ def status_base(
         "requested_end": str(progress.get("requested_end", "")),
         "formal_prices_sha256": prices_sha256,
         "backtest_config_sha256": config_sha256,
+        "strategy_sha256": strategy_sha256,
         "effective_trading_days": "",
         "total_return": "",
         "benchmark_total_return": "",

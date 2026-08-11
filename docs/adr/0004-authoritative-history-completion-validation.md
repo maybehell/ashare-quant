@@ -31,14 +31,21 @@ The historical completion and validation workflow uses two ordered states:
 4. history-validate requires research_only configuration, disabled broker
    submission, active emergency stop, isolated output and state paths, zero
    remaining symbols, and zero failures.
-5. The validation status binds the progress generation time, fixed backtest
-   configuration hash, and byte hash of the formal prices file.
-6. Exact completed evidence is reusable. Changed data, configuration, progress,
-   or a missing report forces a new validation.
-7. Validation may generate backtest outputs and a report only. Generic execution
+5. The validation configuration declares the exact fixed strategy SHA-256. The
+   command rejects a missing or mismatched declaration, and validation status
+   binds that strategy identity together with progress generation time, fixed
+   backtest configuration hash, and the formal prices byte hash.
+6. Validation may declare an absolute complete-market symbol count and a
+   minimum effective trading-day count. The current 100-position fixed strategy
+   uses at least 500 priced symbols per accepted date and requires 1500
+   post-warmup dates. A shorter run is audited as failed, and completed-evidence
+   reuse rechecks the current minimum.
+7. Exact completed evidence is reusable. Changed data, configuration, progress,
+   a stricter minimum, or a missing report forces a new validation.
+8. Validation may generate backtest outputs and a report only. Generic execution
    orders, candidate promotion, strategy activation, broker access, live-ledger
    initialization, and submission remain forbidden.
-8. The daemon records validation failure or timeout and retries later. It exits
+9. The daemon records validation failure or timeout and retries later. It exits
    successfully only after the fixed-strategy validation completes.
 
 ## Consequences
@@ -50,6 +57,8 @@ Positive:
 - Long-history evidence is generated automatically without granting authority.
 - Repeated Windows logons do not rerun an unchanged completed validation.
 - Operators can distinguish data completion from fixed-strategy validation.
+- A requested long-history run cannot silently complete after relative coverage
+  filtering removes most of the requested period.
 
 Costs:
 
@@ -57,6 +66,9 @@ Costs:
 - Byte-level parquet changes conservatively trigger revalidation.
 - Historical completion now has an additional bounded backtest stage before the
   temporary daemon exits.
+- An absolute cross-section threshold is explicit and auditable but does not
+  remove survivorship bias from a stock pool selected using current membership
+  and liquidity.
 
 ## Alternatives considered
 

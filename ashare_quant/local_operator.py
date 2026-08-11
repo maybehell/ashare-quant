@@ -11,8 +11,9 @@ from typing import Any
 import pandas as pd
 
 from .audit import backtest_config_sha256, mapping_sha256
+from .candidate import live_strategy_hash
 from .challengers import primary_challenger_config_paths
-from .config import project_path
+from .config import load_config, project_path
 from .io_utils import atomic_to_csv
 
 
@@ -93,6 +94,9 @@ def write_local_operator_status(
     history_daemon_status = _read_json(
         project_path("outputs_extended_history_validation/history_backfill_daemon_status.json")
     )
+    history_validation = _read_csv(
+        project_path("outputs_extended_history_validation/history_validation_status.csv")
+    )
     scheduled_observation = _read_csv(strategy_dir / "daily_observation_summary.csv")
     broker_refresh = _read_csv(live_dir / "huatai_read_only_refresh.csv")
     client_status = _read_csv(live_dir / "huatai_client_status.csv")
@@ -170,6 +174,9 @@ def write_local_operator_status(
     )
     history_daemon_ok, history_daemon_value, history_daemon_message = (
         _history_backfill_daemon_status(history_daemon_status, max_age_seconds=5400)
+    )
+    history_validation_ok, history_validation_value, history_validation_message = (
+        _current_extended_history_validation_status(history_validation)
     )
     observation_settings = strategy_config.get("observation_task", {}) if isinstance(strategy_config.get("observation_task"), dict) else {}
     scheduled_required = str(observation_settings.get("required", False)).strip().lower() in {"true", "1", "yes"}
@@ -321,6 +328,7 @@ def write_local_operator_status(
         _row("strategy_family_selection", family_selection_value, family_selection_ok, "strategy", "\u5019\u9009\u53bb\u91cd\u540e\u7684\u7b56\u7565\u65cf\u7ea7\u4e92\u8865\u7559\u51fa\u5ba1\u8ba1\u3002"),
         _row("primary_challenger_observation", challenger_value, challenger_ok, "research", challenger_message),
         _row("extended_history_backfill", history_daemon_value, history_daemon_ok, "research", history_daemon_message),
+        _row("extended_history_validation", history_validation_value, history_validation_ok, "research", history_validation_message),
         _row("strict_live_allowed", strict_allowed or "False", strict_strategy, "strategy", "严格实盘策略门禁。"),
         _row("recovery_candidate", recovery_value, recovery_ok, "research", recovery_message),
         _row("recovery_candidate_capital", recovery_capital_value, recovery_capital_ok, "research", recovery_capital_message),
@@ -534,6 +542,7 @@ def _history_backfill_daemon_status(
     requested = safe_count(progress.get("requested_symbols", 0))
     next_run = str(payload.get("next_run_at", "") or "").strip()
     backoff = safe_count(payload.get("source_backoff_minutes", 0))
+    exit_code = str(payload.get("last_exit_code", "") or "").strip()
     age = _timestamp_age_seconds(payload.get("updated_at", ""))
     fresh = age is not None and -30 <= age <= max(max_age_seconds, 60)
     reported_hash = str(payload.get("script_sha256", "") or "").strip().lower()
@@ -545,7 +554,7 @@ def _history_backfill_daemon_status(
     )
     value = (
         f"state={state or 'missing'};completed={completed}/{requested};"
-        f"source={source_status};backoff_minutes={backoff};next={next_run or 'none'};"
+        f"source={source_status};backoff_minutes={backoff};exit={exit_code or 'none'};next={next_run or 'none'};"
         f"age_seconds={'missing' if age is None else f'{max(age, 0):.0f}'};"
         f"script={'current' if script_current else 'stale_or_missing'};startup={startup_label}"
     )
@@ -553,10 +562,85 @@ def _history_backfill_daemon_status(
         return True, value, "\u957f\u5386\u53f2\u884c\u60c5\u4e0e\u56fa\u5b9a\u7b56\u7565\u9694\u79bb\u9a8c\u8bc1\u5df2\u5b8c\u6210\uff1b\u8be5\u7ed3\u679c\u4ecd\u4e0d\u81ea\u52a8\u6388\u6743\u7b56\u7565\u664b\u7ea7\u3002"
     if state == "source_unavailable" or source_status == "source_unavailable":
         return False, value, "\u957f\u5386\u53f2\u516c\u5171\u6570\u636e\u6e90\u5f53\u524d\u4e0d\u53ef\u7528\uff1b\u6b63\u5f0f\u7f13\u5b58\u672a\u88ab\u66ff\u6362\u3002"
+    if state == "retry_wait":
+        return False, value, "\u957f\u5386\u53f2\u4e0a\u4e00\u6279\u6267\u884c\u5931\u8d25\uff0c\u5b88\u62a4\u6b63\u5728\u5e38\u89c4\u95f4\u9694\u540e\u91cd\u8bd5\uff1b\u6b63\u5f0f\u7f13\u5b58\u672a\u88ab\u66ff\u6362\u3002"
     if state in {"waiting", "running", "deferred", "validating"} and runtime_current:
         return True, value, "\u957f\u5386\u53f2\u7814\u7a76\u4efb\u52a1\u6b63\u5728\u53ef\u4fe1\u540e\u53f0\u8fd0\u884c\u6216\u7b49\u5f85\uff1b\u672a\u5b8c\u6210\u6570\u636e\u4e0d\u4f1a\u8fdb\u5165\u6b63\u5f0f\u56de\u6d4b\u3002"
     return False, value, "\u957f\u5386\u53f2\u7814\u7a76\u4efb\u52a1\u7684\u542f\u52a8\u9879\u3001\u72b6\u6001\u65f6\u6548\u6216\u811a\u672c\u8eab\u4efd\u65e0\u6548\uff1b\u6b63\u5f0f\u7f13\u5b58\u4ecd\u4fdd\u6301\u539f\u6837\u3002"
 
+
+def _current_extended_history_validation_status(
+    frame: pd.DataFrame,
+    *,
+    expected_strategy_sha256: str | None = None,
+    expected_backtest_config_sha256: str | None = None,
+    current_prices_sha256: str | None = None,
+) -> tuple[bool, str, str]:
+    if frame.empty:
+        return False, "missing", "\u957f\u5386\u53f2\u56fa\u5b9a\u7b56\u7565\u9a8c\u8bc1\u5c1a\u672a\u5b8c\u6210\u3002"
+    row = frame.iloc[-1]
+    status = str(row.get("status", "") or "").strip().lower()
+    expected_strategy = expected_strategy_sha256
+    expected_backtest = expected_backtest_config_sha256
+    current_prices = current_prices_sha256
+    if (
+        expected_strategy is None
+        or expected_backtest is None
+        or current_prices is None
+    ):
+        try:
+            extended_config = load_config("configs/extended_history_validation.yaml")
+            expected_strategy = live_strategy_hash(extended_config)
+            expected_backtest = backtest_config_sha256(extended_config)
+            cache_dir = project_path(extended_config["paths"]["cache_dir"])
+            prices_path = cache_dir / "prices.parquet"
+            if not prices_path.exists():
+                prices_path = cache_dir / "prices.csv"
+            current_prices = _file_sha256(prices_path)
+        except (KeyError, OSError, TypeError, ValueError):
+            expected_strategy = ""
+            expected_backtest = ""
+            current_prices = ""
+    strategy_current = bool(
+        expected_strategy
+        and str(row.get("strategy_sha256", "") or "") == expected_strategy
+    )
+    backtest_current = bool(
+        expected_backtest
+        and str(row.get("backtest_config_sha256", "") or "") == expected_backtest
+    )
+    prices_current = bool(
+        current_prices
+        and str(row.get("formal_prices_sha256", "") or "") == current_prices
+    )
+    requested = pd.to_numeric(row.get("requested_symbols", 0), errors="coerce")
+    completed = pd.to_numeric(row.get("completed_symbols", 0), errors="coerce")
+    requested_count = 0 if pd.isna(requested) else max(int(requested), 0)
+    completed_count = 0 if pd.isna(completed) else max(int(completed), 0)
+    effective_days = pd.to_numeric(
+        row.get("effective_trading_days", 0), errors="coerce"
+    )
+    days = 0 if pd.isna(effective_days) else max(int(effective_days), 0)
+    passed = bool(
+        status == "completed"
+        and requested_count > 0
+        and completed_count == requested_count
+        and strategy_current
+        and backtest_current
+        and prices_current
+    )
+    value = (
+        f"status={status or 'missing'};scope={completed_count}/{requested_count};"
+        f"days={days};excess={row.get('excess_total_return', '')};"
+        f"information_ratio={row.get('information_ratio', '')};"
+        f"drawdown={row.get('max_drawdown', '')};"
+        f"strategy={'current' if strategy_current else 'stale'};"
+        f"backtest={'current' if backtest_current else 'stale'};"
+        f"prices={'current' if prices_current else 'stale'}"
+    )
+    if passed:
+        return True, value, "\u957f\u5386\u53f2\u56fa\u5b9a\u7b56\u7565\u9a8c\u8bc1\u5df2\u5b8c\u6210\u4e14\u8eab\u4efd\u4e0e\u5f53\u524d\u6b63\u5f0f\u6570\u636e\u4e00\u81f4\uff1b\u4ecd\u4e0d\u81ea\u52a8\u6388\u6743\u664b\u7ea7\u6216\u4e0b\u5355\u3002"
+    return False, value, "\u957f\u5386\u53f2\u9a8c\u8bc1\u7f3a\u5931\u3001\u672a\u5b8c\u6210\u6216\u5df2\u4e0e\u5f53\u524d\u7b56\u7565\u3001\u56de\u6d4b\u914d\u7f6e\u6216\u6b63\u5f0f\u4ef7\u683c\u6587\u4ef6\u5931\u914d\u3002"
 
 def _history_backfill_startup_status(
     *, startup_path: Path | None = None

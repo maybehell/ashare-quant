@@ -5,11 +5,13 @@
   },
   "data": {
     "history_source": "auto",
+    "history_workers": 1,
     "history_fallback_to_baostock": false,
     "history_allow_estimated_amount_fallback": false,
     "history_resume_require_trusted_provenance": true,
     "history_overlap_tail_rows": 10,
     "history_overlap_min_rows": 10,
+    "complete_market_min_symbol_count": 500,
     "history_request_budget": 25,
     "history_staging_namespace": "extended_history_validation"
   },
@@ -25,6 +27,7 @@
   },
   "validation": {
     "research_only": true,
+    "fixed_strategy_sha256": "26df6a8b70566c434d9b02c0a2d90d5229fe50a7d7b78aa37d6739504451b5b3",
     "apply_active_execution": false,
     "optimized_on_current_cache": true,
     "experiment_status": "extended_history_validation",

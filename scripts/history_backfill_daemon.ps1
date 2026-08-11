@@ -1,6 +1,7 @@
 param(
     [string]$Config = "configs/extended_history_validation.yaml",
     [string]$OutputDir = "outputs_extended_history_validation",
+    [string]$ProgressFile = "",
     [int]$MaxSymbols = 800,
     [int]$IntervalMinutes = 60,
     [int]$HealthyIntervalMinutes = 15,
@@ -44,7 +45,11 @@ $sourcePlanIdentity = "${defaultConfigHash}:${overrideConfigHash}"
 $daemonScriptHash = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()
 New-Item -ItemType Directory -Path $resolvedOutput -Force | Out-Null
 
-$progressPath = Join-Path $projectRoot "data\cache\history_backfill_progress_extended_history_validation.parquet"
+$progressPath = if ($ProgressFile) {
+    Resolve-ProjectPath $ProgressFile
+} else {
+    Join-Path $projectRoot "data\cache\history_backfill_progress_extended_history_validation.parquet"
+}
 $statusPath = Join-Path $resolvedOutput "history_backfill_daemon_status.json"
 $lockPath = Join-Path $resolvedOutput "history_backfill_daemon.lock"
 $stopPath = Join-Path $resolvedOutput "history_backfill_daemon.stop"
@@ -286,12 +291,15 @@ try {
         if ($RunOnce) { exit $exitCode }
         $nextIntervalMinutes = Get-NextBatchIntervalMinutes $progress $exitCode
         $nextRun = (Get-Date).AddMinutes($nextIntervalMinutes)
+        $nextState = if ($exitCode -eq 0) { "waiting" } else { "retry_wait" }
         $message = if ($nextIntervalMinutes -eq $HealthyIntervalMinutes) {
             "Healthy zero-failure batch completed; waiting for the accelerated bounded retry."
-        } else {
+        } elseif ($exitCode -eq 0) {
             "Waiting before the next bounded history batch."
+        } else {
+            "History batch failed; waiting before the regular bounded retry."
         }
-        Write-Status "waiting" $message $progress $exitCode $nextRun
+        Write-Status $nextState $message $progress $exitCode $nextRun
         Start-Sleep -Seconds ($nextIntervalMinutes * 60)
     }
 } catch {
