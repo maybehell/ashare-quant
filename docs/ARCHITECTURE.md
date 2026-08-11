@@ -64,7 +64,9 @@ Rules:
 - A research scheduler may invoke fixed-parameter validation after authoritative
   data completion, but cannot promote a candidate, activate a strategy, create
   execution orders, or call the broker boundary.
-- Required unattended observation must have both a fresh live heartbeat and a verified current-user Startup entry; stale status files are not liveness evidence.
+- Required unattended observation and research backfill must have a fresh status
+  bound to the current script plus a verified current-user Startup entry; stale
+  status files are not liveness evidence.
 
 ### 3.2 Configuration, data, and market infrastructure
 

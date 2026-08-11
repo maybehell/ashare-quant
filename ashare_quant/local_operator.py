@@ -169,7 +169,7 @@ def write_local_operator_status(
         ),
     )
     history_daemon_ok, history_daemon_value, history_daemon_message = (
-        _history_backfill_daemon_status(history_daemon_status)
+        _history_backfill_daemon_status(history_daemon_status, max_age_seconds=5400)
     )
     observation_settings = strategy_config.get("observation_task", {}) if isinstance(strategy_config.get("observation_task"), dict) else {}
     scheduled_required = str(observation_settings.get("required", False)).strip().lower() in {"true", "1", "yes"}
@@ -515,12 +515,17 @@ def _observation_daemon_status(
 
 def _history_backfill_daemon_status(
     payload: dict[str, Any],
+    *,
+    max_age_seconds: int = 5400,
+    startup_path: Path | None = None,
 ) -> tuple[bool, str, str]:
     if not payload:
-        return False, "missing", "尚未发现长历史补全状态；该研究证据不会影响现有正式缓存。"
+        return False, "missing", "\u5c1a\u672a\u53d1\u73b0\u957f\u5386\u53f2\u8865\u5168\u72b6\u6001\uff1b\u8be5\u7814\u7a76\u8bc1\u636e\u4e0d\u4f1a\u5f71\u54cd\u73b0\u6709\u6b63\u5f0f\u7f13\u5b58\u3002"
     state = str(payload.get("state", "") or "").strip().lower()
+    mode = str(payload.get("mode", "") or "").strip()
     progress = payload.get("progress", {}) if isinstance(payload.get("progress"), dict) else {}
     source_status = str(progress.get("source_status", "unknown") or "unknown").strip().lower()
+
     def safe_count(value: object) -> int:
         numeric = pd.to_numeric(value, errors="coerce")
         return 0 if pd.isna(numeric) else max(int(numeric), 0)
@@ -529,18 +534,60 @@ def _history_backfill_daemon_status(
     requested = safe_count(progress.get("requested_symbols", 0))
     next_run = str(payload.get("next_run_at", "") or "").strip()
     backoff = safe_count(payload.get("source_backoff_minutes", 0))
+    age = _timestamp_age_seconds(payload.get("updated_at", ""))
+    fresh = age is not None and -30 <= age <= max(max_age_seconds, 60)
+    reported_hash = str(payload.get("script_sha256", "") or "").strip().lower()
+    expected_hash = _file_sha256(project_path("scripts/history_backfill_daemon.ps1"))
+    script_current = bool(reported_hash and expected_hash and reported_hash == expected_hash)
+    startup_ok, startup_label = _history_backfill_startup_status(startup_path=startup_path)
+    runtime_current = bool(
+        mode == "research_history_backfill" and fresh and script_current and startup_ok
+    )
     value = (
         f"state={state or 'missing'};completed={completed}/{requested};"
-        f"source={source_status};backoff_minutes={backoff};next={next_run or 'none'}"
+        f"source={source_status};backoff_minutes={backoff};next={next_run or 'none'};"
+        f"age_seconds={'missing' if age is None else f'{max(age, 0):.0f}'};"
+        f"script={'current' if script_current else 'stale_or_missing'};startup={startup_label}"
     )
-    if state == "complete":
-        return True, value, "长历史行情与固定策略隔离验证已完成；该结果仍不自动授权策略晋级。"
+    if state == "complete" and mode == "research_history_backfill" and script_current:
+        return True, value, "\u957f\u5386\u53f2\u884c\u60c5\u4e0e\u56fa\u5b9a\u7b56\u7565\u9694\u79bb\u9a8c\u8bc1\u5df2\u5b8c\u6210\uff1b\u8be5\u7ed3\u679c\u4ecd\u4e0d\u81ea\u52a8\u6388\u6743\u7b56\u7565\u664b\u7ea7\u3002"
     if state == "source_unavailable" or source_status == "source_unavailable":
-        return False, value, "长历史公共数据源当前不可用；已验证暂存数据保持不变，系统正在熔断退避，正式缓存未被替换。"
-    if state in {"waiting", "running", "deferred", "validating"}:
-        return True, value, "长历史研究任务正在有界运行或等待；未完成数据不会进入正式回测。"
-    return False, value, "长历史研究任务未就绪；检查 daemon 状态和日志，正式缓存仍保持原样。"
+        return False, value, "\u957f\u5386\u53f2\u516c\u5171\u6570\u636e\u6e90\u5f53\u524d\u4e0d\u53ef\u7528\uff1b\u6b63\u5f0f\u7f13\u5b58\u672a\u88ab\u66ff\u6362\u3002"
+    if state in {"waiting", "running", "deferred", "validating"} and runtime_current:
+        return True, value, "\u957f\u5386\u53f2\u7814\u7a76\u4efb\u52a1\u6b63\u5728\u53ef\u4fe1\u540e\u53f0\u8fd0\u884c\u6216\u7b49\u5f85\uff1b\u672a\u5b8c\u6210\u6570\u636e\u4e0d\u4f1a\u8fdb\u5165\u6b63\u5f0f\u56de\u6d4b\u3002"
+    return False, value, "\u957f\u5386\u53f2\u7814\u7a76\u4efb\u52a1\u7684\u542f\u52a8\u9879\u3001\u72b6\u6001\u65f6\u6548\u6216\u811a\u672c\u8eab\u4efd\u65e0\u6548\uff1b\u6b63\u5f0f\u7f13\u5b58\u4ecd\u4fdd\u6301\u539f\u6837\u3002"
 
+
+def _history_backfill_startup_status(
+    *, startup_path: Path | None = None
+) -> tuple[bool, str]:
+    if startup_path is None:
+        appdata = str(os.environ.get("APPDATA", "") or "").strip()
+        if not appdata:
+            return False, "folder_unavailable"
+        startup_path = (
+            Path(appdata)
+            / "Microsoft"
+            / "Windows"
+            / "Start Menu"
+            / "Programs"
+            / "Startup"
+            / "AshareQuantHistoryBackfill.cmd"
+        )
+    try:
+        launcher = startup_path.read_text(encoding="ascii", errors="replace")
+    except OSError:
+        return False, "missing"
+    expected_daemon = str(project_path("scripts/history_backfill_daemon.ps1").resolve())
+    normalized = launcher.replace("/", "\\").casefold()
+    expected = expected_daemon.replace("/", "\\").casefold()
+    safe = (
+        expected in normalized
+        and "history_backfill_daemon.ps1" in normalized
+        and "auto-live-run" not in normalized
+        and "submit" not in normalized
+    )
+    return safe, "current" if safe else "invalid"
 
 def _observation_startup_status(
     *,

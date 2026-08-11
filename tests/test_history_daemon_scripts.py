@@ -26,6 +26,8 @@ def test_history_daemon_has_audited_source_outage_backoff():
     assert "$sourceResumeAt" in text
     assert "source_plan_identity" in text
     assert "Get-FileHash" in text
+    assert "script_sha256" in text
+    assert "schema_version = 3" in text
     assert "validated partial data is preserved" in text
     assert '"history-validate"' in text
     assert '"auto-live-run"' not in text

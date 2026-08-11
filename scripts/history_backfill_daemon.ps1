@@ -41,6 +41,7 @@ if (-not (Test-Path -LiteralPath $defaultConfig)) { throw "Missing default confi
 $defaultConfigHash = (Get-FileHash -LiteralPath $defaultConfig -Algorithm SHA256).Hash.ToLowerInvariant()
 $overrideConfigHash = (Get-FileHash -LiteralPath $resolvedConfig -Algorithm SHA256).Hash.ToLowerInvariant()
 $sourcePlanIdentity = "${defaultConfigHash}:${overrideConfigHash}"
+$daemonScriptHash = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()
 New-Item -ItemType Directory -Path $resolvedOutput -Force | Out-Null
 
 $progressPath = Join-Path $projectRoot "data\cache\history_backfill_progress_extended_history_validation.parquet"
@@ -77,9 +78,10 @@ if (Test-Path -LiteralPath $statusPath) {
 
 function Write-Status([string]$State, [string]$Message, [object]$Progress, [object]$ExitCode, [object]$NextRunAt) {
     $payload = [ordered]@{
-        schema_version = 2
+        schema_version = 3
         state = $State
         mode = "research_history_backfill"
+        script_sha256 = $daemonScriptHash
         pid = $PID
         config = $resolvedConfig
         source_plan_identity = $sourcePlanIdentity

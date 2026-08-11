@@ -5,6 +5,72 @@ added directly below this introduction, newest first. It records verified facts;
 it is not a release-marketing document and does not replace generated audit
 artifacts.
 
+## 2026-08-11 - Bind unattended history status to current runtime
+
+**Objective**
+
+Repair unattended runtime evidence after the history and observation Startup
+entries disappeared, prevent stale history status from being reported as a
+healthy task, and complete the governance record omitted by automatic commit
+`81baf67`.
+
+**Changes**
+
+- Restored and started the current-user observation-only and research-history
+  Startup entries. Their installers verified fresh live processes before
+  returning.
+- Upgraded history daemon status to schema version 3 and bound every status to
+  the SHA-256 of the running script.
+- Made local operator history status require the current mode, a fresh timestamp,
+  the current script hash, and a safe current-user Startup launcher while work is
+  incomplete. The rendered value now exposes age, script, and Startup evidence.
+- Extended the architecture rule for authoritative unattended liveness from
+  observation to research backfill and added focused stale/missing evidence
+  regressions.
+- Repaired the missing development-log record for commit `81baf67`: that commit
+  added cross-source confirmation of legitimate late history starts, persisted
+  start-boundary provenance, covered the BaoStock path, and kept estimated
+  amount fail closed. Its final regression was 1075 tests plus 39 subtests.
+
+**Architecture and safety**
+
+- This change affects only interface/runtime evidence and the isolated research
+  scheduler. It does not change strategy parameters, formal-cache acceptance,
+  broker adapters, account state, execution provenance, or submission gates.
+- The Huatai configuration remains emergency-stopped with broker and service
+  submission disabled. Live ledger, active strategy, Canary certificate,
+  generic order, and RPA order artifacts remain absent.
+- GitHub Startup synchronization was not restored: the permission reviewer
+  rejected unattended future pushes because their payloads cannot be known in
+  advance. No workaround was attempted.
+
+**Verification**
+
+- Focused local-operator and history-daemon regression: `38 passed in 5.20s`.
+- Final full regression: `1075 passed, 39 subtests passed in 159.76s`, exit code
+  zero.
+- History daemon PID 13460 published schema v3 with the current script hash. Its
+  first bounded batch advanced trusted completion from 684 to 708/800; one of
+  25 symbols remained unsuccessful, so the source was correctly marked degraded
+  and the regular 60-minute interval was retained.
+- Observation supervisor PID 3676 and observation daemon PID 5004 were live.
+  Fresh `local-status` and Chinese `report.html` artifacts were regenerated.
+- Formal price cache and protected live artifacts were audited; incomplete
+  staging did not create or replace any execution artifact.
+
+**Remaining work**
+
+- Continue the remaining 92-symbol history acquisition and run fixed-strategy
+  isolated validation only after trusted completion. Investigate the one degraded
+  symbol through existing bounded retries; do not relax amount provenance.
+- Strategy remains non-live: the common forward window, independent history,
+  strict readiness, repeated broker snapshots, explicit live-ledger
+  initialization, account binding, lifecycle certification, Canary approval,
+  and any submission remain separate gates.
+- Restore unattended GitHub synchronization only after the operator explicitly
+  accepts that future unknown repository changes may be committed and pushed to
+  the configured remote.
+
 ## 2026-08-10 - Accelerate only trusted healthy history batches
 
 **Objective**

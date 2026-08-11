@@ -40,22 +40,50 @@ class LocalOperatorTests(unittest.TestCase):
         self.assertFalse(passed)
         self.assertIn("completed=120/800", value)
         self.assertIn("backoff_minutes=240", value)
-        self.assertIn("熔断退避", message)
-        self.assertIn("正式缓存未被替换", message)
+        self.assertIn("\u516c\u5171\u6570\u636e\u6e90", message)
+        self.assertIn("\u6b63\u5f0f\u7f13\u5b58\u672a\u88ab\u66ff\u6362", message)
 
-    def test_history_backfill_waiting_is_research_progress_only(self):
-        passed, value, message = _history_backfill_daemon_status({
+    def test_history_backfill_waiting_requires_current_status_script_and_startup(self):
+        output = Path("test_outputs") / "history_backfill_runtime_status"
+        output.mkdir(parents=True, exist_ok=True)
+        launcher = output / "AshareQuantHistoryBackfill.cmd"
+        expected = (Path.cwd() / "scripts" / "history_backfill_daemon.ps1").resolve()
+        launcher.write_text(
+            f'@echo off\nstart "" /min powershell.exe -File "{expected}"\n',
+            encoding="ascii",
+        )
+        payload = {
             "state": "waiting",
+            "mode": "research_history_backfill",
+            "updated_at": pd.Timestamp.now(tz="UTC").isoformat(),
+            "script_sha256": hashlib.sha256(expected.read_bytes()).hexdigest(),
             "progress": {
                 "requested_symbols": 800,
                 "completed_symbols": 145,
                 "source_status": "ok",
             },
-        })
+        }
+
+        passed, value, message = _history_backfill_daemon_status(
+            payload, startup_path=launcher
+        )
+        missing_ok, missing_value, _ = _history_backfill_daemon_status(
+            payload, startup_path=output / "missing.cmd"
+        )
+        stale_ok, stale_value, _ = _history_backfill_daemon_status(
+            {**payload, "updated_at": "2026-01-01T00:00:00+00:00"},
+            startup_path=launcher,
+        )
 
         self.assertTrue(passed)
         self.assertIn("completed=145/800", value)
-        self.assertIn("未完成数据不会进入正式回测", message)
+        self.assertIn("script=current", value)
+        self.assertIn("startup=current", value)
+        self.assertIn("\u672a\u5b8c\u6210\u6570\u636e\u4e0d\u4f1a\u8fdb\u5165\u6b63\u5f0f\u56de\u6d4b", message)
+        self.assertFalse(missing_ok)
+        self.assertIn("startup=missing", missing_value)
+        self.assertFalse(stale_ok)
+        self.assertIn("script=current", stale_value)
 
     def test_observation_startup_status_requires_current_safe_launcher(self):
         output = Path("test_outputs") / "observation_startup_status"
