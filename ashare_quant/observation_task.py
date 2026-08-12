@@ -152,10 +152,14 @@ def build_observation_task_status(
         and daemon_alive
         and daemon_fresh
         and str(daemon_status.get("status", "")).lower()
-        in {"waiting", "running", "completed", "retry_wait"}
+        in {"waiting", "running", "completed", "retry_wait", "strategy_blocked"}
         and (not daemon_claims_running or daemon_child_alive)
     )
     daemon_execution_running = daemon_ready and daemon_claims_running
+    daemon_strategy_blocked = (
+        daemon_ready
+        and str(daemon_status.get("status", "")).lower() == "strategy_blocked"
+    )
 
     lock_invalid = bool(lock.get("invalid"))
     lock_started = _timestamp(lock.get("started_at"))
@@ -179,12 +183,18 @@ def build_observation_task_status(
     elif lock:
         summary_status = "stale_lock"
         message = "observation_lock_is_invalid_stale_or_process_missing"
+    elif daemon_strategy_blocked:
+        summary_status = "strategy_blocked"
+        message = "strategy_evidence_blocked_no_retry"
     elif not latest and daemon_ready:
         summary_status = "scheduled"
         message = "daemon_waiting_for_schedule"
     elif not latest:
         summary_status = "not_run"
         message = "observation_task_has_not_run"
+    elif str(latest.get("status", "")).lower() == "strategy_blocked":
+        summary_status = "strategy_blocked"
+        message = str(latest.get("message", "strategy_evidence_blocked") or "strategy_evidence_blocked")
     elif not completion_ok:
         summary_status = "failed"
         message = str(latest.get("message", "observation_failed") or "observation_failed")

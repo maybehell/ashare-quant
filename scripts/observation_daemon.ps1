@@ -90,31 +90,44 @@ function Sync-RunnerCompletion([object]$State, [datetime]$Now) {
             $resolvedConfig,
             [StringComparison]::OrdinalIgnoreCase
         )
-        $completedToday = (
-            [string]$row.status -eq "completed" -and
-            [int]$row.exit_code -eq 0 -and
+        $resultToday = (
             $finishedAt.Date -eq $Now.Date -and
             $finishedAt.TimeOfDay -ge $scheduledTime -and
             $configMatches
         )
+        $completedToday = (
+            $resultToday -and
+            [string]$row.status -eq "completed" -and
+            [int]$row.exit_code -eq 0
+        )
+        $strategyBlockedToday = (
+            $resultToday -and
+            [string]$row.status -eq "strategy_blocked" -and
+            [int]$row.exit_code -eq 20
+        )
     } catch {
         return $State
     }
-    if (-not $completedToday -or [string]$State.last_success_date -eq $Now.ToString("yyyy-MM-dd")) {
+    $today = $Now.ToString("yyyy-MM-dd")
+    $alreadyRecovered = (
+        ($completedToday -and [string]$State.last_success_date -eq $today) -or
+        ($strategyBlockedToday -and [string]$State.attempt_date -eq $today -and [int]$State.last_exit_code -eq 20)
+    )
+    if ((-not $completedToday -and -not $strategyBlockedToday) -or $alreadyRecovered) {
         return $State
     }
-    $attemptCount = if ([string]$State.attempt_date -eq $Now.ToString("yyyy-MM-dd")) {
+    $attemptCount = if ([string]$State.attempt_date -eq $today) {
         [math]::Max(1, [int]$State.attempt_count)
     } else {
         1
     }
     $recovered = [ordered]@{
-        last_success_date = $Now.ToString("yyyy-MM-dd")
-        attempt_date = $Now.ToString("yyyy-MM-dd")
+        last_success_date = if ($completedToday) { $today } else { [string]$State.last_success_date }
+        attempt_date = $today
         attempt_count = $attemptCount
         next_retry_at = ""
-        last_exit_code = 0
-        last_message = "recovered_from_daily_observation_status"
+        last_exit_code = if ($completedToday) { 0 } else { 20 }
+        last_message = if ($completedToday) { "recovered_from_daily_observation_status" } else { "recovered_strategy_block_from_daily_observation_status" }
         last_finished_at = $finishedAt.ToString("o")
     }
     Write-JsonAtomic $statePath $recovered
@@ -217,6 +230,10 @@ try {
             try { $nextRetry = [DateTimeOffset]::Parse([string]$state.next_retry_at).LocalDateTime } catch { $nextRetry = $null }
         }
         $retryReady = $null -eq $nextRetry -or $now -ge $nextRetry
+        $strategyBlockedToday = (
+            [string]$state.attempt_date -eq $today -and
+            [int]$state.last_exit_code -eq 20
+        )
         $calendarStatus = if ($weekday) { "unchecked" } else { "closed" }
         $calendarMessage = ""
         $calendarOpen = $weekday
@@ -245,7 +262,7 @@ try {
             }
             $calendarOpen = $calendarStatus -eq "open"
         }
-        $due = $weekday -and $calendarOpen -and $afterStart -and $lastSuccess -ne $today -and $attemptCount -lt $MaxDailyAttempts -and $retryReady
+        $due = $weekday -and $calendarOpen -and $afterStart -and $lastSuccess -ne $today -and -not $strategyBlockedToday -and $attemptCount -lt $MaxDailyAttempts -and $retryReady
         if ($due) {
             if ($DryRun) {
                 Publish-Status "dry_run_due" "Observation would run now; no command executed." $state
@@ -318,8 +335,9 @@ try {
                 $message = (($result | ForEach-Object { $_.ToString().Trim() } | Where-Object { $_ }) -join " | ")
                 if ($message.Length -gt 2000) { $message = $message.Substring(0, 2000) }
                 $success = $exitCode -eq 0
+                $terminalStrategyBlock = $exitCode -eq 20
                 $retryBase = Get-Date
-                $nextRetryAt = if ($success -or $attemptCount -ge $MaxDailyAttempts) { "" } else { $retryBase.AddMinutes($RetryMinutes).ToString("o") }
+                $nextRetryAt = if ($success -or $terminalStrategyBlock -or $attemptCount -ge $MaxDailyAttempts) { "" } else { $retryBase.AddMinutes($RetryMinutes).ToString("o") }
                 $state = [ordered]@{
                     last_success_date = if ($success) { $today } else { $lastSuccess }
                     attempt_date = $today
@@ -330,7 +348,8 @@ try {
                     last_finished_at = (Get-Date).ToString("o")
                 }
                 Write-JsonAtomic $statePath $state
-                Publish-Status $(if ($success) { "completed" } else { "retry_wait" }) $state.last_message $state
+                $resultStatus = if ($success) { "completed" } elseif ($terminalStrategyBlock) { "strategy_blocked" } else { "retry_wait" }
+                Publish-Status $resultStatus $state.last_message $state
             }
         } else {
             $reason = if (-not $weekday) {
@@ -343,6 +362,8 @@ try {
                 "waiting_for_schedule"
             } elseif ($lastSuccess -eq $today) {
                 "already_completed_today"
+            } elseif ($strategyBlockedToday) {
+                "strategy_blocked_no_retry"
             } elseif ($attemptCount -ge $MaxDailyAttempts) {
                 "daily_attempt_limit_reached"
             } else {

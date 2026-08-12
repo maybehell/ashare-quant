@@ -76,6 +76,11 @@ Rules:
 - Observation status, logs, and delivery evidence are written to the output
   directory owned by the configured daemon. The shared default-output lock is a
   separate market-cache coordination artifact and does not own task status.
+- A frozen-candidate identity preflight failure is a terminal strategy block for
+  that trading day, not a transient operational failure. It leaves observation
+  completion and freshness failed, suppresses redundant same-day strategy
+  retries, and does not prevent independent broker read-only refresh, report
+  rendering, or alert delivery.
 
 ### 3.2 Configuration, data, and market infrastructure
 

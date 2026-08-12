@@ -191,6 +191,26 @@ if ($SkipRefresh) {
 $exitCode = 1
 $message = "not_started"
 $result = @()
+
+function Get-ObservationFailure {
+    param([string]$FailureText, [string]$EmptyMessage = "command_failed_without_output")
+
+    $summary = [string]$FailureText
+    $withoutOutput = [string]::IsNullOrWhiteSpace($summary)
+    if ($withoutOutput) {
+        $summary = $EmptyMessage
+    }
+    $summary = $summary.Trim()
+    if ($summary.Length -gt 1000) {
+        $summary = $summary.Substring(0, 1000)
+    }
+    $strategyBlocked = $summary -like "*Forward candidate preflight failed before market refresh:*"
+    [ordered]@{
+        exit_code = if ($strategyBlocked) { 20 } else { 1 }
+        message = if ($strategyBlocked) { "strategy_blocked: $summary" } else { "command_failed: $summary" }
+    }
+}
+
 $previousErrorActionPreference = $ErrorActionPreference
 try {
     $ErrorActionPreference = "Continue"
@@ -201,26 +221,24 @@ try {
 
     if ($exitCode -ne 0) {
         $errorSummary = (($result | ForEach-Object { $_.ToString().Trim() } | Where-Object { $_ }) -join " | ")
-        if ($errorSummary.Length -gt 1000) {
-            $errorSummary = $errorSummary.Substring(0, 1000)
-        }
-        $message = if ($errorSummary) { "command_failed: $errorSummary" } else { "command_failed_without_output" }
+        $failure = Get-ObservationFailure $errorSummary
+        $exitCode = [int]$failure.exit_code
+        $message = [string]$failure.message
     } else {
         $message = "completed"
     }
 } catch {
     $ErrorActionPreference = $previousErrorActionPreference
-    $_ | Out-String | Tee-Object -FilePath $logPath -Append | Out-Null
-    $message = [string]$_.Exception.Message
-    $exitCode = 1
-    if ([string]::IsNullOrWhiteSpace($message)) {
-        $message = "observation_exception_without_message"
-    }
+    $failureText = ($_ | Out-String)
+    $failureText | Tee-Object -FilePath $logPath -Append | Out-Null
+    $failure = Get-ObservationFailure $failureText "observation_exception_without_message"
+    $exitCode = [int]$failure.exit_code
+    $message = [string]$failure.message
 } finally {
     $ErrorActionPreference = $previousErrorActionPreference
     $finishedAt = Get-Date
     [PSCustomObject]@{
-        status = if ($exitCode -eq 0) { "completed" } else { "failed" }
+        status = if ($exitCode -eq 0) { "completed" } elseif ($exitCode -eq 20) { "strategy_blocked" } else { "failed" }
         mode = "observation_only"
         started_at = $startedAt.ToString("o")
         finished_at = $finishedAt.ToString("o")

@@ -6,6 +6,60 @@ it is not a release-marketing document and does not replace generated audit
 artifacts.
 
 
+## 2026-08-12 - Separate terminal strategy blocks from read-only operations
+
+**Objective**
+
+Stop deterministic invalid-candidate retries while preserving unattended broker
+read-only refresh, reporting, alerting, and explicit fail-closed operator state.
+
+**Changes**
+
+- Added runner exit code 20 and status `strategy_blocked` for frozen-candidate
+  preflight failures in both ordinary native-process and PowerShell exception
+  paths.
+- Kept broker read-only refresh, report rendering, and durable alert dispatch
+  after a strategy block.
+- Made the observation daemon treat exit 20 as terminal for the trading day and
+  recover that state idempotently from the runner artifact after a restart.
+- Exposed `strategy_blocked` separately from daemon readiness in local status.
+- Added ADR 0023 and focused tests for status aggregation, script ordering,
+  no-retry behavior, and restart recovery.
+
+**Architecture and safety**
+
+- Strategy completion and freshness remain failed. No candidate was repaired,
+  promoted, or activated.
+- Reinstalled and restarted the current-user observation supervisor with the
+  corrected scripts. Supervisor PID 9732 and daemon PID 17088 were verified
+  alive; broker read-only refresh and email alerting remain enabled.
+- A real run failed candidate preflight in 1.425 seconds with exit code 20. The
+  daemon recovered it as `strategy_blocked_no_retry` with an empty
+  `next_retry_at`.
+- The independent broker refresh failed because the Huatai window was minimized;
+  a critical email alert was delivered. An earlier same-session read-only
+  refresh had authenticated and produced the account snapshot, so this is a
+  current window-availability failure rather than submission activity.
+- Local status reports the daemon ready, scheduled observation
+  `strategy_blocked`, and overall `blocked`. Configured emergency stop is
+  true, broker and service submission are false, and live ledger, order, and
+  active-strategy artifacts remain absent.
+
+**Verification**
+
+- Observation scheduling focused regression: 38 passed; daemon recovery focused
+  regression: 20 passed.
+- Full regression: 1,166 tests and 39 subtests passed in 334.12 seconds.
+- Real runner/daemon verification: status `strategy_blocked`, exit code 20,
+  daemon message `strategy_blocked_no_retry`, no next retry.
+- `git diff --check`: passed; only expected PowerShell line-ending notices.
+
+**Remaining work**
+
+- Restore and keep the Huatai funds/positions window visible for the next
+  read-only refresh. Create a new immutable preregistered candidate cycle only
+  after independent data and forward evidence are available; do not mutate the
+  three invalid registrations. Live submission remains blocked.
 ## 2026-08-12 - Install unattended read-only observation and bind running status to its child
 
 **Objective**
