@@ -5,6 +5,64 @@ added directly below this introduction, newest first. It records verified facts;
 it is not a release-marketing document and does not replace generated audit
 artifacts.
 
+## 2026-08-12 - Stabilize lot planning and reject isolated v2
+
+**Objective**
+
+Remove direct cost-scenario influence from small-capital target construction,
+bind planning algorithm revisions to evidence identity, and evaluate one isolated
+v2 without weakening admission thresholds.
+
+**Changes**
+
+- Added optional fixed planning commission/fees and downward planning-equity steps
+  to `capital_aware.py`; actual fills still use real scenario costs and equity.
+- Fixed selected-lot weight encoding to use actual investable equity, preserving
+  intended quantities when planning equity is rounded down.
+- Added `planning_schema_version=1` validation and identity through the v2 strategy
+  configuration so stale sensitivity runs cannot be reused after algorithm changes.
+- Added the fail-closed `optimized_on_current_cache=false` admission check.
+- Added isolated `small_capital_100k_v2.yaml`, focused tests, ADR 0018, and
+  documented the evaluated rejection.
+
+**Architecture and safety**
+
+- Legacy v1 behavior remains unchanged when planning options are absent; its
+  return, drawdown, turnover, benchmark, and excess metrics reproduced exactly.
+- V2 is research-only, marked optimized on the current cache, and remains blocked
+  from candidate preregistration. No active strategy, live ledger, broker call,
+  or execution order is created.
+- Planning schema is strategy/backtest identity. Unsupported versions fail config
+  validation instead of silently consuming incompatible artifacts.
+
+**Verification**
+
+- Capital-aware, config, readiness, sensitivity, stress, warmup, and candidate
+  focused regression: `67 passed in 10.91s`.
+- V1 compatibility rerun reproduced total return `36.36508%`, maximum drawdown
+  `-32.86025%`, annualized turnover `4.89533`, benchmark return `22.16332%`, and
+  excess return `14.20176%`.
+- V2 base return was `47.06807%`, excess return `24.90475%`, maximum drawdown
+  `-30.58596%`, and annualized turnover `4.25174`.
+- V2 high-cost return was `46.40267%`; symmetric cost-path deviation improved to
+  `0.66540` percentage points and passed the two-point limit.
+- V2 failed forward evidence: fixed walk-forward positive ratio `33.33%`, worst
+  fold excess `-8.53%`, and current-cache optimization remains true.
+- Four fresh schema-bound capital runs found only CNY 200,000 passed; CNY 100,000
+  trailed that reference by `47.13` percentage points and failed capital fidelity.
+- Extended focused regression including documentation governance: `70 passed in 11.18s`.
+- Full regression after fail-closed missing-schema validation: `1127 passed, 39 subtests passed in 311.27s`.
+- Final audit refreshed v1 and v2 admission artifacts; both remain current-cache
+  research only with broker submission disabled and emergency stop active. No
+  active strategy, live ledger, candidate, generic/RPA/live/auto order file exists.
+
+**Remaining work**
+
+- Do not preregister v2 or continue same-cache parameter search. Design the next
+  version before acquiring/separating evaluation data, then preserve that holdout.
+- Independent live-readiness, broker, rollout, and confirmation gates remain
+  mandatory even for a future strategy that passes research admission.
+
 ## 2026-08-12 - Gate small-capital forward preregistration
 
 **Objective**

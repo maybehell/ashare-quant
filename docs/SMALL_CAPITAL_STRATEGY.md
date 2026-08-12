@@ -91,3 +91,25 @@ consistency, worst annual excess return, fixed-parameter walk-forward consistenc
 worst walk-forward excess return, and cost-path stability. Higher simulated
 costs currently produce a materially different and better trade path; the gate
 treats this as integer-lot path instability rather than favorable robustness.
+
+## Isolated v2 result
+
+`configs/small_capital_100k_v2.yaml` is a single evaluated research revision. It
+uses fixed conservative lot-planning costs, a CNY 1,000 downward planning-equity
+step, an explicit planning schema identity, an eight-percent reserve, and stronger
+breadth/benchmark exposure reductions. It is marked
+`optimized_on_current_cache=true`, remains `structural_backtest_only`, and cannot
+be preregistered from this cache.
+
+The v2 base backtest returned 47.07%, with 24.90% excess return and -30.59%
+maximum drawdown. Its high-cost return was 46.40%, reducing symmetric cost-path
+deviation from v1's 3.79 percentage points to 0.67 percentage points. That
+implementation improvement did not make the strategy robust: only one of three
+fixed walk-forward folds had positive excess, the worst fold excess was -8.53%,
+and CNY 100,000 lagged the CNY 200,000 sensitivity reference by 47.13 percentage
+points. Only CNY 200,000 passed the configured capital-fidelity test.
+
+The experiment is therefore rejected as a forward candidate. No further
+same-cache parameter variants should be used to claim independent validation;
+the next strategy revision requires a predeclared design and genuinely separate
+evaluation data.

@@ -58,6 +58,13 @@ def build_small_capital_live_readiness(config: dict[str, Any]) -> pd.DataFrame:
         and bool(auto_live.get("emergency_stop", True))
     )
     rows.append(audit_row(
+        "research_cache_optimization_absent",
+        not bool(validation.get("optimized_on_current_cache", False)),
+        bool(validation.get("optimized_on_current_cache", False)),
+        "optimized_on_current_cache=false",
+        "A strategy selected on the current cache cannot enter forward preregistration.",
+    ))
+    rows.append(audit_row(
         "research_execution_isolation", isolated,
         f"research_only={bool(validation.get('research_only', False))};"
         f"auto_live={bool(auto_live.get('enabled', False))};"

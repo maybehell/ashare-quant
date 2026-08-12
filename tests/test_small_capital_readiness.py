@@ -26,6 +26,7 @@ def config_for(root: Path) -> dict:
         "validation": {
             "research_only": True,
             "apply_active_execution": False,
+            "optimized_on_current_cache": False,
             "experiment_status": "preregistered_forward_only",
             "candidate_path": str(root / "candidate.json"),
             "capital_sensitivity": {"cash_levels": [100000, 200000]},
@@ -150,3 +151,19 @@ def test_candidate_preregistration_fails_before_market_store_when_guard_is_block
 
     with pytest.raises(RuntimeError, match="Small-capital forward preregistration gate failed"):
         preregister_forward_candidate(config, UnexpectedStore(), force=True)
+
+
+def test_current_cache_optimization_blocks_preregistration(tmp_path):
+    config = config_for(tmp_path)
+    write_passing_evidence(config)
+    config["validation"]["optimized_on_current_cache"] = True
+
+    with patch(
+        "ashare_quant.small_capital_readiness.capital_sensitivity_needs_refresh",
+        return_value=False,
+    ):
+        audit = build_small_capital_live_readiness(config).set_index("check")
+        with pytest.raises(RuntimeError, match="research_cache_optimization_absent"):
+            assert_small_capital_preregistration_ready(config)
+
+    assert not bool(audit.loc["research_cache_optimization_absent", "passed"])

@@ -186,6 +186,11 @@ Rules:
   identity, drawdown, annual consistency, fixed-parameter walk-forward, and
   symmetric cost-path stability before forward-only candidate preregistration.
   Passing this gate can start observation only and grants no execution authority.
+- Capital-aware lot planning may use fixed conservative planning costs and
+  downward-rounded planning equity, while actual fills retain scenario costs and
+  actual account equity. Planning quantities are encoded against actual
+  investable equity, and supported algorithm revisions carry an explicit schema
+  version in backtest and capital-sensitivity identity.
 - Parameter selection and final evaluation evidence are distinguished.
 - Every formal result binds configuration, input data, benchmark, and code-level
   assumptions through manifests or hashes.
@@ -218,6 +223,8 @@ Rules:
 - Candidate preregistration invokes the small-capital admission assertion when
   that policy is enabled; changing experiment status cannot bypass failed
   research evidence.
+- Small-capital candidates selected or tuned on the current cache remain blocked
+  from forward preregistration regardless of their historical metrics.
 - Historical reruns cannot increase forward-observation days.
 - Candidate changes create a new identity and restart applicable evidence.
 - A recorded early or terminal forward failure permanently quarantines the matching

@@ -338,3 +338,27 @@ class ValidationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_capital_aware_rejects_unknown_planning_schema_version():
+    from ashare_quant.config import load_config
+
+    config = load_config("configs/small_capital_100k_v2.yaml")
+    config["strategy"]["capital_aware"] = {
+        "enabled": True,
+        "planning_schema_version": 2,
+    }
+
+    errors = validate_config(config)
+
+    assert "strategy.capital_aware.planning_schema_version must be 1" in errors
+
+def test_capital_aware_requires_schema_for_planning_options():
+    from ashare_quant.config import load_config
+
+    config = load_config("configs/small_capital_100k_v2.yaml")
+    config["strategy"]["capital_aware"].pop("planning_schema_version")
+
+    errors = validate_config(config)
+
+    assert "strategy.capital_aware.planning_schema_version is required" in errors

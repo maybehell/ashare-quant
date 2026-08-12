@@ -51,6 +51,39 @@ def validate_config(config: dict[str, Any]) -> list[str]:
             errors.append("strategy.max_stock_weight must be in (0, 1]")
         if not 0 < max_industry_weight <= 1:
             errors.append("strategy.max_industry_weight must be in (0, 1]")
+        capital_aware = config["strategy"].get("capital_aware", {})
+        if capital_aware and not isinstance(capital_aware, dict):
+            errors.append("strategy.capital_aware must be a mapping")
+        elif isinstance(capital_aware, dict) and bool(capital_aware.get("enabled", False)):
+            planning_keys = {
+                "planning_equity_step",
+                "planning_commission_rate",
+                "planning_min_commission",
+                "planning_transfer_fee_rate",
+            }
+            configured_planning = planning_keys.intersection(capital_aware)
+            if configured_planning and "planning_schema_version" not in capital_aware:
+                errors.append("strategy.capital_aware.planning_schema_version is required")
+            if "planning_schema_version" in capital_aware:
+                try:
+                    schema_version = int(capital_aware["planning_schema_version"])
+                except (TypeError, ValueError):
+                    schema_version = 0
+                if schema_version != 1:
+                    errors.append("strategy.capital_aware.planning_schema_version must be 1")
+            for key in (
+                "planning_equity_step",
+                "planning_commission_rate",
+                "planning_min_commission",
+                "planning_transfer_fee_rate",
+            ):
+                if key in capital_aware:
+                    try:
+                        value = float(capital_aware[key])
+                    except (TypeError, ValueError):
+                        value = -1.0
+                    if value < 0:
+                        errors.append(f"strategy.capital_aware.{key} must be non-negative")
         relative_cap = config["strategy"].get("industry_relative_cap", {})
         if relative_cap and not isinstance(relative_cap, dict):
             errors.append("strategy.industry_relative_cap must be a mapping")

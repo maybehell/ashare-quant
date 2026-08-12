@@ -33,17 +33,29 @@ def build_capital_aware_target_weights(
     lot_size = max(int(trading.get("lot_size", 100)), 1)
     reserve = min(max(float(trading.get("reserve_cash_ratio", 0.0)), 0.0), 1.0)
     exposure = min(max(float(exposure), 0.0), 1.0)
-    base_investable = float(equity) * (1.0 - reserve)
-    budget = base_investable * exposure
-    if budget <= 0 or base_investable <= 0:
+    equity_step = max(float(policy.get("planning_equity_step", 0.0)), 0.0)
+    planning_equity = float(equity)
+    if equity_step > 0:
+        planning_equity = (planning_equity // equity_step) * equity_step
+    actual_investable = float(equity) * (1.0 - reserve)
+    planning_investable = planning_equity * (1.0 - reserve)
+    budget = planning_investable * exposure
+    if budget <= 0 or actual_investable <= 0 or planning_investable <= 0:
         return pd.Series(dtype=float)
 
     max_stock_weight = min(max(float(strategy.get("max_stock_weight", 1.0)), 0.0), 1.0)
     max_industry_weight = min(max(float(strategy.get("max_industry_weight", 1.0)), 0.0), 1.0)
-    stock_value_cap = base_investable * exposure * max_stock_weight
-    industry_value_cap = base_investable * exposure * max_industry_weight
+    stock_value_cap = planning_investable * exposure * max_stock_weight
+    industry_value_cap = planning_investable * exposure * max_industry_weight
     require_industry = bool(policy.get("require_industry", True))
     allow_additional_lots = bool(policy.get("allow_additional_lots", True))
+    planning_trading = dict(trading)
+    if "planning_commission_rate" in policy:
+        planning_trading["commission_rate"] = float(policy["planning_commission_rate"])
+    if "planning_min_commission" in policy:
+        planning_trading["min_commission"] = float(policy["planning_min_commission"])
+    if "planning_transfer_fee_rate" in policy:
+        planning_trading["transfer_fee_rate"] = float(policy["planning_transfer_fee_rate"])
 
     frame = scores.copy()
     if not {"symbol", "score"}.issubset(frame.columns):
@@ -68,7 +80,7 @@ def build_capital_aware_target_weights(
 
     def order_cost(symbol: str, quantity: int, price: float) -> float:
         amount = quantity * price
-        return amount + calc_fee("buy", amount, trading)
+        return amount + calc_fee("buy", amount, planning_trading)
 
     for _, row in frame.iterrows():
         if len(quantities) >= max_positions:
@@ -121,7 +133,7 @@ def build_capital_aware_target_weights(
                 break
 
     weights = {
-        symbol: quantities[symbol] * float(selected_rows[symbol]["price"]) / base_investable
+        symbol: quantities[symbol] * float(selected_rows[symbol]["price"]) / actual_investable
         for symbol in quantities
     }
     result = pd.Series(weights, dtype=float).sort_index()

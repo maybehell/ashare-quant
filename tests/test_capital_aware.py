@@ -60,6 +60,40 @@ class CapitalAwareTests(unittest.TestCase):
         weights = build_capital_aware_target_weights(self.scores, prices, 2567.44, 1.0, config())
         self.assertTrue(weights.empty)
 
+    def test_fixed_planning_cost_keeps_target_weights_stable_across_execution_costs(self):
+        prices = {"600001": 6.0, "600002": 5.0, "600003": 7.0, "600004": 8.0, "600005": 9.0}
+        low_cost = config(
+            planning_commission_rate=0.0008,
+            planning_min_commission=5,
+            planning_transfer_fee_rate=0.00001,
+        )
+        high_cost = config(
+            planning_commission_rate=0.0008,
+            planning_min_commission=5,
+            planning_transfer_fee_rate=0.00001,
+        )
+        high_cost["trading"]["commission_rate"] = 0.005
+
+        low_weights = build_capital_aware_target_weights(
+            self.scores, prices, 2567.44, 1.0, low_cost
+        )
+        high_weights = build_capital_aware_target_weights(
+            self.scores, prices, 2567.44, 1.0, high_cost
+        )
+
+        pd.testing.assert_series_equal(low_weights, high_weights)
+
+    def test_planning_equity_step_reduces_boundary_sensitivity(self):
+        prices = {"600001": 6.0, "600002": 5.0, "600003": 7.0, "600004": 8.0, "600005": 9.0}
+        policy = config(planning_equity_step=100.0)
+
+        lower = build_capital_aware_target_weights(self.scores, prices, 2699.0, 1.0, policy)
+        upper = build_capital_aware_target_weights(self.scores, prices, 2601.0, 1.0, policy)
+
+        self.assertEqual(set(lower.index), set(upper.index))
+        self.assertAlmostEqual(float(lower.sum()), 1800.0 / (2699.0 * 0.9))
+        self.assertAlmostEqual(float(upper.sum()), 1800.0 / (2601.0 * 0.9))
+
     def test_reduced_exposure_can_fail_closed_instead_of_fractional_lot(self):
         prices = {"600001": 6.0, "600002": 5.0, "600003": 7.0, "600004": 8.0, "600005": 9.0}
         weights = build_capital_aware_target_weights(self.scores, prices, 2567.44, 0.35, config())

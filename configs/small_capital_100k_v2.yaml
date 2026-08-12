@@ -1,0 +1,60 @@
+{
+  "extends": "small_capital_100k.yaml",
+  "paths": {
+    "output_dir": "outputs_small_capital_100k_v2",
+    "state_db": "data/state_small_capital_100k_v2.sqlite3"
+  },
+  "validation": {
+    "research_only": true,
+    "apply_active_execution": false,
+    "optimized_on_current_cache": true,
+    "experiment_status": "structural_backtest_only",
+    "experiment_reason": "Isolated v2 research revision using stable lot-planning assumptions and stronger exposure controls; not eligible for forward registration from this cache."
+  },
+  "strategy": {
+    "name": "small_capital_100k_defensive_liquid_v2",
+    "capital_aware": {
+      "enabled": true,
+      "min_positions": 8,
+      "max_positions": 10,
+      "max_candidate_rank": 120,
+      "require_industry": true,
+      "allow_additional_lots": true,
+      "planning_schema_version": 1,
+      "planning_equity_step": 1000,
+      "planning_commission_rate": 0.0008,
+      "planning_min_commission": 5,
+      "planning_transfer_fee_rate": 0.00001
+    }
+  },
+  "breadth_overlay": {
+    "enabled": true,
+    "moving_average_days": 60,
+    "max_stale_trade_days": 5,
+    "min_history_ratio": 0.75,
+    "min_symbols": 80,
+    "weak_threshold": 0.40,
+    "critical_threshold": 0.25,
+    "weak_exposure": 0.55,
+    "critical_exposure": 0.25
+  },
+  "risk_overlay": {
+    "enabled": true,
+    "benchmark_ma_days": 200,
+    "benchmark_vol_days": 60,
+    "max_exposure": 1.00,
+    "min_exposure": 0.25,
+    "bear_market_exposure": 0.45,
+    "high_volatility_threshold": 0.25,
+    "high_volatility_exposure": 0.60,
+    "breadth_combination_mode": "minimum"
+  },
+  "trading": {
+    "reserve_cash_ratio": 0.08
+  },
+  "auto_live": {
+    "enabled": false,
+    "allow_broker_submit": false,
+    "emergency_stop": true
+  }
+}
