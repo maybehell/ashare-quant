@@ -9,6 +9,7 @@ from typing import Any
 
 import pandas as pd
 
+from .capital_budget import capital_budget_errors
 from .data import normalize_symbol
 from .fundamental_policy import fundamental_factor_policy
 
@@ -272,6 +273,8 @@ def validate_config(config: dict[str, Any]) -> list[str]:
             ttl_seconds = int(confirmation.get("ttl_seconds", 600))
             if ttl_seconds < 30 or ttl_seconds > 900:
                 errors.append("auto_live.action_confirmation.ttl_seconds must be between 30 and 900")
+
+    errors.extend(capital_budget_errors(config))
 
     if "rpa" in config:
         if not bool(config["rpa"].get("require_manual_final_confirm", True)):

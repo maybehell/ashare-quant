@@ -164,7 +164,8 @@ Rules:
 Owners: `universe.py`, `factors.py`, `forward_factors.py`, `portfolio.py`,
 `industry_risk.py`, `backtest.py`, `walkforward.py`, `research.py`,
 `stress.py`, `factor_robustness.py`, `selection_bias.py`,
-`statistical_validation.py`, `capital_aware.py`, `capital_sensitivity.py`, and
+`statistical_validation.py`, `capital_aware.py`, `capital_budget.py`,
+`capital_sensitivity.py`, and
 `history_validation.py`.
 
 Responsibilities:
@@ -178,6 +179,9 @@ Responsibilities:
 Rules:
 
 - Research modules never call broker or RPA modules.
+- An opt-in research capital budget fails before execution when initial cash or
+  any configured sensitivity level exceeds its hard ceiling. It does not
+  retroactively mutate frozen candidate evidence.
 - Parameter selection and final evaluation evidence are distinguished.
 - Every formal result binds configuration, input data, benchmark, and code-level
   assumptions through manifests or hashes.

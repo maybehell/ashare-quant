@@ -17,6 +17,43 @@ from ashare_quant.validation import (
 
 
 class ValidationTests(unittest.TestCase):
+    def test_small_capital_budget_rejects_strategy_values_above_ceiling(self):
+        config = {
+            "capital_budget": {
+                "enabled": True,
+                "intended_account_capital": 100000,
+                "max_total_capital": 200000,
+            },
+            "backtest": {"initial_cash": 250000},
+            "validation": {"capital_sensitivity": {"cash_levels": [50000, 300000]}},
+        }
+
+        errors = validate_config(config)
+
+        self.assertIn("backtest.initial_cash exceeds capital_budget.max_total_capital", errors)
+        self.assertIn(
+            "validation.capital_sensitivity.cash_levels contains a value above "
+            "capital_budget.max_total_capital",
+            errors,
+        )
+
+    def test_small_capital_budget_accepts_all_levels_at_or_below_ceiling(self):
+        config = {
+            "capital_budget": {
+                "enabled": True,
+                "intended_account_capital": 100000,
+                "max_total_capital": 200000,
+            },
+            "backtest": {"initial_cash": 100000},
+            "validation": {
+                "capital_sensitivity": {"cash_levels": [30000, 50000, 100000, 200000]}
+            },
+        }
+
+        errors = validate_config(config)
+
+        self.assertFalse(any("capital_budget" in error for error in errors))
+
     def test_config_validation_catches_bad_values(self):
         errors = validate_config(
             {

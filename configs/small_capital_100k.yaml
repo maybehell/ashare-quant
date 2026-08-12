@@ -1,0 +1,104 @@
+{
+  "paths": {
+    "output_dir": "outputs_small_capital_100k",
+    "state_db": "data/state_small_capital_100k.sqlite3"
+  },
+  "capital_budget": {
+    "enabled": true,
+    "intended_account_capital": 100000,
+    "max_total_capital": 200000
+  },
+  "validation": {
+    "research_only": true,
+    "apply_active_execution": false,
+    "optimized_on_current_cache": true,
+    "experiment_status": "structural_backtest_only",
+    "experiment_reason": "Predeclared board-lot-aware small-capital strategy; excluded from activation and existing frozen candidate selection.",
+    "research_archive_configs": [],
+    "comparison_candidate_configs": [],
+    "primary_challenger_configs": [],
+    "forward_only_candidate_configs": [],
+    "capital_sensitivity": {
+      "cash_levels": [30000, 50000, 100000, 200000],
+      "max_abs_return_drag": 0.08,
+      "max_excess_cash_ratio_vs_reference": 0.15,
+      "min_final_positions": 6
+    }
+  },
+  "backtest": {
+    "start": "2023-01-01",
+    "end": null,
+    "initial_cash": 100000,
+    "rebalance": "quarterly"
+  },
+  "strategy": {
+    "name": "small_capital_100k_defensive_liquid_v1",
+    "top_n": 80,
+    "max_stock_weight": 0.16,
+    "max_industry_weight": 0.30,
+    "weighting": "equal",
+    "lookbacks": {
+      "momentum": 60,
+      "long_momentum": 120,
+      "volatility": 60,
+      "drawdown": 60,
+      "short_reversal": 20,
+      "liquidity": 60
+    },
+    "weights": {
+      "momentum": 0.15,
+      "long_momentum": 0.15,
+      "valuation": 0.00,
+      "quality": 0.00,
+      "low_volatility": 0.25,
+      "low_drawdown": 0.10,
+      "trend_quality": 0.00,
+      "liquidity": 0.35
+    },
+    "capital_aware": {
+      "enabled": true,
+      "min_positions": 8,
+      "max_positions": 10,
+      "max_candidate_rank": 120,
+      "require_industry": true,
+      "allow_additional_lots": true
+    }
+  },
+  "walk_forward": {
+    "enabled": true,
+    "selection_mode": "fixed",
+    "train_days": 420,
+    "test_days": 126,
+    "step_days": 126,
+    "candidates": [{"name": "small_capital_100k_predeclared_fixed"}]
+  },
+  "breadth_overlay": {
+    "enabled": true,
+    "moving_average_days": 60,
+    "max_stale_trade_days": 5,
+    "min_history_ratio": 0.75,
+    "min_symbols": 80,
+    "weak_threshold": 0.35,
+    "critical_threshold": 0.20,
+    "weak_exposure": 0.70,
+    "critical_exposure": 0.40
+  },
+  "risk_overlay": {
+    "enabled": true,
+    "benchmark_ma_days": 200,
+    "benchmark_vol_days": 60,
+    "max_exposure": 1.00,
+    "min_exposure": 0.40,
+    "bear_market_exposure": 0.65,
+    "high_volatility_threshold": 0.30,
+    "high_volatility_exposure": 0.75,
+    "breadth_combination_mode": "minimum"
+  },
+  "trading": {"reserve_cash_ratio": 0.05},
+  "runtime": {"skip_expensive_diagnostics": false},
+  "auto_live": {
+    "enabled": false,
+    "allow_broker_submit": false,
+    "emergency_stop": true
+  }
+}

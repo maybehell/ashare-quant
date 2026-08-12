@@ -5,6 +5,60 @@ added directly below this introduction, newest first. It records verified facts;
 it is not a release-marketing document and does not replace generated audit
 artifacts.
 
+## 2026-08-12 - Add a hard-capped CNY 100,000 strategy study
+
+**Objective**
+
+Design and backtest an A-share strategy that is executable around CNY 100,000
+and refuses any configured research capital above CNY 200,000.
+
+**Changes**
+
+- Added an opt-in `capital_budget` validator covering intended capital,
+  backtest initial cash, and every capital-sensitivity level.
+- Added `configs/small_capital_100k.yaml`: quarterly rebalance, eight-to-ten
+  integer-lot targets, five-percent reserve, 16% stock cap, 30% industry cap,
+  and a fixed momentum/low-volatility/low-drawdown/liquidity factor mix.
+- Added isolated 30,000/50,000/100,000/200,000 yuan sensitivity runs and
+  documented the design, evidence, and promotion boundary in ADR 0016.
+
+**Architecture and safety**
+
+- The configuration is research-only and cannot activate a strategy, generate
+  generic/live/RPA orders, initialize a live ledger, or access a broker.
+  `auto_live.enabled=false`, `allow_broker_submit=false`, and the emergency
+  stop remains active.
+- Existing frozen candidates and their forward evidence were not changed.
+- Capital levels above CNY 200,000 fail before sensitivity backtests begin.
+
+**Verification**
+
+- Focused validation, capital-aware, sensitivity, and documentation tests:
+  `35 passed in 1.16s`.
+- Full regression: `1119 passed, 39 subtests passed in 180.76s`.
+- The CNY 100,000 backtest covered 750 trading days from 2023-07-06 through
+  2026-08-07: total return 36.37%, benchmark return 22.16%, excess return
+  14.20%, maximum drawdown -32.86%, annualized turnover 4.90, and average
+  deployed cash 25.98%.
+- Fixed walk-forward evaluation produced three non-overlapping folds, 66.67%
+  positive test excess, 3.97% average test excess, and -10.24% worst-fold
+  excess.
+- Four-level sensitivity used one current market-data fingerprint. CNY 100,000
+  was the first passing level; CNY 30,000 and 50,000 failed return-fidelity
+  thresholds. The CNY 30,000 return of 101.54% is classified as concentrated
+  board-lot path dependence, not superior strategy evidence.
+- Safety audit found no active execution strategy, live ledger, generic order,
+  RPA order, or auto-live order artifact.
+
+**Remaining work**
+
+- A separate high-cost stress command did not start because the platform
+  permission review disconnected; no stress result is claimed.
+- Maximum drawdown remains too high and one walk-forward fold had negative
+  excess. Keep the strategy research-only and accumulate a new untuned forward
+  window before any promotion review.
+
+
 ## 2026-08-11 - Dismiss Huatai post-login notices safely
 
 **Objective**

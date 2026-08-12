@@ -16,6 +16,24 @@ from ashare_quant.capital_sensitivity import (
 
 
 class CapitalSensitivityTests(unittest.TestCase):
+    def test_capital_sensitivity_fails_before_backtest_when_level_exceeds_budget(self):
+        config = {
+            "paths": {"output_dir": "unused"},
+            "capital_budget": {
+                "enabled": True,
+                "intended_account_capital": 100000,
+                "max_total_capital": 200000,
+            },
+            "backtest": {"initial_cash": 100000},
+            "validation": {"capital_sensitivity": {"cash_levels": [100000, 300000]}},
+        }
+
+        with patch("ashare_quant.capital_sensitivity.run_backtest") as backtest:
+            with self.assertRaisesRegex(ValueError, "above capital_budget.max_total_capital"):
+                run_capital_sensitivity(config)
+
+        backtest.assert_not_called()
+
     def test_deployed_cash_ratio_excludes_pre_trade_warmup(self):
         equity = pd.DataFrame(
             {

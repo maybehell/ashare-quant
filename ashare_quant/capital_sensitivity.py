@@ -8,6 +8,7 @@ import pandas as pd
 
 from .audit import backtest_config_sha256, capital_sensitivity_config_sha256, mapping_sha256
 from .backtest import run_backtest
+from .capital_budget import capital_budget_errors
 from .config import project_path
 from .io_utils import atomic_to_csv
 
@@ -32,6 +33,9 @@ CAPITAL_SENSITIVITY_AUDIT_COLUMNS = ["check", "passed", "value", "threshold", "m
 
 def run_capital_sensitivity(config: dict[str, Any]) -> dict[str, Path]:
     """Rerun the full lot-aware backtest across isolated capital levels."""
+    budget_errors = capital_budget_errors(config)
+    if budget_errors:
+        raise ValueError("; ".join(budget_errors))
     output_dir = project_path(config["paths"]["output_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
     run_root = output_dir / "capital_sensitivity_runs"
