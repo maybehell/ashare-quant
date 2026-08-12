@@ -4,6 +4,9 @@ paths:
   output_dir: outputs_live
   state_db: data/huatai_live_state.sqlite3
 
+operations:
+  config_role: broker_live
+
 validation:
   apply_active_execution: true
 

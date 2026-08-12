@@ -36,6 +36,9 @@ class ObservationDaemonScriptTests(unittest.TestCase):
         self.assertIn("process_started_at", text)
         self.assertIn("Test-LockOwner", text)
         self.assertIn("Sync-RunnerCompletion", text)
+        self.assertIn("Test-CoreObservationCompleted", text)
+        self.assertIn('Publish-Status "finalizing"', text)
+        self.assertIn('phase = "delivery_and_readonly_finalize"', text)
         self.assertIn("Repair-PreScheduleSuccess", text)
         self.assertIn("discarded_pre_schedule_success", text)
         self.assertIn("daily_observation_status.csv", text)
@@ -179,6 +182,57 @@ class ObservationDaemonScriptTests(unittest.TestCase):
         self.assertIn("[switch]$BrokerReadOnlyRefresh", text)
         self.assertIn('"-BrokerReadOnlyRefresh"', text)
 
+
+    @unittest.skipUnless(sys.platform.startswith("win"), "Windows observation role guards")
+    def test_broker_live_config_is_rejected_before_daemon_state_creation(self):
+        output = self.root / "test_outputs" / "observation_daemon_rejects_broker_role"
+        output.mkdir(parents=True, exist_ok=True)
+
+        completed = subprocess.run(
+            [
+                "powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                "-File", str(self.daemon),
+                "-Config", str(self.root / "configs" / "huatai_desktop_canary.yaml"),
+                "-AlertConfig", str(self.root / "configs" / "huatai_desktop_canary.yaml"),
+                "-OutputDir", str(output),
+                "-Once", "-DryRun",
+            ],
+            cwd=self.root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=20,
+            check=False,
+        )
+
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("config_role=broker_live", completed.stderr)
+        self.assertFalse((output / "observation_daemon.lock.json").exists())
+        self.assertFalse((output / "observation_daemon_status.json").exists())
+
+    @unittest.skipUnless(sys.platform.startswith("win"), "Windows observation role guards")
+    def test_broker_live_config_is_rejected_before_startup_preview(self):
+        completed = subprocess.run(
+            [
+                "powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                "-File", str(self.installer),
+                "-Config", str(self.root / "configs" / "huatai_desktop_canary.yaml"),
+                "-AlertConfig", str(self.root / "configs" / "huatai_desktop_canary.yaml"),
+                "-OutputDir", str(self.root / "outputs_live"),
+            ],
+            cwd=self.root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=20,
+            check=False,
+        )
+
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("config_role=broker_live", completed.stderr)
+        self.assertNotIn("Preview only", completed.stdout)
 
     def test_supervisor_only_restarts_observation_daemon(self):
         text = self.supervisor.read_text(encoding="utf-8")

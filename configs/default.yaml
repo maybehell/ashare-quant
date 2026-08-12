@@ -5,6 +5,9 @@
     "output_dir": "outputs",
     "state_db": "data/state.sqlite3"
   },
+  "operations": {
+    "config_role": "observation_orchestrator"
+  },
   "observation_task": {
     "required": true,
     "startup_required": true,

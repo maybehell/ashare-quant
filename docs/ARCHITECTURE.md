@@ -69,6 +69,15 @@ Rules:
 - Required unattended observation and research backfill must have a fresh status
   bound to the current script plus a verified current-user Startup entry; stale
   status files are not liveness evidence.
+- The single daily observation entry uses an explicit
+  `observation_orchestrator` configuration whose owned output contains the
+  authoritative scheduler state. Broker-live and frozen research-candidate
+  configurations cannot be substituted for that role, including through a
+  Startup command.
+- A child run distinguishes core market observation from `finalizing`. The
+  latter means core observation succeeded but broker read-only refresh, report
+  rendering, or durable alert delivery is still running; only child exit updates
+  the daemon's final success state.
 - An observation daemon that reports `running` is accepted as active work only
   when its recorded child process is also alive. A live daemon with a missing or
   dead child fails closed instead of being presented as a scheduled or healthy

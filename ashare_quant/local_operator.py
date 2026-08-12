@@ -506,7 +506,7 @@ def _observation_daemon_status(
     script_current = bool(reported_hash and expected_hash and reported_hash == expected_hash)
     passed = bool(
         mode == "observation_only_daemon"
-        and status in {"waiting", "running", "completed", "retry_wait"}
+        and status in {"waiting", "running", "finalizing", "completed", "retry_wait"}
         and fresh
         and script_current
     )
@@ -517,6 +517,8 @@ def _observation_daemon_status(
         f"script={'current' if script_current else 'stale_or_missing'}"
     )
     if passed:
+        if status == "finalizing":
+            return True, value, "核心观察已完成；系统正在完成只读券商刷新、报告和邮件投递，不生成实盘订单。"
         return True, value, "自动观察守护心跳正常；该进程只刷新冻结候选，不生成实盘订单。"
     return False, value, "自动观察守护缺失、停止、心跳过期或运行代码已过时；请重启观察守护进程。"
 

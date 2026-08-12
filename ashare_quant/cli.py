@@ -88,6 +88,7 @@ from .live_evidence import sync_live_strategy_evidence
 from .local_operator import _formal_candidate_observation_status, strategy_operating_mode, write_local_operator_status
 from .index_membership import refresh_benchmark_membership
 from .observation_plan import write_observation_schedule
+from .observation_config import require_observation_orchestrator_config
 from .observation_task import write_observation_task_status
 from .observation_progress import capture_observation_snapshot, observation_progress_blockers, write_observation_progress
 from .order_audit import write_order_liquidity_audit
@@ -276,6 +277,9 @@ def main(argv: list[str] | None = None) -> None:
     local_status.add_argument("--live-config", default="configs/huatai_desktop_canary.yaml", help="Huatai read-only/Canary audit configuration")
     deployment_gate = sub.add_parser("deployment-gate", help="Build a read-only strategy, broker, and safety gate for Canary review")
     deployment_gate.add_argument("--live-config", default="configs/huatai_desktop_canary.yaml", help="Read-only broker evidence configuration")
+    observation_config_check = sub.add_parser("observation-config-check", help="Fail-closed audit of the observation orchestrator role and output ownership")
+    observation_config_check.add_argument("--output-dir", required=True, help="Output directory owned by the orchestrator process")
+    observation_config_check.add_argument("--allow-output-override", action="store_true", help="Allow isolated dry-run output redirection; production launchers never set this")
     observation_alert = sub.add_parser("observation-alert", help="Send a deduplicated non-trading alert from daily observation evidence")
     observation_alert.add_argument("--strategy-output", default="outputs", help="Strategy output directory containing observation and health evidence")
 
@@ -609,6 +613,14 @@ def run_command(args: argparse.Namespace, config: dict) -> None:
         paths = write_observation_task_status(config)
         paths.update(write_local_operator_status(config, live_config))
         print_paths(paths.values())
+    elif args.command == "observation-config-check":
+        print(
+            require_observation_orchestrator_config(
+                config,
+                output_dir=args.output_dir,
+                allow_output_override=bool(args.allow_output_override),
+            )
+        )
     elif args.command == "deployment-gate":
         live_config = load_config(str(args.live_config))
         print_paths(write_deployment_gate(config, live_config).values())

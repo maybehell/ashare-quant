@@ -255,6 +255,12 @@ class LocalOperatorTests(unittest.TestCase):
         self.assertIn("last_success=2026-07-28", daemon_value)
         self.assertIn("exit=0", daemon_value)
         self.assertIn("script=current", daemon_value)
+        finalizing_ok, finalizing_value, finalizing_message = _observation_daemon_status(
+            {**daemon, "status": "finalizing"}, max_age_seconds=300
+        )
+        self.assertTrue(finalizing_ok)
+        self.assertIn("status=finalizing", finalizing_value)
+        self.assertIn("只读券商刷新", finalizing_message)
         stale_ok, stale_value, _ = _observation_daemon_status({**daemon, "script_sha256": "0" * 64}, max_age_seconds=300)
         self.assertFalse(stale_ok)
         self.assertIn("script=stale_or_missing", stale_value)

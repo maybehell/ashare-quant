@@ -1,5 +1,8 @@
 extends: hs300_point_in_time_core_v4_forward.yaml
 
+operations:
+  config_role: research_candidate
+
 paths:
   cache_dir: data/cache_hs300_small_capital_defensive_trend_v1_forward
   output_dir: outputs_hs300_small_capital_defensive_trend_v1_forward

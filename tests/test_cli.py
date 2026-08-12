@@ -206,6 +206,7 @@ class CliWorkflowTests(unittest.TestCase):
         candidate_output.mkdir(parents=True, exist_ok=True)
         config = {
             "paths": {"output_dir": str(output), "cache_dir": str(output / "base-cache")},
+            "operations": {"config_role": "observation_orchestrator"},
             "validation": {
                 "forward_only_candidate_configs": ["configs/frozen_candidate.yaml"],
             },

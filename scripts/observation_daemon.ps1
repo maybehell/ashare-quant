@@ -39,6 +39,12 @@ $resolvedAlertConfig = Resolve-ProjectPath $AlertConfig
 $resolvedOutput = Resolve-ProjectPath $OutputDir
 if (-not (Test-Path -LiteralPath $resolvedConfig)) { throw "Missing config: $resolvedConfig" }
 if (-not (Test-Path -LiteralPath $resolvedAlertConfig)) { throw "Missing alert config: $resolvedAlertConfig" }
+$roleArguments = @("--config", $resolvedConfig, "observation-config-check", "--output-dir", $resolvedOutput)
+if ($DryRun) { $roleArguments += "--allow-output-override" }
+$roleResult = & $aqScript @roleArguments 2>&1
+if ($LASTEXITCODE -ne 0) {
+    throw "Observation daemon configuration is invalid: $($roleResult -join ' | ')"
+}
 New-Item -ItemType Directory -Path $resolvedOutput -Force | Out-Null
 
 $lockPath = Join-Path $resolvedOutput "observation_daemon.lock.json"
@@ -134,6 +140,22 @@ function Sync-RunnerCompletion([object]$State, [datetime]$Now) {
     return $recovered
 }
 
+function Test-CoreObservationCompleted([datetime]$ChildStartedAt) {
+    if (-not (Test-Path -LiteralPath $runnerStatusPath)) { return $false }
+    try {
+        $row = @(Import-Csv -LiteralPath $runnerStatusPath -Encoding UTF8)[-1]
+        $rowStartedAt = [DateTimeOffset]::Parse([string]$row.started_at).LocalDateTime
+        $rowConfig = [IO.Path]::GetFullPath([string]$row.config)
+        return (
+            $rowStartedAt -ge $ChildStartedAt.AddSeconds(-2) -and
+            $rowConfig.Equals($resolvedConfig, [StringComparison]::OrdinalIgnoreCase) -and
+            [string]$row.status -eq "completed" -and
+            [int]$row.exit_code -eq 0
+        )
+    } catch {
+        return $false
+    }
+}
 function Repair-PreScheduleSuccess([object]$State, [datetime]$Now) {
     if ([string]$State.last_success_date -ne $Now.ToString("yyyy-MM-dd")) { return $State }
     $finished = $null
@@ -306,7 +328,13 @@ try {
                     while (-not $child.HasExited) {
                         $elapsed = ((Get-Date) - $childStartedAt).TotalSeconds
                         $runningState.elapsed_seconds = [math]::Round($elapsed, 3)
-                        Publish-Status "running" "Observation child process is running." $runningState
+                        if (Test-CoreObservationCompleted $childStartedAt) {
+                            $runningState.phase = "delivery_and_readonly_finalize"
+                            Publish-Status "finalizing" "Core observation completed; read-only refresh, report, and alert delivery are finishing." $runningState
+                        } else {
+                            $runningState.phase = "core_observation"
+                            Publish-Status "running" "Observation child process is running." $runningState
+                        }
                         if ($elapsed -gt ($MaxRuntimeHours * 3600.0)) {
                             Stop-Process -Id $child.Id -Force -ErrorAction SilentlyContinue
                             $timedOut = $true

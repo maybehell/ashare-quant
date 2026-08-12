@@ -26,6 +26,7 @@ from .forward_selection import (
 from .huatai_certification import build_huatai_canary_arming_audit
 from .io_utils import atomic_to_csv
 from .readiness import build_live_readiness_from_outputs
+from .observation_config import require_observation_orchestrator_config
 from .shadow_policy import shadow_evaluation_identity
 from .strategy_activation import build_active_execution_status
 
@@ -135,6 +136,11 @@ def write_deployment_gate(
     live_config: dict[str, Any],
 ) -> dict[str, Path]:
     strategy_dir = project_path(strategy_config["paths"]["output_dir"])
+    require_observation_orchestrator_config(
+        strategy_config,
+        output_dir=strategy_dir,
+        validate_candidates=False,
+    )
     live_dir = project_path(live_config["paths"]["output_dir"])
     strategy_dir.mkdir(parents=True, exist_ok=True)
 

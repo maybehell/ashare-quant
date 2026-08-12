@@ -93,6 +93,7 @@ class DeploymentGateTests(unittest.TestCase):
         self.candidate_manifest = self.root / "candidate-manifest.json"
         candidate_definition = {
             "paths": {"output_dir": str(self.candidate_output), "cache_dir": str(self.root / "candidate-cache")},
+            "operations": {"config_role": "research_candidate"},
             "validation": {
                 "candidate_path": str(self.candidate_manifest),
                 "research_only": True,
@@ -145,6 +146,7 @@ class DeploymentGateTests(unittest.TestCase):
         }
         self.strategy_config = load_config(self.candidate_config)
         self.strategy_config["paths"]["output_dir"] = str(self.strategy)
+        self.strategy_config["operations"]["config_role"] = "observation_orchestrator"
         self.strategy_config["paths"]["cache_dir"] = str(self.root / "base-cache")
         self.strategy_config["validation"]["forward_only_candidate_configs"] = [
             str(self.candidate_config)
@@ -405,6 +407,12 @@ class DeploymentGateTests(unittest.TestCase):
 
         self.assertFalse(passed)
         self.assertIn("shared_with:", detail)
+
+    def test_research_candidate_config_cannot_render_orchestrator_deployment_gate(self):
+        candidate = load_config(self.candidate_config)
+
+        with self.assertRaisesRegex(RuntimeError, "config_role=research_candidate"):
+            write_deployment_gate(candidate, self.live_config)
 
     def test_shared_candidate_cache_blocks_strategy_gate(self):
         self.write_complete_evidence()

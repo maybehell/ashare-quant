@@ -5,6 +5,66 @@ added directly below this introduction, newest first. It records verified facts;
 it is not a release-marketing document and does not replace generated audit
 artifacts.
 
+## 2026-08-12 - Enforce one observation configuration role and truth source
+
+**Objective**
+
+Prevent a broker configuration or split output directory from silently becoming
+the unattended strategy observer, and make long post-observation cleanup visible
+without weakening completion semantics.
+
+**Changes**
+
+- Added explicit `operations.config_role` values for the default orchestrator,
+  Huatai broker configuration, and frozen research candidate, with a structured
+  `observation-config-check` CLI audit.
+- Required the Startup installer, supervisor, daemon, and deployment gate to
+  validate orchestrator role, output ownership, and isolated preregistered
+  candidate topology before creating operational state.
+- Added a `finalizing` daemon phase after a matching current child writes its
+  core completion artifact while broker read-only refresh, report rendering, and
+  alert delivery are still running.
+- Replaced the duplicate `outputs_live` observation Startup route with the sole
+  default orchestrator route under `outputs`; the completed daily observation
+  was recovered without a duplicate market run.
+- Added ADR 0027 and updated the unified architecture.
+
+**Architecture and safety**
+
+- Strategy orchestration, broker-live settings, and frozen candidate research are
+  now explicit configuration capabilities. Inherited fields or filenames cannot
+  grant the orchestrator role.
+- `finalizing` is informational only. It neither stops the child nor records
+  success early; final exit remains authoritative and failures still retry under
+  existing policy.
+- The migrated runtime performed observation, broker read-only queries, form
+  previews, report generation, and email delivery only. No broker submission or
+  live-ledger initialization was enabled.
+- Emergency stop remains true and broker/service submission remain false.
+  Protected live artifacts are audited again after the full regression below.
+
+**Verification**
+
+- Configuration-role, deployment, CLI, scheduler, and documentation focused
+  regression: 161 passed in 18.15 seconds.
+- Observation daemon and local-operator focused regression after phase handling:
+  42 passed in 13.45 seconds; expanded role, scheduler, deployment, operator,
+  and documentation regression: 208 passed in 25.22 seconds.
+- Real default observation completed with exit code 0; one frozen candidate was
+  observed at 0/60 post-freeze sessions, Huatai read-only refresh and email
+  delivery completed, and no `outputs_live` observation process remained.
+- Full regression: 1,188 tests and 39 subtests passed in 175.65 seconds.
+- Final runtime audit found exactly one supervisor plus one daemon, both under
+  the default orchestrator output; zero observation processes used `outputs_live`.
+  The current-hash Huatai read-only refresh restored
+  `broker_read_only_ready=true` with `submit_invoked=false`. Protected live
+  ledger, generic orders, and active execution strategy artifacts remain absent.
+- `git diff --check`: passed; line-ending conversion notices only.
+
+**Remaining work**
+
+- Accumulate 60 genuine post-freeze sessions. Strategy promotion, live-ledger
+  initialization, and any broker submission remain blocked.
 
 ## 2026-08-12 - Require an isolated unknown-outcome recovery drill before Canary
 

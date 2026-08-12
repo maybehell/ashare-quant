@@ -20,7 +20,9 @@ param(
 $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $supervisor = Join-Path $PSScriptRoot "observation_supervisor.ps1"
+$aqScript = Join-Path $PSScriptRoot "aq.ps1"
 if (-not (Test-Path -LiteralPath $supervisor)) { throw "Missing supervisor: $supervisor" }
+if (-not (Test-Path -LiteralPath $aqScript)) { throw "Missing aq runner: $aqScript" }
 [void][datetime]::ParseExact($StartAt, "HH:mm", [Globalization.CultureInfo]::InvariantCulture)
 if ($PollSeconds -lt 10) { throw "PollSeconds must be at least 10." }
 if ($MaxDailyAttempts -lt 1) { throw "MaxDailyAttempts must be positive." }
@@ -37,6 +39,10 @@ $resolvedAlertConfig = Resolve-ProjectPath $AlertConfig
 $resolvedOutput = Resolve-ProjectPath $OutputDir
 if (-not (Test-Path -LiteralPath $resolvedConfig)) { throw "Missing config: $resolvedConfig" }
 if (-not (Test-Path -LiteralPath $resolvedAlertConfig)) { throw "Missing alert config: $resolvedAlertConfig" }
+$roleResult = & $aqScript "--config" $resolvedConfig "observation-config-check" "--output-dir" $resolvedOutput 2>&1
+if ($LASTEXITCODE -ne 0) {
+    throw "Observation Startup configuration is invalid: $($roleResult -join ' | ')"
+}
 $startup = [Environment]::GetFolderPath([Environment+SpecialFolder]::Startup)
 if (-not $startup) { throw "Current user Startup folder is unavailable." }
 $target = Join-Path $startup $EntryName
