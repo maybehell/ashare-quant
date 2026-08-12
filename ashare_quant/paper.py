@@ -167,7 +167,7 @@ def run_paper(
     combined_multiplier = market_multiplier * float(health_exposure["exposure"])
     if capital_aware_enabled(config):
         weights = build_capital_aware_target_weights(
-            scores, close_prices, portfolio.equity(close_prices), combined_multiplier, config
+            scores, close_prices, portfolio.equity(close_prices), combined_multiplier, config, weights
         )
     else:
         weights = weights * combined_multiplier
@@ -307,7 +307,7 @@ def run_shadow_signals(
     )
     if capital_aware_enabled(config):
         weights = build_capital_aware_target_weights(
-            scores, close_prices, portfolio.equity(close_prices), exposure_multiplier, config
+            scores, close_prices, portfolio.equity(close_prices), exposure_multiplier, config, base_weights
         )
     else:
         weights = base_weights * exposure_multiplier

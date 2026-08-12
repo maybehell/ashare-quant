@@ -1,3 +1,75 @@
+## 2026-08-12 - Preserve benchmark targets through small-capital lot planning
+
+**Objective**
+
+Make small-capital simulations faithfully discretize the portfolio weights
+produced by benchmark anchors and other upstream weighting policies, then perform
+one fixed 100,000 yuan CSI 300 enhanced-strategy evaluation without tuning to the
+result.
+
+**Changes**
+
+- Added optional upstream target weights to the capital-aware lot constructor and
+  passed them through backtest, walk-forward, paper, and broker-preview workflows.
+- Added planning schema version 2 with explicit respect_target_weights behavior:
+  only positive upstream targets are admitted, and additional board lots are
+  added one at a time when they reduce absolute target-value error.
+- Preserved schema version 1 behavior and added compatibility, target-priority,
+  allocation, missing-target, schema, and non-numeric failure tests.
+- Added research-only configs/small_capital_100k_v3.yaml using point-in-time CSI
+  300 membership, a 70% liquidity reference core, a 30% defensive factor
+  satellite, eight to ten positions, and full-exposure benchmark-relative
+  behavior.
+- Added ADR 0019 and updated the account/execution architecture responsibility
+  for versioned preservation of upstream portfolio intent.
+
+**Architecture and safety**
+
+- The planning change affects research, paper, and read-only preview target
+  construction only. It does not enable broker submission, initialize a live
+  ledger, activate a strategy, or create generic execution orders.
+- Schema v2 fails closed without an upstream target. Schema v1 ignores the new
+  optional input so existing v1/v2 evidence remains replayable.
+- The v3 config remains research-only, optimized on the current cache, auto-live
+  disabled, broker submit disabled, and emergency stop active.
+- The first fixed v3 evaluation was rejected. It cannot be preregistered,
+  activated, or used as execution authority.
+
+**Verification**
+
+- Focused planning, validation, reference-anchor, and governance tests:
+  40 passed in 0.89s.
+- Cross-module backtest, paper, walk-forward, broker-preview, sensitivity,
+  readiness, and validation tests: 83 passed in 4.23s.
+- Authoritative full regression in the original machine-bound workspace:
+  1135 passed, 39 subtests passed in 161.30s.
+- Schema v1 compatibility rerun exactly reproduced the recorded v2 result:
+  total return 47.06807%, benchmark return 22.16332%, and excess return 24.90475%.
+- The single v3 evaluation covered 750 trading days from 2023-07-06 through
+  2026-08-07. It returned -12.40564% versus benchmark +22.16332%, for
+  -34.56896% excess, with -33.04888% maximum drawdown.
+- V3 annual excess was negative in all four calendar years. Walk-forward positive
+  ratio was 1/3 and the worst fold excess was -8.77460%.
+- CSI 300 snapshot structure passed: 44 snapshots, exactly 300 unique constituents
+  each, no future update dates, and acceptable staleness. Historical-member price
+  coverage failed at 261/395 (66.0759%), so point-in-time membership readiness
+  remained false.
+- Small-capital readiness correctly blocked v3 on current-cache optimization,
+  missing capital/cost evidence, drawdown, annual consistency, and walk-forward
+  checks.
+- Four-level capital sensitivity was intentionally not run for v3 because the
+  base strategy and prerequisite historical-member coverage had already failed;
+  running it could not make the experiment admissible.
+
+**Remaining work**
+
+- Do not tune or promote v3. Complete historical CSI 300 constituent price
+  coverage before evaluating another benchmark-member strategy.
+- Retain v2 as research-only despite its positive aggregate backtest: it still
+  fails intended-capital fidelity and walk-forward consistency gates.
+- A future small-capital challenger must be preregistered against independent
+  data and evaluated once; no backtest result guarantees benchmark
+  outperformance.
 # Development Log
 
 This is the chronological engineering record for the repository. New entries are

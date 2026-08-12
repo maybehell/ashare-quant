@@ -346,12 +346,12 @@ def test_capital_aware_rejects_unknown_planning_schema_version():
     config = load_config("configs/small_capital_100k_v2.yaml")
     config["strategy"]["capital_aware"] = {
         "enabled": True,
-        "planning_schema_version": 2,
+        "planning_schema_version": 3,
     }
 
     errors = validate_config(config)
 
-    assert "strategy.capital_aware.planning_schema_version must be 1" in errors
+    assert "strategy.capital_aware.planning_schema_version must be 1 or 2" in errors
 
 def test_capital_aware_requires_schema_for_planning_options():
     from ashare_quant.config import load_config
@@ -362,3 +362,58 @@ def test_capital_aware_requires_schema_for_planning_options():
     errors = validate_config(config)
 
     assert "strategy.capital_aware.planning_schema_version is required" in errors
+def test_target_aware_planning_requires_schema_version_two():
+    from ashare_quant.config import load_config
+
+    config = load_config("configs/small_capital_100k_v2.yaml")
+    config["strategy"]["capital_aware"]["respect_target_weights"] = True
+    config["strategy"]["capital_aware"]["planning_schema_version"] = 1
+
+    errors = validate_config(config)
+
+    assert (
+        "strategy.capital_aware.respect_target_weights requires planning_schema_version 2"
+        in errors
+    )
+
+
+def test_target_aware_planning_accepts_schema_version_two():
+    from ashare_quant.config import load_config
+
+    config = load_config("configs/small_capital_100k_v2.yaml")
+    config["strategy"]["capital_aware"]["respect_target_weights"] = True
+    config["strategy"]["capital_aware"]["planning_schema_version"] = 2
+
+    errors = validate_config(config)
+
+    assert not any("capital_aware" in error for error in errors)
+
+def test_target_aware_planning_rejects_non_numeric_schema_without_exception():
+    from ashare_quant.config import load_config
+
+    config = load_config("configs/small_capital_100k_v2.yaml")
+    config["strategy"]["capital_aware"]["respect_target_weights"] = True
+    config["strategy"]["capital_aware"]["planning_schema_version"] = "invalid"
+
+    errors = validate_config(config)
+
+    assert "strategy.capital_aware.planning_schema_version must be 1 or 2" in errors
+    assert (
+        "strategy.capital_aware.respect_target_weights requires planning_schema_version 2"
+        in errors
+    )
+
+def test_target_aware_planning_rejects_missing_schema_without_exception():
+    from ashare_quant.config import load_config
+
+    config = load_config("configs/small_capital_100k_v2.yaml")
+    config["strategy"]["capital_aware"]["respect_target_weights"] = True
+    config["strategy"]["capital_aware"].pop("planning_schema_version")
+
+    errors = validate_config(config)
+
+    assert "strategy.capital_aware.planning_schema_version is required" in errors
+    assert (
+        "strategy.capital_aware.respect_target_weights requires planning_schema_version 2"
+        in errors
+    )

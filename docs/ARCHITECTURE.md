@@ -251,6 +251,7 @@ Responsibilities:
 - Represent orders, fills, cash, positions, available quantity, and fees.
 - Generate deterministic paper orders from an authorized strategy epoch.
 - Apply A-share lot, T+1, price-limit, suspension, fee, and liquidity rules.
+- Preserve configured upstream portfolio targets through versioned board-lot planning; legacy planning schemas remain replayable.
 - Reconcile every financial state transition.
 
 Rules:

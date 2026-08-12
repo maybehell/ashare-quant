@@ -64,13 +64,19 @@ def validate_config(config: dict[str, Any]) -> list[str]:
             configured_planning = planning_keys.intersection(capital_aware)
             if configured_planning and "planning_schema_version" not in capital_aware:
                 errors.append("strategy.capital_aware.planning_schema_version is required")
+            schema_version = 0
             if "planning_schema_version" in capital_aware:
                 try:
                     schema_version = int(capital_aware["planning_schema_version"])
                 except (TypeError, ValueError):
                     schema_version = 0
-                if schema_version != 1:
-                    errors.append("strategy.capital_aware.planning_schema_version must be 1")
+                if schema_version not in {1, 2}:
+                    errors.append("strategy.capital_aware.planning_schema_version must be 1 or 2")
+            if bool(capital_aware.get("respect_target_weights", False)):
+                if schema_version != 2:
+                    errors.append(
+                        "strategy.capital_aware.respect_target_weights requires planning_schema_version 2"
+                    )
             for key in (
                 "planning_equity_step",
                 "planning_commission_rate",

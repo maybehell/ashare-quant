@@ -19,6 +19,7 @@ def build_capital_aware_target_weights(
     equity: float,
     exposure: float,
     config: dict[str, Any],
+    target_weights: pd.Series | dict[str, float] | None = None,
 ) -> pd.Series:
     """Build an integer-lot target while preserving cash, stock and industry caps."""
     if scores.empty or equity <= 0 or exposure <= 0:
@@ -49,6 +50,7 @@ def build_capital_aware_target_weights(
     industry_value_cap = planning_investable * exposure * max_industry_weight
     require_industry = bool(policy.get("require_industry", True))
     allow_additional_lots = bool(policy.get("allow_additional_lots", True))
+    respect_target_weights = bool(policy.get("respect_target_weights", False))
     planning_trading = dict(trading)
     if "planning_commission_rate" in policy:
         planning_trading["commission_rate"] = float(policy["planning_commission_rate"])
@@ -68,9 +70,20 @@ def build_capital_aware_target_weights(
     if "industry" not in frame:
         frame["industry"] = ""
     frame["industry"] = frame["industry"].fillna("").astype(str).str.strip()
+    if respect_target_weights:
+        targets = pd.Series(target_weights, dtype=float)
+        targets.index = targets.index.astype(str).str.split(".").str[0].str.zfill(6)
+        targets = pd.to_numeric(targets, errors="coerce").fillna(0.0).clip(lower=0.0)
+        targets = targets.groupby(level=0).sum()
+        if targets.empty or float(targets.sum()) <= 0:
+            return pd.Series(dtype=float)
+        frame["target_weight"] = frame["symbol"].map(targets).fillna(0.0)
+        frame = frame[frame["target_weight"] > 0]
     frame = frame.dropna(subset=["score", "price"])
     frame = frame[frame["price"] > 0]
-    frame = frame.sort_values(["score", "symbol"], ascending=[False, True]).drop_duplicates("symbol")
+    sort_columns = ["target_weight", "score", "symbol"] if respect_target_weights else ["score", "symbol"]
+    ascending = [False, False, True] if respect_target_weights else [False, True]
+    frame = frame.sort_values(sort_columns, ascending=ascending).drop_duplicates("symbol")
     frame = frame.head(max_candidate_rank).reset_index(drop=True)
 
     quantities: dict[str, int] = {}
@@ -108,8 +121,22 @@ def build_capital_aware_target_weights(
         return pd.Series(dtype=float)
 
     if allow_additional_lots:
+        desired_values: dict[str, float] = {}
+        if respect_target_weights:
+            selected_target = {
+                symbol: max(float(row.get("target_weight", 0.0)), 0.0)
+                for symbol, row in selected_rows.items()
+            }
+            selected_total = sum(selected_target.values())
+            if selected_total <= 0:
+                return pd.Series(dtype=float)
+            desired_values = {
+                symbol: budget * weight / selected_total
+                for symbol, weight in selected_target.items()
+            }
         while True:
             added = False
+            candidates = []
             for symbol, row in selected_rows.items():
                 price = float(row["price"])
                 industry = str(row["industry"] or "").strip()
@@ -125,8 +152,25 @@ def build_capital_aware_target_weights(
                     continue
                 if total_cost + incremental_cost > budget + 1e-8:
                     continue
+                if respect_target_weights:
+                    desired = desired_values[symbol]
+                    improvement = abs(old_value - desired) - abs(new_value - desired)
+                    if improvement > 1e-8:
+                        candidates.append((improvement, symbol, row, incremental_cost))
+                    continue
                 quantities[symbol] = new_quantity
                 industry_values[industry_key] += new_value - old_value
+                total_cost += incremental_cost
+                added = True
+            if respect_target_weights and candidates:
+                _, symbol, row, incremental_cost = max(
+                    candidates, key=lambda item: (item[0], item[1])
+                )
+                price = float(row["price"])
+                industry = str(row["industry"] or "").strip()
+                industry_key = industry or f"unknown:{symbol}"
+                quantities[symbol] += lot_size
+                industry_values[industry_key] += price * lot_size
                 total_cost += incremental_cost
                 added = True
             if not added:

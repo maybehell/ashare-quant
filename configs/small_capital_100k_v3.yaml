@@ -1,0 +1,57 @@
+{
+  "extends": "small_capital_100k_v2.yaml",
+  "paths": {
+    "output_dir": "outputs_small_capital_100k_v3",
+    "state_db": "data/state_small_capital_100k_v3.sqlite3"
+  },
+  "validation": {
+    "research_only": true,
+    "apply_active_execution": false,
+    "optimized_on_current_cache": true,
+    "experiment_status": "rejected",
+    "experiment_reason": "Rejected on first fixed evaluation: total excess return -34.57%, annual positive excess 0/4, and historical CSI 300 member price coverage only 66.08%; never eligible for forward registration or activation."
+  },
+  "strategy": {
+    "name": "small_capital_100k_hs300_target_aware_v3",
+    "benchmark_membership": {
+      "enabled": true,
+      "index_symbol": "000300",
+      "max_staleness_days": 120
+    },
+    "reference_anchor": {
+      "enabled": true,
+      "weight": 0.70,
+      "top_n": 300,
+      "max_stock_weight": 0.02,
+      "weighting": "liquidity_sqrt"
+    },
+    "capital_aware": {
+      "enabled": true,
+      "min_positions": 8,
+      "max_positions": 10,
+      "max_candidate_rank": 120,
+      "require_industry": true,
+      "allow_additional_lots": true,
+      "planning_schema_version": 2,
+      "respect_target_weights": true,
+      "planning_equity_step": 1000,
+      "planning_commission_rate": 0.0008,
+      "planning_min_commission": 5,
+      "planning_transfer_fee_rate": 0.00001
+    }
+  },
+  "breadth_overlay": {
+    "enabled": false
+  },
+  "risk_overlay": {
+    "enabled": false
+  },
+  "trading": {
+    "reserve_cash_ratio": 0.05
+  },
+  "auto_live": {
+    "enabled": false,
+    "allow_broker_submit": false,
+    "emergency_stop": true
+  }
+}

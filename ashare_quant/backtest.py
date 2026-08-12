@@ -104,7 +104,7 @@ def run_backtest(config: dict[str, Any]) -> dict[str, Path]:
             )
             if capital_aware_enabled(config):
                 weights = build_capital_aware_target_weights(
-                    scores, close_prices, equity_value, exposure, config
+                    scores, close_prices, equity_value, exposure, config, weights
                 )
             else:
                 weights = weights * exposure

@@ -227,7 +227,7 @@ def simulate_period(
             if capital_aware_enabled(config):
                 initial_cash = float(config.get("backtest", {}).get("initial_cash", 1_000_000.0))
                 weights = build_capital_aware_target_weights(
-                    scores, signal_prices, initial_cash * value, exposure, config
+                    scores, signal_prices, initial_cash * value, exposure, config, weights
                 )
             else:
                 weights = weights * exposure

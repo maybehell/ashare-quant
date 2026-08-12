@@ -99,6 +99,60 @@ class CapitalAwareTests(unittest.TestCase):
         weights = build_capital_aware_target_weights(self.scores, prices, 2567.44, 0.35, config())
         self.assertTrue(weights.empty)
 
+    def test_target_aware_mode_preserves_upstream_selection_priority(self):
+        prices = {symbol: 5.0 for symbol in self.scores["symbol"]}
+        policy = config(
+            respect_target_weights=True,
+            planning_schema_version=2,
+            allow_additional_lots=False,
+        )
+        targets = pd.Series(
+            {"600001": 0.05, "600002": 0.20, "600003": 0.30, "600004": 0.40}
+        )
+
+        weights = build_capital_aware_target_weights(
+            self.scores, prices, 5000.0, 1.0, policy, targets
+        )
+
+        self.assertEqual(set(weights.index), {"600002", "600003", "600004"})
+
+    def test_target_aware_mode_allocates_lots_toward_compressed_target(self):
+        prices = {symbol: 5.0 for symbol in self.scores["symbol"]}
+        policy = config(respect_target_weights=True, planning_schema_version=2)
+        policy["strategy"]["max_stock_weight"] = 0.60
+        targets = pd.Series({"600001": 0.50, "600003": 0.30, "600004": 0.20})
+
+        weights = build_capital_aware_target_weights(
+            self.scores, prices, 5000.0, 1.0, policy, targets
+        )
+
+        self.assertGreater(float(weights["600001"]), float(weights["600003"]))
+        self.assertGreaterEqual(float(weights["600003"]), float(weights["600004"]))
+
+    def test_target_aware_mode_fails_closed_without_target(self):
+        prices = {symbol: 5.0 for symbol in self.scores["symbol"]}
+        policy = config(respect_target_weights=True, planning_schema_version=2)
+
+        weights = build_capital_aware_target_weights(
+            self.scores, prices, 5000.0, 1.0, policy
+        )
+
+        self.assertTrue(weights.empty)
+
+    def test_legacy_mode_ignores_optional_upstream_target(self):
+        prices = {"600001": 6.0, "600002": 5.0, "600003": 7.0, "600004": 8.0, "600005": 9.0}
+        policy = config()
+        targets = pd.Series({"600004": 1.0})
+
+        without_target = build_capital_aware_target_weights(
+            self.scores, prices, 2567.44, 1.0, policy
+        )
+        with_target = build_capital_aware_target_weights(
+            self.scores, prices, 2567.44, 1.0, policy, targets
+        )
+
+        pd.testing.assert_series_equal(without_target, with_target)
+
 
 if __name__ == "__main__":
     unittest.main()

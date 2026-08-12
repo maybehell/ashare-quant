@@ -740,7 +740,7 @@ def write_broker_order_preview(config: dict[str, Any], current_date: date | None
         combined_multiplier = market_multiplier * float(health_exposure["exposure"])
         if capital_aware_enabled(config):
             target_weights = build_capital_aware_target_weights(
-                scores, close_prices, portfolio.equity(close_prices), combined_multiplier, config
+                scores, close_prices, portfolio.equity(close_prices), combined_multiplier, config, target_weights
             )
         else:
             target_weights = target_weights * combined_multiplier
