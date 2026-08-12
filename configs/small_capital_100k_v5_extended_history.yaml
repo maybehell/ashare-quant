@@ -1,0 +1,89 @@
+extends: extended_history_validation.yaml
+
+paths:
+  output_dir: outputs_small_capital_100k_v5_extended_history
+  state_db: data/state_small_capital_100k_v5_extended_history.sqlite3
+
+capital_budget:
+  enabled: true
+  intended_account_capital: 100000
+  max_total_capital: 200000
+
+validation:
+  research_only: true
+  apply_active_execution: false
+  optimized_on_current_cache: false
+  experiment_status: preregistered_extended_history_once
+  experiment_reason: >-
+    One fixed evaluation of a directly investable ten-stock portfolio on the
+    previously constructed 2018-2026 extended-history cache. Configuration and
+    strategy identity are committed before the first evaluation; no parameter
+    sweep or promotion authority is allowed.
+  research_rationale: >-
+    A CNY 100,000 account cannot implement a broad 80-100 stock target with
+    acceptable cash utilization. Test a structurally concentrated, quarterly
+    rebalanced momentum, low-risk, and liquidity portfolio with ten equal
+    positions and explicit board-lot planning.
+  fixed_strategy_sha256: 95310e6619d742d340f03e2ebc3a667e6b4408ca1652d983aaf55bc7f450b406
+  min_backtest_trading_days: 1500
+  candidate_path: data/research_candidate_small_capital_100k_v5_extended_history.json
+  research_archive_configs: []
+  comparison_candidate_configs: []
+  primary_challenger_configs: []
+  forward_only_candidate_configs: []
+
+backtest:
+  start: "2018-01-01"
+  end: "2026-08-07"
+  initial_cash: 100000
+  rebalance: quarterly
+
+strategy:
+  name: small_capital_100k_concentrated10_extended_v5
+  top_n: 10
+  max_stock_weight: 0.10
+  max_industry_weight: 0.30
+  weighting: equal
+  lookbacks:
+    momentum: 60
+    long_momentum: 120
+    volatility: 60
+    drawdown: 60
+    short_reversal: 20
+    liquidity: 60
+  weights:
+    momentum: 0.20
+    long_momentum: 0.20
+    valuation: 0.00
+    quality: 0.00
+    low_volatility: 0.20
+    low_drawdown: 0.10
+    trend_quality: 0.15
+    liquidity: 0.15
+  capital_aware:
+    enabled: true
+    min_positions: 8
+    max_positions: 10
+    max_candidate_rank: 30
+    require_industry: true
+    allow_additional_lots: true
+    planning_schema_version: 2
+    respect_target_weights: true
+    planning_equity_step: 1000
+    planning_commission_rate: 0.0008
+    planning_min_commission: 5
+    planning_transfer_fee_rate: 0.00001
+
+breadth_overlay:
+  enabled: false
+
+risk_overlay:
+  enabled: false
+
+trading:
+  reserve_cash_ratio: 0.05
+
+auto_live:
+  enabled: false
+  allow_broker_submit: false
+  emergency_stop: true

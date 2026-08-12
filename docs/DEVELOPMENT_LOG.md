@@ -6,6 +6,40 @@ it is not a release-marketing document and does not replace generated audit
 artifacts.
 
 
+## 2026-08-12 - Preregister one concentrated CNY 100,000 history test
+
+**Objective**
+
+Freeze a materially smaller-position-count small-account hypothesis before its
+first evaluation on the existing 2018-2026 extended-history cache.
+
+**Pre-evaluation registration**
+
+- Added `configs/small_capital_100k_v5_extended_history.yaml`: ten equal-weight
+  positions, 10% stock cap, 30% industry cap, quarterly rebalance, fixed
+  momentum/low-risk/trend/liquidity weights, and board-lot planning schema 2.
+- Fixed strategy SHA-256 is
+  `95310e6619d742d340f03e2ebc3a667e6b4408ca1652d983aaf55bc7f450b406`;
+  backtest configuration SHA-256 is
+  `2945b62605620ec414e1f27bd90c65c959b438cb4c31ff2c50a49f4e2d7819ab`.
+- The inherited cache currently contains 2,007,871 rows for 1,503 symbols from
+  2018-01-02 through 2026-08-07. It will be read without a fetch or refresh.
+- Configuration validation passed. No historical evaluation of this exact
+  fingerprint had been run when this entry was written.
+
+**Architecture and safety**
+
+- ADR 0022 limits this to one rejection-oriented diagnostic. The cache has
+  current-universe survivorship bias, so even a favorable result cannot authorize
+  candidate admission, activation, paper/live orders, a live ledger, or broker
+  submission.
+- Output and SQLite paths are isolated. Automatic live is disabled, broker submit
+  is disabled, and emergency stop remains active.
+
+**Remaining work**
+
+- Commit and push this preregistration before running `history-validate` once.
+- Record the fixed result without adjusting this strategy on the same cache.
 ## 2026-08-12 - Enforce the CNY 200,000 system capital boundary
 
 **Objective**
@@ -64,7 +98,9 @@ across research, portfolio construction, RPA review, and automatic-live risk.
   the current default on the same cache.
 - Regenerate longer-history evidence under the new fixed CNY 100,000 identity
   before citing it. Continue broker read-only evidence refresh independently of
-  strategy promotion.`n`n## 2026-08-12 - Version rebalance execution and reject non-robust small-capital evidence
+  strategy promotion.
+
+## 2026-08-12 - Version rebalance execution and reject non-robust small-capital evidence
 
 **Objective**
 
