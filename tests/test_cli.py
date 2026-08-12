@@ -871,6 +871,20 @@ class CliWorkflowTests(unittest.TestCase):
             run_command(argparse.Namespace(command="auto-live-recovery-audit"), config)
         mocked.assert_called_once_with(config)
 
+    def test_auto_live_recovery_drill_command_is_dispatched(self):
+        output = Path.cwd() / "test_outputs" / "cli_auto_live_recovery_drill"
+        config = {"paths": {"output_dir": str(output)}}
+        expected = {
+            "auto_live_recovery_drill_audit.csv": output / "auto_live_recovery_drill_audit.csv",
+            "auto_live_recovery_drill_summary.csv": output / "auto_live_recovery_drill_summary.csv",
+        }
+        with patch(
+            "ashare_quant.cli.write_auto_live_recovery_drill",
+            return_value=expected,
+        ) as mocked:
+            run_command(argparse.Namespace(command="auto-live-recovery-drill"), config)
+        mocked.assert_called_once_with(config)
+
     def test_auto_live_alert_commands_are_dispatched(self):
         output = Path.cwd() / "test_outputs" / "cli_auto_live_alerts"
         config = {"paths": {"output_dir": str(output)}}

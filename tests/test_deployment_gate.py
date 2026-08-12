@@ -337,6 +337,19 @@ class DeploymentGateTests(unittest.TestCase):
             self.live / "auto_live_adapter_replay_summary.csv",
             [{"status": "certified_live", "auto_live_config_sha256": auto_live_config_sha256(self.live_config)}],
         )
+        self.write_csv(
+            self.live / "auto_live_recovery_drill_summary.csv",
+            [{
+                "status": "passed",
+                "schema_version": 1,
+                "auto_live_config_sha256": auto_live_config_sha256(self.live_config),
+                "broker_adapter_invoked": False,
+                "isolated_workspace_removed": True,
+                "passed_checks": 8,
+                "total_checks": 8,
+                "generated_at": now,
+            }],
+        )
         self.write_csv(self.live / "auto_live_alert_audit.csv", [{"check": "alert", "passed": True}])
         self.write_csv(self.live / "broker_canary_capital_audit.csv", [{"check": "broker_canary_capital_ready", "passed": True}])
         self.write_csv(
@@ -812,6 +825,58 @@ class DeploymentGateTests(unittest.TestCase):
         self.assertFalse(bool(gate.loc["adapter_replay_certification", "passed"]))
         self.assertIn("config_match=False", gate.loc["adapter_replay_certification", "value"])
         self.assertFalse(bool(gate.loc["broker_ready", "passed"]))
+
+    def test_recovery_drill_config_mismatch_blocks_canary(self):
+        self.write_complete_evidence()
+        self.write_csv(
+            self.live / "auto_live_recovery_drill_summary.csv",
+            [{
+                "status": "passed",
+                "schema_version": 1,
+                "auto_live_config_sha256": "stale-config",
+                "broker_adapter_invoked": False,
+                "isolated_workspace_removed": True,
+                "passed_checks": 8,
+                "total_checks": 8,
+                "generated_at": pd.Timestamp.now(tz="UTC").isoformat(),
+            }],
+        )
+
+        gate = pd.read_csv(
+            write_deployment_gate(self.strategy_config, self.live_config)["deployment_gate.csv"]
+        ).set_index("check")
+
+        self.assertFalse(bool(gate.loc["submission_recovery_drill", "passed"]))
+        self.assertIn("config_match=False", gate.loc["submission_recovery_drill", "value"])
+        self.assertFalse(bool(gate.loc["ready_to_request_canary", "passed"]))
+
+    def test_recovery_drill_missing_explicit_no_broker_marker_blocks_canary(self):
+        self.write_complete_evidence()
+        path = self.live / "auto_live_recovery_drill_summary.csv"
+        summary = pd.read_csv(path).drop(columns=["broker_adapter_invoked"])
+        summary.to_csv(path, index=False, encoding="utf-8-sig")
+
+        gate = pd.read_csv(
+            write_deployment_gate(self.strategy_config, self.live_config)["deployment_gate.csv"]
+        ).set_index("check")
+
+        self.assertFalse(bool(gate.loc["submission_recovery_drill", "passed"]))
+        self.assertIn("broker_adapter_invoked=missing", gate.loc["submission_recovery_drill", "value"])
+
+    def test_recovery_drill_that_invoked_broker_blocks_canary(self):
+        self.write_complete_evidence()
+        path = self.live / "auto_live_recovery_drill_summary.csv"
+        summary = pd.read_csv(path)
+        summary.loc[0, "broker_adapter_invoked"] = True
+        summary.to_csv(path, index=False, encoding="utf-8-sig")
+
+        gate = pd.read_csv(
+            write_deployment_gate(self.strategy_config, self.live_config)["deployment_gate.csv"]
+        ).set_index("check")
+
+        self.assertFalse(bool(gate.loc["submission_recovery_drill", "passed"]))
+        self.assertIn("broker_adapter_invoked=true", gate.loc["submission_recovery_drill", "value"])
+        self.assertFalse(bool(gate.loc["ready_to_request_canary", "passed"]))
 
     def test_adapter_file_hash_is_recomputed_instead_of_trusting_csv(self):
         adapter_path = self.root / "adapter.py"

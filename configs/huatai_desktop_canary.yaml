@@ -45,6 +45,8 @@ auto_live:
   action_confirmation:
     required_before_submit: true
     ttl_seconds: 600
+  recovery_drill:
+    max_age_seconds: 86400
   desktop_canary_certification:
     bridge_config: configs/huatai_bridge_desktop_canary.yaml
     arming_ttl_seconds: 1800

@@ -4,7 +4,7 @@ Status: authoritative
 
 Version: 1.0
 
-Last reviewed: 2026-08-11
+Last reviewed: 2026-08-12
 
 ## 1. Purpose
 
@@ -328,6 +328,10 @@ Rules:
   run; old reports are not authority.
 - Unknown or partial outcomes trigger query/recovery and critical alerting, not
   blind retry.
+- Before a Canary can be requested, a fresh configuration-bound isolated recovery
+  drill must prove persisted-intent deduplication, request-bound unknown-state
+  reconstruction, query recovery, and terminal-status release. The drill never
+  invokes a broker adapter, creates a live ledger, or grants execution authority.
 - Adapter/pin/config changes invalidate stale certification and signatures.
 
 ### 3.7 Presentation and reporting
@@ -384,6 +388,7 @@ Additional constraints:
 | Orders/RPA tickets | paper/execution pipeline | preview/live control | `orders.csv` and `rpa_orders.csv` are never written by backtest; provenance-bound, quarantine stale batch |
 | Rollout approval/confirmation | live control plane | submission gate | signed, expiring, single purpose |
 | Auto-live journal/recovery | live control plane | recovery, audit | append-only/hash chained |
+| Isolated unknown-outcome recovery drill | live control plane | deployment gate, operator | atomically replace final audit/summary only; synthetic intent/request/query state exists solely in a deleted temporary workspace; configuration-bound and expiring; never invokes the broker or grants authority |
 | HTML/CSV reports | presentation | operator | derived, never authoritative for submit |
 
 ## 6. Canonical workflows
@@ -423,8 +428,9 @@ Additional constraints:
 1. Verify strategy authority and current execution epoch.
 2. Verify fresh broker snapshot and signed account binding.
 3. Verify reconciliation, order provenance, liquidity, cash, T+1, and limits.
-4. Verify pinned adapter, certification, trading window, rollout approval,
-   emergency stop, alert channel, recovery point, and single-use confirmation.
+4. Verify pinned adapter, certification, the current isolated unknown-outcome
+   recovery drill, trading window, rollout approval, emergency stop, alert channel,
+   recovery point, and single-use confirmation.
 5. Submit once through the adapter.
 6. Persist intent/result identity and query ambiguous outcomes.
 7. Import verified fills idempotently and reconcile broker/local state.

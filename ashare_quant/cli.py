@@ -29,6 +29,7 @@ from .autolive_integrity import write_command_adapter_file_audit
 from .autolive_journal import write_auto_live_journal_audit
 from .autolive_binding import bind_auto_live_account, unbind_auto_live_account, write_auto_live_account_binding_audit
 from .autolive_recovery import create_auto_live_recovery_point, write_auto_live_recovery_audit
+from .autolive_recovery_drill import write_auto_live_recovery_drill
 from .autolive_alerts import retry_auto_live_alerts, send_auto_live_alert, write_auto_live_alert_audit, write_auto_live_alert_selftest
 from .autolive_rollout import approve_auto_live_rollout, revoke_auto_live_rollout, write_auto_live_rollout_audit
 from .autolive_service import (
@@ -307,6 +308,7 @@ def main(argv: list[str] | None = None) -> None:
     sub.add_parser("auto-live-account", help="Read and audit broker account snapshot through the configured auto-live adapter")
     sub.add_parser("auto-live-account-binding", help="Audit the signed local-state to broker-account binding")
     sub.add_parser("auto-live-recovery-audit", help="Verify the latest pre-submit recovery point")
+    sub.add_parser("auto-live-recovery-drill", help="Run an isolated unknown-outcome recovery drill without broker calls")
     sub.add_parser("auto-live-backup", help="Create and verify an auto-live recovery point without broker submission")
     sub.add_parser("auto-live-alert-audit", help="Audit external alert-channel readiness and pending outbox")
     sub.add_parser("auto-live-alert-selftest", help="Run signed non-trading alert channel self-test")
@@ -666,6 +668,8 @@ def run_command(args: argparse.Namespace, config: dict) -> None:
         print_paths(write_auto_live_account_binding_audit(config).values())
     elif args.command == "auto-live-recovery-audit":
         print_paths(write_auto_live_recovery_audit(config).values())
+    elif args.command == "auto-live-recovery-drill":
+        print_paths(write_auto_live_recovery_drill(config).values())
     elif args.command == "auto-live-alert-audit":
         print_paths(write_auto_live_alert_audit(config).values())
     elif args.command == "auto-live-alert-selftest":

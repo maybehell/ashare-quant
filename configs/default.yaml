@@ -586,6 +586,9 @@
       "required_before_submit": true,
       "ttl_seconds": 600
     },
+    "recovery_drill": {
+      "max_age_seconds": 86400
+    },
     "allow_account_sync": false,
     "allow_simulated_account_snapshot": false,
     "account_binding": {

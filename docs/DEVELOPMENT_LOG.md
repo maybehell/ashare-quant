@@ -6,6 +6,68 @@ it is not a release-marketing document and does not replace generated audit
 artifacts.
 
 
+## 2026-08-12 - Require an isolated unknown-outcome recovery drill before Canary
+
+**Objective**
+
+Add current, configuration-bound proof that an interrupted submission cannot be
+blindly retried, without invoking the broker or changing protected live state.
+
+**Changes**
+
+- Added `auto-live-recovery-drill`, which creates a signed synthetic submit
+  request and all intermediate recovery state in an auto-deleted temporary
+  directory. Only the final audit and summary are atomically published.
+- The drill proves request-bound unknown-result reconstruction, duplicate
+  suppression from the persisted intent, broker-order-ID recovery through a
+  synthetic query, active-order blocking, and release only after terminal status.
+- Added `submission_recovery_drill` as a mandatory Canary deployment check with
+  schema, current `auto_live` configuration hash, 24-hour freshness, no-broker,
+  and temporary-workspace-removal requirements.
+- Added ADR 0026 and updated architecture ownership, broker-boundary rules, and
+  the guarded live workflow.
+
+**Architecture and safety**
+
+- The drill never executes the command adapter, creates a live ledger, emits an
+  order artifact, activates a strategy, changes safety switches, or grants
+  execution authority. Missing HMAC, stale or mismatched identity, retained
+  temporary state, or a broker-invoked marker fails closed.
+- Real-config evidence passed 8/8 checks with
+  `broker_adapter_invoked=false` and `isolated_workspace_removed=true`.
+- The configuration change invalidated the old replay hash as intended. A real
+  Huatai read-only refresh then restored `certified_read_only_live` for the
+  current hash; account, buy/sell form readback, and empty order/trade/cancel
+  probes succeeded with `submit_invoked=false`.
+- Final deployment state remains blocked: `strategy_ready=false`,
+  `broker_execution_ready=false`, and `ready_to_request_canary=false`, while
+  `broker_read_only_ready=true` and `safe_default=true`. The full lifecycle is
+  not certified, the forward window is incomplete, capital evidence is not
+  compatible/current, and the isolated live ledger is not initialized.
+- Emergency stop remains true; broker and service submission remain false.
+  `data/huatai_live_state.sqlite3`, `data/orders.csv`, and
+  `data/active_execution_strategy.json` remain absent.
+
+**Verification**
+
+- Recovery drill, deployment gate, CLI, and documentation focused regression:
+  146 passed.
+- Final full regression: 1,180 tests and 39 subtests passed in 165.27 seconds.
+- Real `auto-live-recovery-drill`: 8/8 passed without broker invocation.
+- Real `broker-refresh`: completed with exit code 0 and explicitly without
+  broker submission; final deployment gate regenerated against current evidence.
+- `git diff --check`: passed after documentation finalization.
+
+**Remaining work**
+
+- Accumulate the immutable candidate's 60 genuinely post-freeze trading days;
+  do not tune it from forward observations or promote it early.
+- Complete a separately authorized real submit/query/cancel/fill lifecycle
+  certification before requesting a one-order Canary. This offline drill cannot
+  substitute for broker-specific lifecycle evidence.
+- Keep live-ledger initialization and any order submission blocked until their
+  separate evidence and explicit authorizations exist.
+
 ## 2026-08-12 - Route and observe the frozen defensive small-capital candidate
 
 **Objective**

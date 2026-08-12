@@ -69,6 +69,7 @@ LEDGER_AUTHORIZATION_CHECKS = {
 }
 CANARY_AUTHORIZATION_CHECKS = {
     "adapter_replay_certification",
+    "submission_recovery_drill",
     "canary_sandbox_evidence_current",
     "canary_configuration_integrity",
     "canary_capital_affordability",
@@ -111,6 +112,7 @@ CHECK_LABELS = {
     "adapter_file_integrity": "桥接器文件完整性",
     "adapter_read_only_replay_certification": "桥接器真实账户只读回放",
     "adapter_replay_certification": "桥接器生命周期回放",
+    "submission_recovery_drill": "未知提交结果恢复演练",
     "canary_sandbox_evidence_current": "Canary 沙箱证据当前有效",
     "alert_channel_current": "邮件告警时效",
     "canary_configuration_integrity": "Canary 配置完整性",
@@ -147,6 +149,7 @@ def write_deployment_gate(
     binding = _read_csv(live_dir / "auto_live_account_binding_audit.csv")
     adapter_files = build_command_adapter_file_audit(live_config)
     replay = _read_csv(live_dir / "auto_live_adapter_replay_summary.csv")
+    recovery_drill = _read_csv(live_dir / "auto_live_recovery_drill_summary.csv")
     alerts = build_auto_live_alert_audit(live_config)
     canary = build_huatai_canary_arming_audit(live_config)
     canary_capital = _read_csv(live_dir / "broker_canary_capital_audit.csv")
@@ -372,6 +375,11 @@ def write_deployment_gate(
     replay_read_only_ok = replay_status in {"certified_read_only_live", "certified_live"} and replay_config_match
     replay_ok = replay_status == "certified_live" and replay_config_match
     replay_value = f"status={replay_status or 'missing'};config_match={replay_config_match}"
+    recovery_cfg = live_config.get("auto_live", {}).get("recovery_drill", {})
+    recovery_max_age = int(recovery_cfg.get("max_age_seconds", 86400) or 86400)
+    recovery_drill_ok, recovery_drill_value = _recovery_drill_status(
+        recovery_drill, expected_replay_fingerprint, recovery_max_age
+    )
     alert_ok, alert_value = _all_checks_passed(alerts)
     canary_integrity_ok, canary_integrity_value = _selected_checks_passed(
         canary,
@@ -499,6 +507,7 @@ def write_deployment_gate(
         _row("broker", "adapter_file_integrity", adapter_ok, adapter_value, "all checks passed", "复核桥接代码变化并更新固定哈希。", "命令适配器及其完整依赖必须通过哈希固定。"),
         _row("broker", "adapter_read_only_replay_certification", replay_read_only_ok, replay_value, "certified_read_only_live or certified_live and current auto_live config", "重新执行真实账户只读刷新并生成回放审计。", "该检查只证明真实账户读取协议，不证明下单、查询或撤单能力。", blocking=False),
         _row("broker", "adapter_replay_certification", replay_ok, replay_value, "certified_live and current auto_live config", "在受控真实环境完成提交、查询、撤单和账户快照生命周期认证。", "完整生命周期回放必须绑定当前配置，并覆盖幂等性和券商单号稳定性。"),
+        _row("broker", "submission_recovery_drill", recovery_drill_ok, recovery_drill_value, f"passed, current config, age <= {recovery_max_age}s, broker not invoked and workspace removed", "运行 auto-live-recovery-drill；该命令仅使用隔离合成状态，不调用券商。", "Canary 前必须证明未知提交结果会阻止重复提交、通过绑定查询恢复，并在终态前保持批次锁。"),
         _row("broker", "alert_channel_current", alert_ok, alert_value, "all checks passed", "重新运行邮件告警自检。", "外部告警配置、HMAC 和时效必须全部通过。"),
         _row("broker", "canary_sandbox_evidence_current", canary_sandbox_ok, canary_sandbox_value, "all 8 dynamic read-only checks current", "重新登录客户端并依次刷新表单预览、空委托监控和账户快照，再生成沙箱汇总。", "动态沙箱摘要及其买卖预览、委托、成交、撤单和账户快照原始证据必须绑定当前配置且仍在有效期内。"),
         _row("broker", "canary_configuration_integrity", canary_integrity_ok, canary_integrity_value, "selected integrity checks passed", "重新生成当前配置下的桌面 Canary 沙箱证据。", "Canary 限额、确认链和桥接配置必须与当前哈希一致。"),
@@ -1000,6 +1009,41 @@ def _broker_snapshot_freshness(frame: pd.DataFrame, max_age_seconds: int) -> tup
     valid = not reasons
     detail = "valid_live_snapshot" if valid else ",".join(reasons)
     return fresh and valid, f"{age_value};{detail}"
+
+def _recovery_drill_status(
+    frame: pd.DataFrame,
+    expected_config_sha256: str,
+    max_age_seconds: int,
+) -> tuple[bool, str]:
+    fresh, freshness_value = _freshness(frame, max_age_seconds)
+    if len(frame) != 1:
+        return False, f"{freshness_value};summary_rows={len(frame)}"
+    row = frame.iloc[0]
+    status = str(row.get("status", "") or "").strip().lower()
+    schema = _as_int(row.get("schema_version"))
+    fingerprint = str(row.get("auto_live_config_sha256", "") or "").strip()
+    config_match = bool(fingerprint) and fingerprint == expected_config_sha256
+    broker_invoked_value = str(row.get("broker_adapter_invoked", "")).strip().lower()
+    broker_not_invoked = broker_invoked_value in {"false", "0", "no"}
+    workspace_removed = _truth(row.get("isolated_workspace_removed"))
+    passed_checks = _as_int(row.get("passed_checks"))
+    total_checks = _as_int(row.get("total_checks"))
+    checks_complete = total_checks > 0 and passed_checks == total_checks
+    valid = bool(
+        status == "passed"
+        and schema == 1
+        and config_match
+        and broker_not_invoked
+        and workspace_removed
+        and checks_complete
+    )
+    value = (
+        f"{freshness_value};status={status or 'missing'};schema={schema};"
+        f"config_match={config_match};broker_adapter_invoked={broker_invoked_value or 'missing'};"
+        f"workspace_removed={workspace_removed};checks={passed_checks}/{total_checks}"
+    )
+    return fresh and valid, value
+
 
 def _last_row(frame: pd.DataFrame) -> pd.Series:
     return frame.iloc[-1] if not frame.empty else pd.Series(dtype=object)
