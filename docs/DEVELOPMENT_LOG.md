@@ -6,6 +6,46 @@ it is not a release-marketing document and does not replace generated audit
 artifacts.
 
 
+## 2026-08-12 - Reject the preregistered concentrated history test
+
+**Objective**
+
+Run the one fixed extended-history evaluation registered in commit `8f19a8a`
+and preserve its result without retuning the strategy on the same cache.
+
+**Evidence**
+
+- `history-validate` completed on 1,965 effective trading days from 2018-01-02
+  through 2026-08-07. Strategy return was 33.33218% versus CSI 300 39.55975%,
+  for cumulative excess return -6.22757% and information ratio -0.03457.
+- Maximum drawdown was -46.17461%, slightly worse than the benchmark's -45.60262%.
+  Fixed-parameter walk-forward positive ratio was 6/13, average test excess was
+  -0.49816%, and the worst test fold was -16.47914%.
+- Average cash ratio was 51.60% and median cash ratio was 30.01%. The run made
+  356 trades across 127 symbols with two market-state rejects. Concentration
+  improved implementation versus the 100-stock target, but did not deliver
+  stable excess return and remained underinvested in parts of the sample.
+- The survivorship audit remained high risk: no point-in-time full-market
+  universe, delisted-security history, or historical risk-warning state exists.
+  The result therefore serves only as a rejection test.
+- Focused configuration, history-validation, documentation, sensitivity, and
+  validation tests passed: 51. Full regression passed: 1,155 tests and 39
+  subtests in 160.65 seconds.
+
+**Decision and safety**
+
+- Marked this exact fingerprint rejected and current-cache evaluated. No weight,
+  lookback, holding-count, or timing change will be tested on this cache.
+- No candidate was created or activated. `data/orders.csv`,
+  `data/active_execution_strategy.json`, and `data/huatai_live_state.sqlite3`
+  remain absent. Broker submission remains disabled and emergency stop remains
+  active.
+
+**Remaining work**
+
+- Do not optimize another candidate on the same known sample. Accumulate new
+  forward sessions or obtain authoritative point-in-time full-market history
+  before opening a new strategy research cycle.
 ## 2026-08-12 - Preregister one concentrated CNY 100,000 history test
 
 **Objective**

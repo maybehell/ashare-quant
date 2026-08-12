@@ -12,13 +12,18 @@ capital_budget:
 validation:
   research_only: true
   apply_active_execution: false
-  optimized_on_current_cache: false
-  experiment_status: preregistered_extended_history_once
+  optimized_on_current_cache: true
+  experiment_status: rejected
   experiment_reason: >-
-    One fixed evaluation of a directly investable ten-stock portfolio on the
-    previously constructed 2018-2026 extended-history cache. Configuration and
-    strategy identity are committed before the first evaluation; no parameter
-    sweep or promotion authority is allowed.
+    Rejected after its one preregistered 2018-2026 extended-history evaluation:
+    cumulative excess return -6.23%, maximum drawdown 46.17%, fixed walk-forward
+    positive ratio 6/13, and worst fold excess -16.48%. No parameter sweep or
+    promotion authority is allowed.
+  rejection_reason: >-
+    Concentrating the portfolio improved board-lot implementability but did not
+    produce stable benchmark-relative returns and materially increased
+    concentration risk. This exact fingerprint must not be retuned on the same
+    cache or admitted to forward observation.
   research_rationale: >-
     A CNY 100,000 account cannot implement a broad 80-100 stock target with
     acceptable cash utilization. Test a structurally concentrated, quarterly
