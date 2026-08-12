@@ -1,10 +1,13 @@
+import sys
 import unittest
 from pathlib import Path
-from unittest.mock import Mock
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 from ashare_quant.huatai_client import (
     build_huatai_client_status,
     request_huatai_client_window_wake,
+    restore_huatai_trading_window,
 )
 
 
@@ -22,6 +25,120 @@ class HuataiClientTests(unittest.TestCase):
             },
         }
 
+    def test_restore_minimized_window_does_not_depend_on_descendants(self):
+        executable = Path(self.config()["desktop_client"]["executable"]).resolve()
+        process_paths = {
+            101: executable,
+            202: executable.parent / "xiadan.exe",
+        }
+
+        class Handle:
+            def __init__(self, pid):
+                self.pid = pid
+
+            def Close(self):
+                pass
+
+        class Window:
+            minimized = True
+            visible = False
+
+            def process_id(self):
+                return 101
+
+            def is_minimized(self):
+                return self.minimized
+
+            def is_visible(self):
+                return self.visible
+
+            def restore(self):
+                self.minimized = False
+                self.visible = True
+
+            def descendants(self):
+                raise AssertionError("minimized descendants must not be inspected")
+
+        window = Window()
+        win32api = SimpleNamespace(OpenProcess=lambda _access, _inherit, pid: Handle(pid))
+        win32con = SimpleNamespace(PROCESS_QUERY_INFORMATION=1, PROCESS_VM_READ=2)
+        win32process = SimpleNamespace(
+            EnumProcesses=lambda: [101, 202],
+            GetModuleFileNameEx=lambda handle, _module: str(process_paths[handle.pid]),
+        )
+        pywinauto = SimpleNamespace(
+            Desktop=lambda backend: SimpleNamespace(
+                windows=lambda visible_only: [window]
+            )
+        )
+        with patch.dict(
+            sys.modules,
+            {
+                "win32api": win32api,
+                "win32con": win32con,
+                "win32process": win32process,
+                "pywinauto": pywinauto,
+            },
+        ):
+            restored, message = restore_huatai_trading_window(
+                executable, pause=lambda _seconds: None
+            )
+
+        self.assertTrue(restored)
+        self.assertIn("verified", message)
+
+    def test_restore_minimized_window_fails_closed_on_multiple_roots(self):
+        executable = Path(self.config()["desktop_client"]["executable"]).resolve()
+        process_paths = {
+            101: executable,
+            202: executable.parent / "xiadan.exe",
+        }
+
+        class Handle:
+            def __init__(self, pid):
+                self.pid = pid
+
+            def Close(self):
+                pass
+
+        class Window:
+            restore = Mock()
+
+            def process_id(self):
+                return 101
+
+            def is_minimized(self):
+                return True
+
+        windows = [Window(), Window()]
+        win32api = SimpleNamespace(OpenProcess=lambda _access, _inherit, pid: Handle(pid))
+        win32con = SimpleNamespace(PROCESS_QUERY_INFORMATION=1, PROCESS_VM_READ=2)
+        win32process = SimpleNamespace(
+            EnumProcesses=lambda: [101, 202],
+            GetModuleFileNameEx=lambda handle, _module: str(process_paths[handle.pid]),
+        )
+        pywinauto = SimpleNamespace(
+            Desktop=lambda backend: SimpleNamespace(
+                windows=lambda visible_only: windows
+            )
+        )
+        with patch.dict(
+            sys.modules,
+            {
+                "win32api": win32api,
+                "win32con": win32con,
+                "win32process": win32process,
+                "pywinauto": pywinauto,
+            },
+        ):
+            restored, message = restore_huatai_trading_window(
+                executable, pause=lambda _seconds: None
+            )
+
+        self.assertFalse(restored)
+        self.assertIn("found 2", message)
+        for window in windows:
+            window.restore.assert_not_called()
     def test_windowless_wake_uses_only_pinned_executable(self):
         config = self.config()
         config["desktop_client"]["wake_windowless_on_refresh"] = True

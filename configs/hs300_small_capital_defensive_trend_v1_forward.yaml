@@ -1,0 +1,112 @@
+extends: hs300_point_in_time_core_v4_forward.yaml
+
+paths:
+  cache_dir: data/cache_hs300_small_capital_defensive_trend_v1_forward
+  output_dir: outputs_hs300_small_capital_defensive_trend_v1_forward
+  state_db: data/state_hs300_small_capital_defensive_trend_v1_forward.sqlite3
+
+capital_budget:
+  enabled: true
+  intended_account_capital: 100000
+  max_total_capital: 200000
+
+validation:
+  candidate_path: data/live_candidate_hs300_small_capital_defensive_trend_v1_forward.json
+  research_governance_state_path: data/research_governance_hs300_small_capital_defensive_trend_v1_forward.json
+  research_only: true
+  apply_active_execution: false
+  optimized_on_current_cache: false
+  experiment_status: preregistered_forward_only
+  fixed_strategy_sha256: 1af970df4011e6b8bc0bce601c813b42d8c58105ae8ab587a3f1f0a5ffcaadd9
+  experiment_reason: >-
+    Parameters were fixed before this candidate's first evaluation. It combines
+    the documented China A-share low-volatility effect with restrained trend and
+    liquidity signals in a point-in-time CSI 300 universe. Historical selection
+    evidence is not inherited from any previous candidate.
+  research_rationale: >-
+    Test an implementable CNY 100,000 portfolio with twenty positions, monthly
+    rebalancing and board-lot-aware allocation. Low
+    volatility and drawdown are primary; trend and liquidity are secondary
+    because pure momentum is unstable in China A shares.
+  require_frozen_input_evidence: true
+  primary_challenger_config: ""
+  primary_challenger_strict: false
+  research_archive_configs: []
+  comparison_candidate_configs: []
+  primary_challenger_configs: []
+  forward_only_candidate_configs: []
+  research_time_folds: 3
+
+backtest:
+  initial_cash: 100000
+  rebalance: monthly
+
+strategy:
+  name: hs300_small_capital_defensive_trend20_v1_forward
+  top_n: 20
+  max_stock_weight: 0.05
+  max_industry_weight: 0.25
+  weighting: equal
+  benchmark_membership:
+    enabled: true
+    index_symbol: "000300"
+    max_staleness_days: 120
+  reference_anchor:
+    enabled: false
+
+  lookbacks:
+    momentum: 60
+    long_momentum: 120
+    volatility: 120
+    drawdown: 120
+    short_reversal: 20
+    liquidity: 60
+  weights:
+    momentum: 0.10
+    long_momentum: 0.10
+    valuation: 0.00
+    quality: 0.00
+    low_volatility: 0.25
+    low_downside_volatility: 0.15
+    low_drawdown: 0.15
+    trend_quality: 0.15
+    liquidity: 0.10
+  industry_neutralization:
+    enabled: true
+    min_group_size: 5
+  cross_sectional_neutralization:
+    enabled: false
+  capital_aware:
+    enabled: true
+    min_positions: 15
+    max_positions: 20
+    max_candidate_rank: 60
+    require_industry: true
+    allow_additional_lots: true
+    planning_schema_version: 2
+    respect_target_weights: true
+    planning_equity_step: 1000
+    planning_commission_rate: 0.0008
+    planning_min_commission: 5
+    planning_transfer_fee_rate: 0.00001
+
+risk_overlay:
+  enabled: false
+
+trading:
+  reserve_cash_ratio: 0.05
+
+data:
+  fetch_benchmark_membership_only: true
+  immutable_before_candidate_freeze: true
+  incremental_fetch: true
+  preserve_cached_history_on_fetch: true
+  history_source: baostock
+  enrich_metadata: false
+  min_fetch_success_ratio: 0.99
+  min_fetch_success_symbols: 390
+
+auto_live:
+  enabled: false
+  allow_broker_submit: false
+  emergency_stop: true

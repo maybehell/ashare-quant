@@ -89,11 +89,14 @@ def huatai_client_executable(config: dict[str, Any]) -> Path | None:
     return executable if integrity_ok else None
 
 
-def restore_huatai_trading_window(executable: Path) -> tuple[bool, str]:
-    """Restore the unique minimized Huatai root that owns xiadan controls."""
+def restore_huatai_trading_window(
+    executable: Path,
+    *,
+    pause: Callable[[float], None] = time.sleep,
+) -> tuple[bool, str]:
+    """Restore the unique minimized UIA root of the pinned Huatai process."""
     import win32api
     import win32con
-    import win32gui
     import win32process
     from pywinauto import Desktop
 
@@ -119,27 +122,31 @@ def restore_huatai_trading_window(executable: Path) -> tuple[bool, str]:
         finally:
             if handle is not None:
                 handle.Close()
-    if not hexin_pids or not xiadan_pids:
-        return False, "pinned Huatai trading processes are not both running"
+    if len(hexin_pids) != 1 or len(xiadan_pids) != 1:
+        return False, (
+            "expected one pinned Huatai market process and one trading process; "
+            f"found hexin={len(hexin_pids)}, xiadan={len(xiadan_pids)}"
+        )
 
     candidates = []
     for window in Desktop(backend="uia").windows(visible_only=False):
         try:
-            if window.process_id() not in hexin_pids or not win32gui.IsIconic(window.handle):
-                continue
-            if any(control.process_id() in xiadan_pids for control in window.descendants()):
+            if window.process_id() in hexin_pids and window.is_minimized():
                 candidates.append(window)
         except Exception:
             continue
     if len(candidates) != 1:
-        return False, f"expected one minimized Huatai trading root, found {len(candidates)}"
+        return False, f"expected one minimized pinned Huatai UIA root, found {len(candidates)}"
 
+    window = candidates[0]
     try:
-        win32gui.ShowWindow(candidates[0].handle, win32con.SW_RESTORE)
+        window.restore()
+        pause(0.25)
+        if window.is_minimized() or not window.is_visible():
+            return False, "pinned Huatai window did not become visible after restore"
     except Exception as exc:
         return False, f"{type(exc).__name__}: {exc}"
-    return True, "restored the pinned minimized Huatai trading window"
-
+    return True, "restored and verified the pinned minimized Huatai trading window"
 
 def open_huatai_trading_module(executable: Path) -> tuple[bool, str]:
     """Send one F12 navigation key to the unique pinned Huatai market root."""

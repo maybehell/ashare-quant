@@ -6,6 +6,60 @@ it is not a release-marketing document and does not replace generated audit
 artifacts.
 
 
+## 2026-08-12 - Fix the next small-capital forward hypothesis before evaluation
+
+**Objective**
+
+Record one implementable and independently observable CNY 100,000 strategy
+hypothesis before copying market data or seeing any result for its fingerprint.
+
+**Pre-evaluation registration**
+
+- Added configs/hs300_small_capital_defensive_trend_v1_forward.yaml with
+  point-in-time CSI 300 membership, twenty equal target positions, 5% stock and
+  25% industry caps, monthly rebalancing, and schema-2 capital-aware board-lot
+  planning.
+- Fixed strategy SHA-256 is
+  1af970df4011e6b8bc0bce601c813b42d8c58105ae8ab587a3f1f0a5ffcaadd9.
+- Factor weights were fixed from an external structural hypothesis: 55% combined
+  low-volatility/downside/drawdown, 35% combined momentum/trend, and 10%
+  liquidity. No current-cache result was inspected to select them.
+- ADR 0024 records the rationale and rejects retuning prior failed candidates.
+  Rank buffering was removed before evaluation because validation correctly
+  rejects combining it with capital-aware planning.
+
+**Broker read-only stability**
+
+- Replaced minimized-window child-control discovery with restoration of the
+  unique minimized UIA root owned by the pinned Huatai executable, after
+  verifying exactly one pinned market process and one same-directory trading
+  process. Success requires the root to become visible and non-minimized.
+- Real window test changed IsIconic from 1 to 0 and returned verified
+  restoration. A full broker refresh then captured the live read-only account,
+  verified buy and sell form readback with submit_invoked=false, and verified
+  empty orders, trades, and cancels before reporting completion without broker
+  submission.
+
+**Architecture and safety**
+
+- No candidate cache has been copied and no backtest, observation, or
+  preregistration has run for the new hash at this commit boundary. The next
+  commit must preserve this ordering before generating the immutable manifest.
+- The candidate is research-only with automatic live and broker submit disabled
+  and emergency stop enabled. Broker refresh did not initialize the live ledger.
+
+**Verification**
+
+- New strategy config validation: no issues; fixed hash recomputed exactly.
+- Huatai client, snapshot, and CLI focused regression: 135 passed.
+- Real read-only refresh: account snapshot ready, positions 0, form previews
+  verified, three monitor probes empty and verified, no broker submission.
+
+**Remaining work**
+
+- Commit and push this preregistration record, then copy the complete predecessor
+  cache into the isolated namespace, generate and seal the immutable candidate,
+  switch unattended observation to it, and accumulate new post-freeze sessions.
 ## 2026-08-12 - Separate terminal strategy blocks from read-only operations
 
 **Objective**
