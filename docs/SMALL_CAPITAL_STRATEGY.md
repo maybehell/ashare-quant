@@ -44,6 +44,7 @@ Primary references:
 ```powershell
 python -m ashare_quant --config configs/small_capital_100k.yaml backtest
 python -m ashare_quant --config configs/small_capital_100k.yaml capital-sensitivity
+python -m ashare_quant --config configs/small_capital_100k.yaml small-capital-readiness
 ```
 
 The second command writes isolated lot-aware results for every configured cash
@@ -76,3 +77,17 @@ The final position count can temporarily exceed the eight-to-ten construction
 target because legacy holdings may remain while a sell is blocked or rounded;
 this is execution behavior, not permission to select more than ten new targets.
 The drawdown and one negative walk-forward fold keep this strategy research-only.
+
+## Forward admission
+
+The readiness command writes
+`outputs_small_capital_100k/small_capital_live_readiness.csv`. Every blocking
+row must pass before this strategy family may be preregistered for a new,
+untuned forward-only observation window. A pass does not authorize paper orders,
+strategy activation, live-ledger initialization, or broker submission.
+
+The current version is blocked by maximum drawdown, annual excess-return
+consistency, worst annual excess return, fixed-parameter walk-forward consistency,
+worst walk-forward excess return, and cost-path stability. Higher simulated
+costs currently produce a materially different and better trade path; the gate
+treats this as integer-lot path instability rather than favorable robustness.

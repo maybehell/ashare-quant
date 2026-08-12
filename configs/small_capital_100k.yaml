@@ -8,6 +8,19 @@
     "intended_account_capital": 100000,
     "max_total_capital": 200000
   },
+  "small_capital_live_guard": {
+    "enabled": true,
+    "required_intended_capital": 100000,
+    "max_total_capital": 200000,
+    "max_strategy_drawdown": 0.30,
+    "min_annual_positive_excess_ratio": 0.75,
+    "min_worst_annual_excess_return": -0.05,
+    "min_walk_forward_positive_ratio": 0.75,
+    "min_worst_walk_forward_excess_return": -0.05,
+    "cost_stress_scenario": "high_cost",
+    "min_high_cost_excess_return": 0.00,
+    "max_cost_total_return_deviation": 0.02
+  },
   "validation": {
     "research_only": true,
     "apply_active_execution": false,

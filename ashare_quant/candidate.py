@@ -360,6 +360,9 @@ def preregister_forward_candidate(
             "Forward-only preregistration requires validation.research_only=true and "
             "validation.experiment_status=preregistered_forward_only."
         )
+    from .small_capital_readiness import assert_small_capital_preregistration_ready
+
+    assert_small_capital_preregistration_ready(config)
     path = candidate_manifest_path(config)
     if path.exists() and not force:
         raise RuntimeError(f"Forward candidate already exists at {path}. Use --force to replace it.")

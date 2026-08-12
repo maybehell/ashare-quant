@@ -113,6 +113,7 @@ from .shadow_policy import shadow_evaluation_evidence, shadow_evaluation_identit
 from .source_health import build_data_source_health, health_failed_rows, write_data_source_health
 from .strategy_health import strategy_health_allows_paper, write_strategy_health
 from .stress import run_cost_stress
+from .small_capital_readiness import write_small_capital_live_readiness
 from .trading_day_status import write_trading_day_status
 from .validation import dependency_status, optional_dependency_status, validate_config, validate_market_data
 from .validation import complete_market_dates, filter_complete_market_data
@@ -157,6 +158,7 @@ def main(argv: list[str] | None = None) -> None:
     sub.add_parser("backtest", help="Run daily multi-factor backtest")
     sub.add_parser("history-validate", help="Validate a completed research-only historical backfill with fixed strategy parameters")
     sub.add_parser("capital-sensitivity", help="Rerun isolated lot-aware backtests across configured capital levels")
+    sub.add_parser("small-capital-readiness", help="Audit whether a capped small-capital strategy may enter forward-only observation")
 
     paper = sub.add_parser("paper", help="Generate paper-trading orders from latest cached data")
     paper.add_argument("--date", help="Signal date, defaults to latest cached trading date")
@@ -489,6 +491,8 @@ def run_command(args: argparse.Namespace, config: dict) -> None:
         print_paths(run_extended_history_validation(config).values())
     elif args.command == "capital-sensitivity":
         print_paths(run_capital_sensitivity(config).values())
+    elif args.command == "small-capital-readiness":
+        print(write_small_capital_live_readiness(config).resolve())
     elif args.command == "metadata":
         store = DataStore.from_config(config)
         if args.workers:
@@ -2804,7 +2808,8 @@ def remediation_next_action(frame: pd.DataFrame) -> str:
 
 def run_workflow(config: dict, skip_stress: bool = False) -> dict[str, Path]:
     paths: dict[str, Path] = {}
-    total_stages = 9 if skip_stress else 10
+    guard_enabled = bool(config.get("small_capital_live_guard", {}).get("enabled", False))
+    total_stages = (9 if skip_stress else 10) + int(guard_enabled)
     stage = 0
 
     def progress(label: str) -> None:
@@ -2828,6 +2833,9 @@ def run_workflow(config: dict, skip_stress: bool = False) -> dict[str, Path]:
         paths["cost_stress.csv"] = write_cost_stress(config)
     progress("capital sensitivity")
     paths.update(ensure_capital_sensitivity_current(config))
+    if guard_enabled:
+        progress("small-capital live readiness")
+        paths["small_capital_live_readiness.csv"] = write_small_capital_live_readiness(config)
     progress("practical readiness")
     paths["practical_readiness.csv"] = write_practical_readiness(config)
     progress("strategy health")

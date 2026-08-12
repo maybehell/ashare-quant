@@ -5,6 +5,60 @@ added directly below this introduction, newest first. It records verified facts;
 it is not a release-marketing document and does not replace generated audit
 artifacts.
 
+## 2026-08-12 - Gate small-capital forward preregistration
+
+**Objective**
+
+Move the capped CNY 100,000 research family toward controlled operation by making
+its research-to-forward admission criteria explicit and fail closed.
+
+**Changes**
+
+- Added `small_capital_readiness.py` and the `small-capital-readiness` CLI command
+  to audit capital fidelity, current identities, drawdown, annual consistency,
+  fixed-parameter walk-forward evidence, and cost-path stability.
+- Added symmetric total-return cost-path sensitivity, so a large favorable change
+  under higher costs fails instead of being misreported as robustness.
+- Integrated the audit into the research workflow and candidate preregistration;
+  enabled small-capital configurations cannot bypass failed evidence by changing
+  experiment status.
+- Added focused positive and fail-closed tests plus ADR 0017, architecture, and
+  operating-document updates.
+
+**Architecture and safety**
+
+- The new artifact is research admission evidence only. A complete pass allows
+  forward-only preregistration, not activation, orders, live-ledger initialization,
+  or broker submission.
+- The current configuration remains `structural_backtest_only`; `auto_live.enabled`
+  and `allow_broker_submit` remain false, and `emergency_stop` remains true.
+- No broker adapter, account state, active strategy, candidate manifest, order,
+  or protected live artifact is created or modified by this command.
+
+**Verification**
+
+- `python -m pytest tests/test_small_capital_readiness.py tests/test_candidate.py tests/test_capital_sensitivity.py -q`:
+  `34 passed in 4.20s`.
+- `python -m ashare_quant --config configs/small_capital_100k.yaml small-capital-readiness`:
+  generated a current audit; capital boundary, isolation, backtest identity,
+  capital fidelity, cost identity, and high-cost excess passed.
+- The current admission result is blocked by `32.86%` maximum drawdown, `50%`
+  positive annual excess ratio, `-11.43%` worst annual excess, `66.67%`
+  positive walk-forward ratio, `-10.24%` worst fold excess, and `3.79` percentage
+  points of symmetric cost-path deviation.
+- Focused suite including documentation governance: `37 passed in 4.15s`.
+- Full regression: `1122 passed, 39 subtests passed in 158.09s`.
+- Final safety audit confirmed research-only status, no active execution strategy,
+  no live ledger, candidate, generic/RPA/live/auto order file, broker submission
+  disabled, and emergency stop active.
+
+**Remaining work**
+
+- Redesign the small-capital strategy as a new research version without relaxing
+  these thresholds merely to pass, then rerun the complete fixed evidence set.
+- Only after admission passes may a new immutable candidate begin its own untuned
+  forward observation; independent live-readiness and broker gates still apply.
+
 ## 2026-08-12 - Add a hard-capped CNY 100,000 strategy study
 
 **Objective**

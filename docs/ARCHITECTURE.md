@@ -165,7 +165,7 @@ Owners: `universe.py`, `factors.py`, `forward_factors.py`, `portfolio.py`,
 `industry_risk.py`, `backtest.py`, `walkforward.py`, `research.py`,
 `stress.py`, `factor_robustness.py`, `selection_bias.py`,
 `statistical_validation.py`, `capital_aware.py`, `capital_budget.py`,
-`capital_sensitivity.py`, and
+`capital_sensitivity.py`, `small_capital_readiness.py`, and
 `history_validation.py`.
 
 Responsibilities:
@@ -182,6 +182,10 @@ Rules:
 - An opt-in research capital budget fails before execution when initial cash or
   any configured sensitivity level exceeds its hard ceiling. It does not
   retroactively mutate frozen candidate evidence.
+- An opt-in small-capital admission gate binds capital fidelity, current market
+  identity, drawdown, annual consistency, fixed-parameter walk-forward, and
+  symmetric cost-path stability before forward-only candidate preregistration.
+  Passing this gate can start observation only and grants no execution authority.
 - Parameter selection and final evaluation evidence are distinguished.
 - Every formal result binds configuration, input data, benchmark, and code-level
   assumptions through manifests or hashes.
@@ -211,6 +215,9 @@ Responsibilities:
 Rules:
 
 - Backtest rank alone never activates a strategy.
+- Candidate preregistration invokes the small-capital admission assertion when
+  that policy is enabled; changing experiment status cannot bypass failed
+  research evidence.
 - Historical reruns cannot increase forward-observation days.
 - Candidate changes create a new identity and restart applicable evidence.
 - A recorded early or terminal forward failure permanently quarantines the matching
