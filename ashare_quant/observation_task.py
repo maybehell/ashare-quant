@@ -129,6 +129,10 @@ def build_observation_task_status(
     daemon_evidence = bool(daemon_status or daemon_lock)
     daemon_mode = str(daemon_status.get("mode", daemon_lock.get("mode", "")) or "")
     daemon_pid = int(_as_float(daemon_status.get("pid", daemon_lock.get("pid"))) or 0)
+    daemon_state = daemon_status.get("state") if isinstance(daemon_status.get("state"), dict) else {}
+    daemon_child_pid = int(_as_float(daemon_state.get("child_pid")) or 0)
+    daemon_child_alive = daemon_child_pid > 0 and pid_alive(daemon_child_pid)
+    daemon_claims_running = str(daemon_status.get("status", "")).lower() == "running"
     daemon_generated = _timestamp(daemon_status.get("generated_at"))
     daemon_age_minutes = (
         (current - daemon_generated).total_seconds() / 60
@@ -149,7 +153,9 @@ def build_observation_task_status(
         and daemon_fresh
         and str(daemon_status.get("status", "")).lower()
         in {"waiting", "running", "completed", "retry_wait"}
+        and (not daemon_claims_running or daemon_child_alive)
     )
+    daemon_execution_running = daemon_ready and daemon_claims_running
 
     lock_invalid = bool(lock.get("invalid"))
     lock_started = _timestamp(lock.get("started_at"))
@@ -166,7 +172,8 @@ def build_observation_task_status(
     completion_ok = str(latest.get("status", "")).lower() == "completed" and exit_code == 0
     fresh = completion_ok and age_hours is not None and age_hours <= max_age_hours
 
-    if running:
+    task_running = running or daemon_execution_running
+    if task_running:
         summary_status = "running"
         message = "observation_in_progress"
     elif lock:
@@ -194,10 +201,20 @@ def build_observation_task_status(
                 "status": summary_status,
                 "required": required,
                 "mode": "observation_only_daemon" if daemon_ready and not running else mode or "observation_only",
-                "started_at": lock.get("started_at", "") if running else latest.get("started_at", ""),
+                "started_at": (
+                    lock.get("started_at", "")
+                    if running
+                    else daemon_state.get("child_started_at", "")
+                    if daemon_execution_running
+                    else latest.get("started_at", "")
+                ),
                 "finished_at": latest.get("finished_at", ""),
                 "age_hours": None if age_hours is None else round(max(age_hours, 0.0), 3),
-                "elapsed_seconds": latest.get("elapsed_seconds", ""),
+                "elapsed_seconds": (
+                    daemon_state.get("elapsed_seconds", "")
+                    if daemon_execution_running
+                    else latest.get("elapsed_seconds", "")
+                ),
                 "exit_code": latest.get("exit_code", ""),
                 "message": message,
                 "daemon_status": str(daemon_status.get("status", "") or "not_configured"),
@@ -210,8 +227,8 @@ def build_observation_task_status(
 
     no_evidence_ok = not required and not latest and not lock
     mode_ok = mode in {"", "observation_only"} and (not daemon_evidence or daemon_mode == "observation_only_daemon")
-    completion_passed = running or completion_ok or no_evidence_ok
-    freshness_passed = running or fresh or no_evidence_ok
+    completion_passed = task_running or completion_ok or no_evidence_ok
+    freshness_passed = task_running or fresh or no_evidence_ok
     lock_passed = not lock or running
     rows = [
         {
@@ -251,7 +268,9 @@ def build_observation_task_status(
             "passed": not daemon_evidence or daemon_ready,
             "value": "not_configured" if not daemon_evidence else (
                 f"status={daemon_status.get('status', 'missing')};pid={daemon_pid};"
-                f"alive={daemon_alive};age_minutes={'' if daemon_age_minutes is None else round(max(daemon_age_minutes, 0.0), 3)}"
+                f"alive={daemon_alive};child_pid={daemon_child_pid or ''};"
+                f"child_alive={daemon_child_alive if daemon_claims_running else ''};"
+                f"age_minutes={'' if daemon_age_minutes is None else round(max(daemon_age_minutes, 0.0), 3)}"
             ),
             "threshold": f"live observation_only_daemon heartbeat <= {daemon_heartbeat_limit:g} minutes",
             "severity": "warning" if daemon_evidence and not daemon_ready else "info",

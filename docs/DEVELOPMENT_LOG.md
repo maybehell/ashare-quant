@@ -6,6 +6,69 @@ it is not a release-marketing document and does not replace generated audit
 artifacts.
 
 
+## 2026-08-12 - Install unattended read-only observation and bind running status to its child
+
+**Objective**
+
+Make forward evidence and broker read-only refresh run locally without AI
+operation, while keeping strategy execution halted and broker submission off.
+
+**Changes**
+
+- Installed current-user Startup entry
+  `AshareQuantDailyObservation.cmd` for weekday 18:30 observation with three
+  bounded attempts, a two-hour child timeout, email alerting, and broker
+  read-only refresh.
+- Started and verified the hidden observation-only supervisor and daemon. The
+  live process chain was supervisor PID 23148, daemon PID 10608, daily runner PID
+  17136, and `aq forward-daily --refresh --quiet` PID 13916.
+- Changed observation status aggregation so daemon `running` counts as an active
+  task only when the recorded child PID is alive. A dead child now fails the
+  daemon audit instead of appearing scheduled or healthy.
+- Separated the runner's owned status/log directory from the global market-data
+  coordination lock. The daemon now passes `outputs_live` explicitly while the
+  shared `outputs/daily_observation.lock.json` continues to serialize cache work.
+- Added a local forward-candidate identity preflight before any candidate data
+  store or network access. Invalid manifests, hashes, and freeze boundaries now
+  fail immediately instead of refreshing evidence that cannot be inherited.
+- Made history-backfill `DryRun` deterministic by bypassing observation-window
+  deferral only in dry-run mode. Real backfill still yields to observation locks
+  and quiet periods.
+
+**Architecture and safety**
+
+- This is orchestration and monitoring work. It does not create paper or live
+  orders, initialize a live ledger, activate a strategy, or enable submission.
+- Real status verification showed the observation task as `running`, all five
+  observation audits passing, and the overall operator status still `blocked`
+  by strategy and stale broker evidence.
+- The first unattended run fetched two missing symbols and completed the
+  forward refresh, then failed closed because all three configured candidate
+  hashes no longer matched preregistration. Broker read-only refresh separately
+  failed because Huatai was not authenticated on the funds/positions page. The
+  critical email alert was delivered.
+- After preflight hardening, the same invalid candidate set failed in 0.727
+  seconds before market access. The old supervisor stopped cleanly and the
+  corrected supervisor restarted as PID 27064 with its prior retry state intact.
+- Automatic live emergency stop remains active; broker and service submission
+  remain disabled.
+
+**Verification**
+
+- Observation/local-operator focused regression: 44 passed; expanded scheduler,
+  output-ownership, history, and local-operator regression: 72 passed.
+- Forward preflight and full CLI regression: 104 passed.
+- History daemon regression: 9 passed.
+- An intermediate full regression exposed the live-lock-dependent history dry
+  run and otherwise passed 1,156 tests; after all CLI and scheduler changes, the
+  final full regression passed 1,162 tests and 39 subtests in 318.14 seconds.
+
+**Remaining work**
+
+- Remove or replace the three stale candidate registrations only through a new
+  preregistered evidence cycle; do not mutate their old manifests. Refresh the
+  Huatai read-only snapshot after login. Strategy activation remains blocked
+  until independent forward and point-in-time evidence passes.
 ## 2026-08-12 - Reject the preregistered concentrated history test
 
 **Objective**

@@ -243,6 +243,12 @@ class CliWorkflowTests(unittest.TestCase):
         with (
             patch("ashare_quant.cli.forward_candidate_cache_isolation", return_value=(True, "isolated")),
             patch("ashare_quant.cli.load_config", return_value=candidate_config),
+            patch(
+                "ashare_quant.cli.load_candidate_manifest",
+                return_value={"freeze_mode": "forward_only_preregistration"},
+            ),
+            patch("ashare_quant.cli.matching_candidate_id", return_value="candidate-id"),
+            patch("ashare_quant.cli.candidate_freeze_boundary_evidence", return_value=(True, "", "")),
             patch("ashare_quant.cli.DataStore.from_config", return_value=store),
             patch("ashare_quant.cli.fetch_akshare", side_effect=fake_fetch),
             patch("ashare_quant.cli.run_forward_only_candidate_observations", side_effect=fake_observe),

@@ -117,9 +117,10 @@ class ObservationTaskTests(unittest.TestCase):
             daemon_status=daemon_status,
             daemon_lock={"pid": 456, "mode": "observation_only_daemon"},
             now=NOW,
-            pid_alive=lambda pid: pid == 456,
+            pid_alive=lambda pid: pid in {456, 789},
         )
 
+        self.assertEqual(summary.loc[0, "status"], "running")
         self.assertEqual(summary.loc[0, "daemon_status"], "running")
         self.assertTrue(bool(audit.set_index("check").loc["observation_daemon_ready", "passed"]))
     def test_stale_daemon_heartbeat_fails_daemon_audit(self):

@@ -263,7 +263,7 @@ try {
             $sourceResumeAt = $null
             continue
         }
-        if ((Test-Path -LiteralPath $observationLock) -or (Test-QuietWindow $now)) {
+        if (-not $DryRun -and ((Test-Path -LiteralPath $observationLock) -or (Test-QuietWindow $now))) {
             $nextRun = $now.AddMinutes($IntervalMinutes)
             Write-Status "deferred" "Daily observation window is active; research backfill yielded." $progress $null $nextRun
             if ($RunOnce) { exit 0 }

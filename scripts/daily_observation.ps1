@@ -1,6 +1,7 @@
 param(
     [string]$Config = "configs/default.yaml",
     [string]$AlertConfig = "configs/huatai_desktop_canary.yaml",
+    [string]$OutputDir = "outputs",
     [int]$MaxSymbols = 300,
     [double]$MaxRuntimeHours = 1,
     [switch]$NoMetadata,
@@ -13,8 +14,13 @@ param(
 $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $aqScript = Join-Path $PSScriptRoot "aq.ps1"
-$outputDir = Join-Path $projectRoot "outputs"
-$lockPath = Join-Path $outputDir "daily_observation.lock.json"
+$coordinationDir = Join-Path $projectRoot "outputs"
+$outputDir = if ([IO.Path]::IsPathRooted($OutputDir)) {
+    [IO.Path]::GetFullPath($OutputDir)
+} else {
+    [IO.Path]::GetFullPath((Join-Path $projectRoot $OutputDir))
+}
+$lockPath = Join-Path $coordinationDir "daily_observation.lock.json"
 $statusPath = Join-Path $outputDir "daily_observation_status.csv"
 $deliveryStatusPath = Join-Path $outputDir "daily_observation_delivery_status.csv"
 $logPath = Join-Path $outputDir "daily_observation.log"
@@ -44,6 +50,7 @@ $resolvedAlertConfig = if ([IO.Path]::IsPathRooted($AlertConfig)) {
 if (-not (Test-Path -LiteralPath $resolvedAlertConfig)) {
     throw "Missing alert config: $resolvedAlertConfig"
 }
+New-Item -ItemType Directory -Path $coordinationDir -Force | Out-Null
 New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
 
 function Publish-StaleObservationLock {

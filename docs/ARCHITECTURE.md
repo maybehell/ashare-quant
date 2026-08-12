@@ -69,6 +69,13 @@ Rules:
 - Required unattended observation and research backfill must have a fresh status
   bound to the current script plus a verified current-user Startup entry; stale
   status files are not liveness evidence.
+- An observation daemon that reports `running` is accepted as active work only
+  when its recorded child process is also alive. A live daemon with a missing or
+  dead child fails closed instead of being presented as a scheduled or healthy
+  observation run.
+- Observation status, logs, and delivery evidence are written to the output
+  directory owned by the configured daemon. The shared default-output lock is a
+  separate market-cache coordination artifact and does not own task status.
 
 ### 3.2 Configuration, data, and market infrastructure
 

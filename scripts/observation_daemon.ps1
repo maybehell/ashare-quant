@@ -255,6 +255,7 @@ try {
                     "-File", $runner,
                     "-Config", $resolvedConfig,
                     "-AlertConfig", $resolvedAlertConfig,
+                    "-OutputDir", $resolvedOutput,
                     "-MaxSymbols", $MaxSymbols,
                     "-MaxRuntimeHours", $MaxRuntimeHours
                 )

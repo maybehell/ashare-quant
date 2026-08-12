@@ -1610,6 +1610,36 @@ def run_forward_only_candidate_observations(
 
 
 
+def preflight_forward_candidate_configs(configured: list[object]) -> list[tuple[str, dict]]:
+    candidates: list[tuple[str, dict]] = []
+    errors: list[str] = []
+    for configured_path in configured:
+        path = str(configured_path)
+        try:
+            candidate_config = load_config(project_path(path))
+            validation = candidate_config.get("validation", {})
+            if not bool(validation.get("research_only", False)):
+                raise RuntimeError("not research_only")
+            if str(validation.get("experiment_status", "")) != "preregistered_forward_only":
+                raise RuntimeError("not preregistered_forward_only")
+            manifest = load_candidate_manifest(candidate_config)
+            if not manifest or manifest.get("freeze_mode") != "forward_only_preregistration":
+                raise RuntimeError("no valid preregistration manifest")
+            if not matching_candidate_id(candidate_config, manifest):
+                raise RuntimeError("strategy hash no longer matches preregistration")
+            boundary_ok, _, _ = candidate_freeze_boundary_evidence(manifest)
+            if not boundary_ok:
+                raise RuntimeError("unsafe freeze boundary")
+            candidates.append((path, candidate_config))
+        except Exception as exc:
+            errors.append(f"{path}: {type(exc).__name__}: {exc}")
+    if errors:
+        raise RuntimeError(
+            "Forward candidate preflight failed before market refresh: " + "; ".join(errors)
+        )
+    return candidates
+
+
 def run_forward_daily(config: dict, args: argparse.Namespace) -> dict[str, Path]:
     validation = config.get("validation", {}) if isinstance(config.get("validation"), dict) else {}
     configured = validation.get(
@@ -1624,13 +1654,8 @@ def run_forward_daily(config: dict, args: argparse.Namespace) -> dict[str, Path]
         cache_isolation_ok, cache_isolation_value = forward_candidate_cache_isolation(config, [str(value) for value in configured])
         if not cache_isolation_ok:
             raise RuntimeError(f"Forward candidate cache isolation failed: {cache_isolation_value}")
-        for idx, configured_path in enumerate(configured, start=1):
-            candidate_config = load_config(project_path(str(configured_path)))
-            candidate_validation = candidate_config.get("validation", {})
-            if not bool(candidate_validation.get("research_only", False)):
-                raise RuntimeError(f"Forward candidate {configured_path} is not research_only.")
-            if str(candidate_validation.get("experiment_status", "")) != "preregistered_forward_only":
-                raise RuntimeError(f"Forward candidate {configured_path} is not preregistered_forward_only.")
+        candidate_configs = preflight_forward_candidate_configs(configured)
+        for idx, (configured_path, candidate_config) in enumerate(candidate_configs, start=1):
             candidate_config.setdefault("data", {})["force_cached_universe"] = True
             candidate_config["data"]["enrich_metadata"] = False
             store = DataStore.from_config(candidate_config)
