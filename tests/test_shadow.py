@@ -5,6 +5,8 @@ from uuid import uuid4
 
 import pandas as pd
 
+from ashare_quant.audit import signal_identity_frames_equal
+
 from ashare_quant.shadow import archive_shadow_outputs, build_continuous_shadow_portfolios, build_shadow_component_attribution, build_shadow_forward_audit, exclude_pre_freeze_candidate_evidence, write_shadow_component_outputs
 
 
@@ -354,6 +356,25 @@ class ShadowAuditTests(unittest.TestCase):
                 "shadow_archive/20260101_candidate-b_signal.csv",
                 second_paths,
             )
+
+    def test_empty_signal_identity_is_stable_across_csv_dtype_inference(self):
+        columns = ["signal_date", "execution_date", "symbol", "target_weight"]
+        generated = pd.DataFrame({
+            "signal_date": pd.Series(dtype=object),
+            "execution_date": pd.Series(dtype=object),
+            "symbol": pd.Series(dtype=object),
+            "target_weight": pd.Series(dtype=float),
+        })
+        csv_loaded = pd.DataFrame({
+            "signal_date": pd.Series(dtype=object),
+            "execution_date": pd.Series(dtype=object),
+            "symbol": pd.Series(dtype=str),
+            "target_weight": pd.Series(dtype=object),
+        })
+
+        self.assertEqual(list(generated.columns), columns)
+        self.assertEqual(list(csv_loaded.columns), columns)
+        self.assertTrue(signal_identity_frames_equal(generated, csv_loaded))
 
     def test_shadow_audit_deduplicates_same_evidence_identity(self):
         temp_root = Path.cwd() / "test_outputs" / "temporary"

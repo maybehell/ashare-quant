@@ -195,18 +195,18 @@ def signal_identity_frame(frame: pd.DataFrame) -> pd.DataFrame:
         values = frame[column] if column in frame else pd.Series("", index=frame.index)
         normalized[column] = values.map(
             lambda value: "" if pd.isna(value) else str(value)
-        )
+        ).astype(object)
     symbols = frame["symbol"] if "symbol" in frame else pd.Series("", index=frame.index)
     normalized["symbol"] = symbols.map(
         lambda value: "" if pd.isna(value) else str(value).zfill(6)
-    )
+    ).astype(object)
     weights = (
         frame["target_weight"]
         if "target_weight" in frame
         else pd.Series(0.0, index=frame.index)
     )
     normalized["target_weight"] = (
-        pd.to_numeric(weights, errors="coerce").fillna(0.0).round(12)
+        pd.to_numeric(weights, errors="coerce").fillna(0.0).astype(float).round(12)
     )
     return normalized.sort_values(columns[:3]).reset_index(drop=True)
 

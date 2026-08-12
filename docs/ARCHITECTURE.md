@@ -167,6 +167,11 @@ Rules:
   retained across increments, newly entering symbols are fetched before the
   scope can pass, and exiting symbols are removed from that scope. Paper and
   shadow signal generation fail closed when the committed scope is incomplete.
+  A history-stage empty increment for a retired index member is accepted only
+  when the symbol is absent from both the current stock catalog and latest
+  membership snapshot, remains present in historical membership, and has both
+  retained prices and bound source provenance. Every other fetch failure remains
+  an unexplained failure and blocks signal generation.
 - Data-acquisition scheduling and resumability knobs are operational identity,
   not strategy identity. They are excluded from the backtest strategy hash;
   their actual data effects remain bound by market-file and run-manifest hashes.

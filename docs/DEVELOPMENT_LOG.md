@@ -6,6 +6,80 @@ it is not a release-marketing document and does not replace generated audit
 artifacts.
 
 
+## 2026-08-12 - Route and observe the frozen defensive small-capital candidate
+
+**Objective**
+
+Replace the invalid unattended candidate registry with the independently frozen
+CNY 100,000 defensive-trend candidate and begin its forward-only observation
+without creating executable orders or inheriting historical authority.
+
+**Changes**
+
+- Registered only
+  `configs/hs300_small_capital_defensive_trend_v1_forward.yaml` in the default
+  forward-observation route. Older candidate files and evidence remain untouched
+  for audit but are no longer scheduled.
+- Copied the complete predecessor cache into the candidate's isolated namespace
+  after commit `4874061`, then preregistered and sealed candidate
+  `d55d124b5800e123`. Its fixed strategy hash remains
+  `1af970df4011e6b8bc0bce601c813b42d8c58105ae8ab587a3f1f0a5ffcaadd9`;
+  freeze, complete-market, raw-price, known-data, and benchmark ends are all
+  2026-08-12.
+- Preserved frozen input evidence for 5,555 stocks, 1,320,067 prices, 65,394
+  fundamentals, 874 benchmark rows, and 13,200 membership rows. The manifest
+  records `optimized_on_current_cache_at_freeze=false`,
+  `promotion_eligible_at_freeze=false`, and
+  `historical_selection_evidence_allowed=false`.
+- Distinguished fully evidenced retired-member history increments from
+  unexplained fetch failures. Acceptance requires a unique history-stage
+  failure, retained prices, bound provenance, historical membership, and absence
+  from both the current stock catalog and latest membership snapshot.
+- Added ADR 0025 and updated the architecture data-trust rule.
+
+**Architecture and safety**
+
+- The real candidate cache contains two accepted retired-history failures:
+  600837 has prices through 2025-02-05 and 601989 through 2025-08-12; both are
+  historical CSI 300 members, absent from the current stock catalog and latest
+  membership snapshot, and retain bound BaoStock provenance. No general failure
+  threshold was relaxed.
+- Cached `forward-daily` completed with no paper or broker orders. The candidate
+  is `waiting_for_post_freeze_market_data`, has 0/60 observed trading days, one
+  pending 2026-08-12 signal for earliest simulated execution on 2026-08-13, and
+  requires that day's close before its first attribution.
+- Deployment remains blocked: `strategy_ready=false`,
+  `ready_to_request_canary=false`, and the execution strategy identity does not
+  match the research candidate. Emergency stop is true; broker and service
+  submission are false.
+- `data/huatai_live_state.sqlite3`, `data/orders.csv`, and
+  `data/active_execution_strategy.json` remain absent.
+
+**Verification**
+
+- Candidate identity/preflight/deployment focused tests: 68 passed.
+- Data-scope, signal, membership, CLI, and strategy-governance expanded
+  regression: 255 passed.
+- An initial full regression passed 1,173 tests and 39 subtests. After fixing
+  empty-signal CSV dtype idempotency, the final full regression passed 1,174
+  tests and 39 subtests in 166.68 seconds.
+- Real cached `forward-daily`: completed without paper or broker orders;
+  immutable candidate observed and deployment gate regenerated.
+- Same-day immutable shadow rerun: completed without conflict or evidence
+  replacement after normalizing signal identity dtypes.
+- Full observation-only runner: Huatai account snapshot and buy/sell form
+  readback passed with `submit_invoked=false`; orders, trades, and cancels were
+  empty and verified. The daemon recovered today as `completed` with exit code 0.
+- `git diff --check`: passed.
+
+**Remaining work**
+
+- Accumulate 60 genuinely post-freeze trading sessions without changing this
+  fingerprint. Do not interpret the pending freeze-date signal or historical
+  cache as forward performance.
+- Refresh broker read-only evidence separately when needed. Live ledger
+  initialization, Canary submission, and broker submission remain blocked.
+
 ## 2026-08-12 - Fix the next small-capital forward hypothesis before evaluation
 
 **Objective**

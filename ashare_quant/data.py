@@ -269,6 +269,56 @@ def normalize_symbol(value: object) -> str:
     return symbol
 
 
+def _accepted_retired_history_failure_symbols(
+    store: DataStore,
+    failures: pd.DataFrame,
+    prices: pd.DataFrame,
+    provenance: pd.DataFrame,
+) -> set[str]:
+    required_failure_columns = {"symbol", "stage"}
+    if failures.empty or not required_failure_columns.issubset(failures.columns):
+        return set()
+    failure_symbols = {normalize_symbol(value) for value in failures["symbol"]}
+    failure_symbols.discard("")
+    if len(failure_symbols) != len(failures):
+        return set()
+    if set(failures["stage"].astype(str).str.strip().str.lower()) != {"history"}:
+        return set()
+    try:
+        stocks = store.read_frame("stocks", required=False)
+        membership = store.read_frame("index_membership", required=False)
+    except (AttributeError, FileNotFoundError, OSError, ValueError, TypeError):
+        return set()
+    if (
+        stocks.empty
+        or "symbol" not in stocks
+        or membership.empty
+        or not {"snapshot_date", "symbol"}.issubset(membership.columns)
+        or prices.empty
+        or "symbol" not in prices
+        or "symbol" not in provenance
+    ):
+        return set()
+    current_stock_symbols = {normalize_symbol(value) for value in stocks["symbol"]}
+    membership = membership.copy()
+    membership["snapshot_date"] = pd.to_datetime(
+        membership["snapshot_date"], errors="coerce"
+    )
+    membership = membership.dropna(subset=["snapshot_date"])
+    if membership.empty:
+        return set()
+    membership["symbol"] = membership["symbol"].map(normalize_symbol)
+    historical_member_symbols = set(membership["symbol"])
+    latest_snapshot = membership["snapshot_date"].max()
+    latest_member_symbols = set(
+        membership.loc[membership["snapshot_date"] == latest_snapshot, "symbol"]
+    )
+    priced_symbols = {normalize_symbol(value) for value in prices["symbol"]}
+    bound_symbols = {normalize_symbol(value) for value in provenance["symbol"]}
+    accepted = failure_symbols & historical_member_symbols & priced_symbols & bound_symbols
+    return accepted - current_stock_symbols - latest_member_symbols
+
+
 def committed_fetch_market_scope(
     store: DataStore,
     prices: pd.DataFrame,
@@ -293,16 +343,29 @@ def committed_fetch_market_scope(
     stage = str(row.get("stage", "") or "").strip().lower()
     symbols = {normalize_symbol(value) for value in provenance["symbol"]}
     symbols.discard("")
+    accepted_retired_failures: set[str] = set()
+    if failed:
+        try:
+            failures = store.read_frame("fetch_failures", required=False)
+        except (AttributeError, FileNotFoundError, OSError, ValueError, TypeError):
+            failures = pd.DataFrame()
+        if isinstance(failures, pd.DataFrame) and len(failures) == failed:
+            accepted_retired_failures = _accepted_retired_history_failure_symbols(
+                store, failures, prices, provenance
+            )
+    unexplained_failures = failed - len(accepted_retired_failures)
     passed = bool(
         stage == "complete"
         and requested > 0
         and fetched == requested
-        and failed == 0
+        and unexplained_failures == 0
         and len(symbols) == fetched
     )
     value = (
         f"stage={stage or 'missing'};requested={requested};fetched={fetched};"
-        f"failed={failed};bound_symbols={len(symbols)}"
+        f"failed={failed};accepted_retired_history_failures="
+        f"{len(accepted_retired_failures)};unexplained_failures={unexplained_failures};"
+        f"bound_symbols={len(symbols)}"
     )
     if not passed:
         return prices.copy(), False, value

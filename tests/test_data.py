@@ -63,6 +63,73 @@ from ashare_quant.data import (
 
 
 class CommittedFetchMarketScopeTests(unittest.TestCase):
+    def test_accepts_bound_history_failures_only_for_retired_index_members(self):
+        class Store:
+            frames = {
+                "fetch_summary": pd.DataFrame([{
+                    "requested_symbols": 2,
+                    "fetched_symbols": 2,
+                    "failed_items": 1,
+                    "stage": "complete",
+                }]),
+                "fetch_history_provenance": pd.DataFrame(
+                    [{"symbol": "600000"}, {"symbol": "600837"}]
+                ),
+                "fetch_failures": pd.DataFrame(
+                    [{"symbol": "600837", "stage": "history", "error": "empty"}]
+                ),
+                "stocks": pd.DataFrame([{"symbol": "600000"}]),
+                "index_membership": pd.DataFrame([
+                    {"snapshot_date": "2025-02-03", "symbol": "600837"},
+                    {"snapshot_date": "2026-08-12", "symbol": "600000"},
+                ]),
+            }
+
+            def read_frame(self, name, required=True):
+                return self.frames.get(name, pd.DataFrame())
+
+        prices = pd.DataFrame([
+            {"symbol": "600000", "date": "2026-08-12", "close": 10},
+            {"symbol": "600837", "date": "2025-02-05", "close": 11},
+        ])
+        scoped, passed, value = committed_fetch_market_scope(Store(), prices)
+
+        self.assertTrue(passed)
+        self.assertEqual(set(scoped["symbol"]), {"600000", "600837"})
+        self.assertIn("accepted_retired_history_failures=1", value)
+        self.assertIn("unexplained_failures=0", value)
+
+    def test_rejects_history_failure_for_a_current_index_member(self):
+        class Store:
+            frames = {
+                "fetch_summary": pd.DataFrame([{
+                    "requested_symbols": 1,
+                    "fetched_symbols": 1,
+                    "failed_items": 1,
+                    "stage": "complete",
+                }]),
+                "fetch_history_provenance": pd.DataFrame([{"symbol": "600000"}]),
+                "fetch_failures": pd.DataFrame(
+                    [{"symbol": "600000", "stage": "history", "error": "empty"}]
+                ),
+                "stocks": pd.DataFrame([{"symbol": "600000"}]),
+                "index_membership": pd.DataFrame(
+                    [{"snapshot_date": "2026-08-12", "symbol": "600000"}]
+                ),
+            }
+
+            def read_frame(self, name, required=True):
+                return self.frames.get(name, pd.DataFrame())
+
+        prices = pd.DataFrame(
+            [{"symbol": "600000", "date": "2026-08-11", "close": 10}]
+        )
+        _, passed, value = committed_fetch_market_scope(Store(), prices)
+
+        self.assertFalse(passed)
+        self.assertIn("accepted_retired_history_failures=0", value)
+        self.assertIn("unexplained_failures=1", value)
+
     def test_filters_retained_history_to_latest_committed_fetch_symbols(self):
         class Store:
             def read_frame(self, name):

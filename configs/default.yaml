@@ -103,9 +103,7 @@
       "configs/balanced_mlv_breadth_research.yaml"
     ],
     "forward_only_candidate_configs": [
-      "configs/breadth_guarded_metadata_v2_forward.yaml",
-      "configs/breadth_guarded_minimum_overlay_v2_forward.yaml",
-      "configs/hs300_point_in_time_core_v4_forward.yaml"
+      "configs/hs300_small_capital_defensive_trend_v1_forward.yaml"
     ],
     "forward_selection": {
       "min_common_trading_days": 60,

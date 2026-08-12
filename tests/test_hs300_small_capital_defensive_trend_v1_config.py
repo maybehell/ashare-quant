@@ -20,6 +20,14 @@ def test_forward_candidate_keeps_its_predeclared_strategy_identity():
     assert config["validation"]["experiment_status"] == "preregistered_forward_only"
 
 
+def test_default_forward_observation_routes_only_to_current_frozen_candidate():
+    default = load_config("configs/default.yaml")
+
+    assert default["validation"]["forward_only_candidate_configs"] == [
+        CONFIG_PATH.as_posix()
+    ]
+
+
 def test_forward_candidate_is_small_capital_implementable_and_fail_closed():
     config = load_config(CONFIG_PATH)
 
