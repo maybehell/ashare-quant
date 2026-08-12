@@ -1,0 +1,27 @@
+{
+  "extends": "small_capital_100k_v3.yaml",
+  "paths": {
+    "cache_dir": "data/cache_hs300_point_in_time_history_reconstruction",
+    "output_dir": "outputs_small_capital_100k_v4_complete_members",
+    "state_db": "data/state_small_capital_100k_v4_complete_members.sqlite3"
+  },
+  "validation": {
+    "research_only": true,
+    "apply_active_execution": false,
+    "optimized_on_current_cache": true,
+    "experiment_status": "rejected",
+    "experiment_reason": "Rejected after one fixed 395/395 historical-member replication: strategy lagged CSI 300, exceeded drawdown and cash-reject limits, and failed annual and walk-forward consistency gates."
+  },
+  "strategy": {
+    "name": "small_capital_100k_hs300_target_aware_v4_complete_members"
+  },
+  "data": {
+    "fetch_benchmark_membership_only": true,
+    "immutable_before_candidate_freeze": false
+  },
+  "auto_live": {
+    "enabled": false,
+    "allow_broker_submit": false,
+    "emergency_stop": true
+  }
+}

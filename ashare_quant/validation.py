@@ -41,6 +41,15 @@ def validate_config(config: dict[str, Any]) -> list[str]:
     if rebalance not in {"monthly", "quarterly"}:
         errors.append("backtest.rebalance must be monthly or quarterly")
 
+    trading = config.get("trading", {})
+    if isinstance(trading, dict) and "rebalance_execution_schema_version" in trading:
+        try:
+            execution_schema = int(trading["rebalance_execution_schema_version"])
+        except (TypeError, ValueError):
+            execution_schema = 0
+        if execution_schema != 2:
+            errors.append("trading.rebalance_execution_schema_version must be 2")
+
     if "strategy" in config:
         top_n = int(config["strategy"].get("top_n", 0))
         max_stock_weight = float(config["strategy"].get("max_stock_weight", 0))

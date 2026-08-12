@@ -71,3 +71,10 @@ def test_fetch_operations_do_not_change_strategy_hash_but_coverage_rules_do():
 
     assert backtest_config_sha256(base) == backtest_config_sha256(operational)
     assert backtest_config_sha256(base) != backtest_config_sha256(behavioral)
+
+
+def test_rebalance_execution_schema_version_invalidates_backtest_evidence():
+    legacy = {"trading": {"rebalance_execution_schema_version": 1, "lot_size": 100}}
+    current = {"trading": {"rebalance_execution_schema_version": 2, "lot_size": 100}}
+
+    assert backtest_config_sha256(legacy) != backtest_config_sha256(current)

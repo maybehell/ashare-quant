@@ -1,3 +1,65 @@
+# Development Log
+
+This is the chronological engineering record for the repository. New entries are
+added directly below this introduction, newest first. It records verified facts;
+it is not a release-marketing document and does not replace generated audit
+artifacts.
+
+## 2026-08-12 - Version rebalance execution and reject non-robust small-capital evidence
+
+**Objective**
+
+Correct board-lot rebalance semantics, bind the revision to backtest identity,
+and re-evaluate the strongest small-capital research result against both its
+original partial cache and the complete 395-member CSI 300 reconstruction.
+
+**Changes**
+
+- Rebalance generation now emits deterministic sells before buys, exits zero
+  targets exactly subject to T+1 sellability, and rounds nonzero-target partial
+  sells down to board lots.
+- Added `trading.rebalance_execution_schema_version=2` to the default backtest
+  identity and reject explicitly unsupported execution versions.
+- Extended small-capital admission with fail-closed order, rejection, and final
+  position evidence; residual odd lots must be zero and cash-constrained buy
+  rejects must not exceed 5%.
+- Added the fixed, research-only complete-member replication config and ADR 0020.
+  V2 and V4 are explicitly marked rejected; neither can authorize execution.
+
+**Evidence**
+
+- The existing isolated historical reconstruction was reused without mutation:
+  395 membership symbols all have prices, with 341,390 rows from 2023-01-03
+  through 2026-08-10; all point-in-time membership quality checks pass.
+- Execution-schema-v2 V2 rerun: total return 50.82926%, benchmark 22.16332%,
+  excess 28.66594%, maximum drawdown -30.72925%, 0 odd lots, and 1/102
+  cash-constrained buys. It still failed annual consistency: 2024 excess was
+  -13.18183%; fixed-parameter walk-forward positive ratio was 1/3, average
+  excess -0.81002%, and worst excess -8.52689%.
+- One fixed complete-member V4 replication: total return 11.16948%, benchmark
+  22.36078%, excess -11.19130%, maximum drawdown -31.20262%, 0 odd lots, and
+  8/89 cash-constrained buys. Positive annual excess ratio was 1/4; the worst
+  walk-forward fold was -8.82586%.
+- Small-capital admission blocked both candidates. Aggregate historical
+  outperformance alone did not override current-cache optimization, drawdown,
+  annual, walk-forward, cost-evidence, capital-fidelity, or execution gates.
+- Focused validation, rule, manifest, and readiness regression: 53 passed.
+- Full regression: 1144 passed and 39 subtests passed in 161.43 seconds.
+
+**Safety**
+
+- Work was limited to research backtests and evidence auditing. No strategy was
+  activated, no broker order was submitted, and no live ledger was initialized.
+- Broker submission remains disabled and these rejected candidates remain
+  ineligible for forward preregistration or execution.
+
+**Remaining work**
+
+- Do not tune V2 or V4 further on the same period. A next challenger must be
+  preregistered before independent future observation and retain the 200,000
+  yuan hard capital ceiling.
+- Refresh capital sensitivity and cost stress only for a future preregistered
+  challenger that first clears aggregate, annual, and walk-forward criteria.
 ## 2026-08-12 - Preserve benchmark targets through small-capital lot planning
 
 **Objective**
@@ -70,13 +132,6 @@ result.
 - A future small-capital challenger must be preregistered against independent
   data and evaluated once; no backtest result guarantees benchmark
   outperformance.
-# Development Log
-
-This is the chronological engineering record for the repository. New entries are
-added directly below this introduction, newest first. It records verified facts;
-it is not a release-marketing document and does not replace generated audit
-artifacts.
-
 ## 2026-08-12 - Stabilize lot planning and reject isolated v2
 
 **Objective**

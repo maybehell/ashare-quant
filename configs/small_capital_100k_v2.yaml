@@ -8,8 +8,8 @@
     "research_only": true,
     "apply_active_execution": false,
     "optimized_on_current_cache": true,
-    "experiment_status": "structural_backtest_only",
-    "experiment_reason": "Isolated v2 research revision using stable lot-planning assumptions and stronger exposure controls; not eligible for forward registration from this cache."
+    "experiment_status": "rejected",
+    "experiment_reason": "Rejected after execution-schema-v2 rerun: aggregate excess was positive, but maximum drawdown, annual consistency, and fixed-parameter walk-forward gates failed; current-cache optimization also blocks admission."
   },
   "strategy": {
     "name": "small_capital_100k_defensive_liquid_v2",

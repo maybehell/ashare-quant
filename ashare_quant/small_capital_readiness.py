@@ -32,6 +32,12 @@ def build_small_capital_live_readiness(config: dict[str, Any]) -> pd.DataFrame:
     annual = read_csv(output_dir / "annual_performance.csv")
     walk_forward = read_csv(output_dir / "walk_forward_summary.csv")
     manifest = manifest_values(read_csv(output_dir / "run_manifest.csv"))
+    orders_path = output_dir / "backtest_orders.csv"
+    rejects_path = output_dir / "rejected_orders.csv"
+    positions_path = output_dir / "positions.csv"
+    orders = read_csv(orders_path)
+    rejects = read_csv(rejects_path)
+    positions = read_csv(positions_path)
 
     rows: list[dict[str, object]] = []
     budget_issues = capital_budget_errors(config)
@@ -80,6 +86,51 @@ def build_small_capital_live_readiness(config: dict[str, Any]) -> pd.DataFrame:
         "backtest_evidence_current", bool(manifest_hash) and manifest_hash == current_hash,
         manifest_hash or "missing", current_hash,
         "The main backtest manifest must match current strategy and execution assumptions.",
+    ))
+
+    execution_evidence_present = (
+        orders_path.exists()
+        and rejects_path.exists()
+        and positions_path.exists()
+        and {"side"}.issubset(orders.columns)
+        and {"side", "reason"}.issubset(rejects.columns)
+        and {"quantity"}.issubset(positions.columns)
+    )
+    rows.append(audit_row(
+        "execution_fidelity_evidence_present", execution_evidence_present,
+        f"orders={orders_path.exists()};rejects={rejects_path.exists()};positions={positions_path.exists()}",
+        "current orders, rejects, and final positions artifacts with required columns",
+        "Execution fidelity cannot be inferred when order-level evidence is absent.",
+    ))
+
+    lot_size = max(1, int(number(config.get("trading", {}).get("lot_size", 100), 100)))
+    quantities = numeric_column(positions, "quantity").round().astype(int)
+    odd_lot_count = int(((quantities > 0) & (quantities % lot_size != 0)).sum())
+    max_odd_lots = int(number(guard.get("max_final_odd_lot_positions", 0), 0))
+    rows.append(audit_row(
+        "final_odd_lot_positions", execution_evidence_present and odd_lot_count <= max_odd_lots,
+        odd_lot_count, f"<={max_odd_lots}",
+        "Backtest-generated residual odd lots indicate a rebalance quantity defect.",
+    ))
+
+    order_sides = orders.get("side", pd.Series(index=orders.index, dtype=str))
+    buy_orders = int((order_sides.astype(str).str.lower() == "buy").sum())
+    reject_sides = rejects.get("side", pd.Series(index=rejects.index, dtype=str))
+    rejected_buys = rejects[reject_sides.astype(str).str.lower() == "buy"]
+    reject_reasons = rejected_buys.get(
+        "reason", pd.Series(index=rejected_buys.index, dtype=str)
+    )
+    cash_rejected_buys = int(
+        reject_reasons.astype(str).str.contains("insufficient_cash", case=False, na=False).sum()
+    )
+    cash_reject_ratio = cash_rejected_buys / buy_orders if buy_orders else 0.0
+    max_cash_reject_ratio = number(guard.get("max_cash_buy_reject_ratio", 0.05), 0.05)
+    rows.append(audit_row(
+        "cash_constrained_buy_reject_ratio",
+        execution_evidence_present and cash_reject_ratio <= max_cash_reject_ratio,
+        f"{cash_reject_ratio:.6f} ({cash_rejected_buys}/{buy_orders})",
+        f"<={max_cash_reject_ratio:.4f}",
+        "Frequent cash rejects mean target weights are not reliably executable at the intended capital.",
     ))
 
     sensitivity_current = not capital_sensitivity_needs_refresh(config)

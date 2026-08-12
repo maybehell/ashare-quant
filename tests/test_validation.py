@@ -17,6 +17,13 @@ from ashare_quant.validation import (
 
 
 class ValidationTests(unittest.TestCase):
+    def test_rejects_unsupported_rebalance_execution_schema(self):
+        config = {"trading": {"rebalance_execution_schema_version": 1}}
+
+        errors = validate_config(config)
+
+        self.assertIn("trading.rebalance_execution_schema_version must be 2", errors)
+
     def test_small_capital_budget_rejects_strategy_values_above_ceiling(self):
         config = {
             "capital_budget": {

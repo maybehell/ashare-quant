@@ -183,8 +183,10 @@ Rules:
   any configured sensitivity level exceeds its hard ceiling. It does not
   retroactively mutate frozen candidate evidence.
 - An opt-in small-capital admission gate binds capital fidelity, current market
-  identity, drawdown, annual consistency, fixed-parameter walk-forward, and
-  symmetric cost-path stability before forward-only candidate preregistration.
+  identity, drawdown, annual consistency, fixed-parameter walk-forward,
+  symmetric cost-path stability, and order-level execution fidelity before
+  forward-only candidate preregistration. It fails closed on missing order
+  artifacts, synthetic odd-lot residues, or excessive cash-constrained buys.
   Passing this gate can start observation only and grants no execution authority.
 - Capital-aware lot planning may use fixed conservative planning costs and
   downward-rounded planning equity, while actual fills retain scenario costs and
@@ -252,6 +254,7 @@ Responsibilities:
 - Generate deterministic paper orders from an authorized strategy epoch.
 - Apply A-share lot, T+1, price-limit, suspension, fee, and liquidity rules.
 - Preserve configured upstream portfolio targets through versioned board-lot planning; legacy planning schemas remain replayable.
+- Generate deterministic rebalance batches with risk-reducing sells before buys and exact zero-target exits, while preserving T+1 sellability.
 - Reconcile every financial state transition.
 
 Rules:

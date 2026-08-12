@@ -526,6 +526,7 @@
     }
   },
   "trading": {
+    "rebalance_execution_schema_version": 2,
     "lot_size": 100,
     "slippage_bps": 5,
     "max_volume_participation": 0.10,

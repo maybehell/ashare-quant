@@ -48,9 +48,11 @@ def config_for(root: Path) -> dict:
             "cost_stress_scenario": "high_cost",
             "min_high_cost_excess_return": 0.0,
             "max_cost_total_return_deviation": 0.02,
+            "max_final_odd_lot_positions": 0,
+            "max_cash_buy_reject_ratio": 0.05,
         },
         "strategy": {"name": "small-test", "top_n": 10},
-        "trading": {"slippage_bps": 5},
+        "trading": {"rebalance_execution_schema_version": 2, "lot_size": 100, "slippage_bps": 5},
         "universe": {"boards": ["main"]},
         "benchmark": {"symbol": "000300"},
         "risk_overlay": {"enabled": False},
@@ -90,6 +92,16 @@ def write_passing_evidence(config: dict) -> None:
         "positive_test_ratio": 0.80,
         "worst_test_excess_return": -0.02,
     }]).to_csv(root / "walk_forward_summary.csv", index=False)
+    pd.DataFrame([
+        {"symbol": "600000", "side": "sell", "quantity": 100},
+        {"symbol": "000001", "side": "buy", "quantity": 100},
+    ]).to_csv(root / "backtest_orders.csv", index=False)
+    pd.DataFrame(columns=["symbol", "side", "quantity", "reason"]).to_csv(
+        root / "rejected_orders.csv", index=False
+    )
+    pd.DataFrame([{"symbol": "000001", "quantity": 100}]).to_csv(
+        root / "positions.csv", index=False
+    )
     pd.DataFrame([
         {
             "scenario": "base",
@@ -167,3 +179,58 @@ def test_current_cache_optimization_blocks_preregistration(tmp_path):
             assert_small_capital_preregistration_ready(config)
 
     assert not bool(audit.loc["research_cache_optimization_absent", "passed"])
+
+
+def test_missing_execution_artifacts_fail_closed(tmp_path):
+    config = config_for(tmp_path)
+    write_passing_evidence(config)
+    (tmp_path / "backtest_orders.csv").unlink()
+
+    with patch(
+        "ashare_quant.small_capital_readiness.capital_sensitivity_needs_refresh",
+        return_value=False,
+    ):
+        audit = build_small_capital_live_readiness(config).set_index("check")
+
+    assert not bool(audit.loc["execution_fidelity_evidence_present", "passed"])
+    assert not bool(audit.loc["forward_preregistration_ready", "passed"])
+
+
+def test_odd_lot_residue_blocks_preregistration(tmp_path):
+    config = config_for(tmp_path)
+    write_passing_evidence(config)
+    pd.DataFrame([{"symbol": "000001", "quantity": 1}]).to_csv(
+        tmp_path / "positions.csv", index=False
+    )
+
+    with patch(
+        "ashare_quant.small_capital_readiness.capital_sensitivity_needs_refresh",
+        return_value=False,
+    ):
+        audit = build_small_capital_live_readiness(config).set_index("check")
+
+    assert not bool(audit.loc["final_odd_lot_positions", "passed"])
+
+
+def test_excessive_cash_rejects_block_preregistration(tmp_path):
+    config = config_for(tmp_path)
+    write_passing_evidence(config)
+    pd.DataFrame([
+        {"symbol": f"{index:06d}", "side": "buy", "quantity": 100}
+        for index in range(10)
+    ]).to_csv(tmp_path / "backtest_orders.csv", index=False)
+    pd.DataFrame([{
+        "symbol": "000001",
+        "side": "buy",
+        "quantity": 100,
+        "reason": "insufficient_cash_position_or_quantity",
+    }]).to_csv(tmp_path / "rejected_orders.csv", index=False)
+
+    with patch(
+        "ashare_quant.small_capital_readiness.capital_sensitivity_needs_refresh",
+        return_value=False,
+    ):
+        audit = build_small_capital_live_readiness(config).set_index("check")
+
+    assert audit.loc["cash_constrained_buy_reject_ratio", "value"] == "0.100000 (1/10)"
+    assert not bool(audit.loc["cash_constrained_buy_reject_ratio", "passed"])

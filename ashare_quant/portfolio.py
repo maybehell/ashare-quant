@@ -162,7 +162,8 @@ def generate_rebalance_orders(
     reserve = float(config["trading"]["reserve_cash_ratio"])
     investable = equity * (1 - reserve)
     symbols = set(target_weights.index.astype(str)) | set(portfolio.positions)
-    orders: list[Order] = []
+    sell_orders: list[Order] = []
+    buy_orders: list[Order] = []
     for symbol in sorted(symbols):
         price = close_prices.get(symbol)
         if not price or price <= 0:
@@ -173,10 +174,18 @@ def generate_rebalance_orders(
         diff_value = target_value - current_value
         qty = buy_quantity_for_value(diff_value, price, int(config["trading"]["lot_size"]))
         if qty > 0:
-            orders.append(Order(date=trade_date, symbol=symbol, side="buy", quantity=qty))
+            buy_orders.append(Order(date=trade_date, symbol=symbol, side="buy", quantity=qty))
         elif diff_value < -price:
             position = portfolio.positions.get(symbol, Position(symbol))
-            qty = min(current_qty, position.sellable_quantity, int(abs(diff_value) / price))
+            target_weight = float(target_weights.get(symbol, 0.0))
+            if target_weight <= 0:
+                qty = min(current_qty, position.sellable_quantity)
+            else:
+                tolerance = max(price * 1e-12, 1e-9)
+                target_qty = max(0, int((target_value + tolerance) / price))
+                desired_sell = max(0, current_qty - target_qty)
+                lot_size = int(config["trading"].get("lot_size", 100))
+                qty = min((desired_sell // lot_size) * lot_size, position.sellable_quantity)
             if qty > 0:
-                orders.append(Order(date=trade_date, symbol=symbol, side="sell", quantity=qty))
-    return orders
+                sell_orders.append(Order(date=trade_date, symbol=symbol, side="sell", quantity=qty))
+    return sell_orders + buy_orders
