@@ -29,10 +29,19 @@ class CapitalSensitivityTests(unittest.TestCase):
         }
 
         with patch("ashare_quant.capital_sensitivity.run_backtest") as backtest:
-            with self.assertRaisesRegex(ValueError, "above capital_budget.max_total_capital"):
+            with self.assertRaisesRegex(ValueError, "above effective maximum total capital"):
                 run_capital_sensitivity(config)
 
         backtest.assert_not_called()
+
+    def test_direct_variant_creation_cannot_exceed_system_ceiling(self):
+        config = {
+            "paths": {"output_dir": "outputs", "state_db": "data/state.sqlite3"},
+            "backtest": {"initial_cash": 100000},
+        }
+
+        with self.assertRaisesRegex(ValueError, "exceeds effective maximum total capital"):
+            capital_variant_config(config, 200001.0, Path("isolated"))
 
     def test_deployed_cash_ratio_excludes_pre_trade_warmup(self):
         equity = pd.DataFrame(
@@ -48,21 +57,20 @@ class CapitalSensitivityTests(unittest.TestCase):
     def test_variant_is_isolated_and_forces_safe_runtime(self):
         config = {
             "paths": {"output_dir": "outputs", "state_db": "data/state.sqlite3"},
-            "backtest": {"initial_cash": 1000000},
+            "backtest": {"initial_cash": 100000},
             "auto_live": {"enabled": True, "allow_broker_submit": True, "emergency_stop": False},
         }
 
-        variant = capital_variant_config(config, 300000.0, Path("isolated"))
+        variant = capital_variant_config(config, 200000.0, Path("isolated"))
 
-        self.assertEqual(variant["backtest"]["initial_cash"], 300000.0)
-        self.assertIn("cash_300000", variant["paths"]["output_dir"])
-        self.assertIn("cash_300000", variant["paths"]["state_db"])
+        self.assertEqual(variant["backtest"]["initial_cash"], 200000.0)
+        self.assertIn("cash_200000", variant["paths"]["output_dir"])
+        self.assertIn("cash_200000", variant["paths"]["state_db"])
         self.assertTrue(variant["runtime"]["skip_expensive_diagnostics"])
         self.assertFalse(variant["auto_live"]["enabled"])
         self.assertFalse(variant["auto_live"]["allow_broker_submit"])
         self.assertTrue(variant["auto_live"]["emergency_stop"])
         self.assertTrue(config["auto_live"]["enabled"])
-
     def test_completed_matching_variant_is_reusable_but_stale_hash_is_not(self):
         output = Path.cwd() / "test_outputs" / "capital_resume"
         config = {
@@ -177,10 +185,10 @@ class CapitalSensitivityTests(unittest.TestCase):
         output.mkdir(parents=True, exist_ok=True)
         config = {
             "paths": {"output_dir": str(output), "state_db": str(output / "main.sqlite3")},
-            "backtest": {"initial_cash": 1000000},
+            "backtest": {"initial_cash": 200000},
             "validation": {
                 "capital_sensitivity": {
-                    "cash_levels": [100000, 300000, 1000000],
+                    "cash_levels": [50000, 100000, 200000],
                     "max_abs_return_drag": 0.02,
                     "max_excess_cash_ratio_vs_reference": 0.06,
                     "min_final_positions": 20,
@@ -192,18 +200,16 @@ class CapitalSensitivityTests(unittest.TestCase):
             cash = int(variant["backtest"]["initial_cash"])
             run_dir = Path(variant["paths"]["output_dir"])
             run_dir.mkdir(parents=True, exist_ok=True)
-            returns = {100000: 0.08, 300000: 0.095, 1000000: 0.10}
-            cash_ratios = {100000: 0.25, 300000: 0.10, 1000000: 0.05}
-            position_counts = {100000: 10, 300000: 25, 1000000: 80}
+            returns = {50000: 0.08, 100000: 0.095, 200000: 0.10}
+            cash_ratios = {50000: 0.25, 100000: 0.10, 200000: 0.05}
+            position_counts = {50000: 10, 100000: 25, 200000: 40}
             frames = {
-                "performance_metrics.csv": pd.DataFrame(
-                    [
-                        {"metric": "total_return", "value": returns[cash]},
-                        {"metric": "excess_total_return", "value": returns[cash] - 0.04},
-                        {"metric": "max_drawdown", "value": -0.10},
-                        {"metric": "annualized_turnover", "value": 2.0},
-                    ]
-                ),
+                "performance_metrics.csv": pd.DataFrame([
+                    {"metric": "total_return", "value": returns[cash]},
+                    {"metric": "excess_total_return", "value": returns[cash] - 0.04},
+                    {"metric": "max_drawdown", "value": -0.10},
+                    {"metric": "annualized_turnover", "value": 2.0},
+                ]),
                 "equity_curve.csv": pd.DataFrame(
                     [{"cash": cash * cash_ratios[cash], "equity": cash, "fills": 1}]
                 ),
@@ -212,10 +218,10 @@ class CapitalSensitivityTests(unittest.TestCase):
                 "positions.csv": pd.DataFrame(
                     [{"symbol": f"{idx:06d}"} for idx in range(position_counts[cash])]
                 ),
-                "run_manifest.csv": pd.DataFrame(
-                    [{"item": key, "value": "same-data"} for key in
-                     ["stocks_sha256", "prices_sha256", "fundamentals_sha256", "benchmark_sha256"]]
-                ),
+                "run_manifest.csv": pd.DataFrame([
+                    {"item": key, "value": "same-data"} for key in
+                    ["stocks_sha256", "prices_sha256", "fundamentals_sha256", "benchmark_sha256"]
+                ]),
             }
             paths = {}
             for name, frame in frames.items():
@@ -224,17 +230,12 @@ class CapitalSensitivityTests(unittest.TestCase):
                 paths[name] = path
             return paths
 
-        main_manifest = pd.DataFrame(
-            [
-                {"item": key, "value": "same-data"}
-                for key in [
-                    "stocks_sha256",
-                    "prices_sha256",
-                    "fundamentals_sha256",
-                    "benchmark_sha256",
-                ]
+        main_manifest = pd.DataFrame([
+            {"item": key, "value": "same-data"}
+            for key in [
+                "stocks_sha256", "prices_sha256", "fundamentals_sha256", "benchmark_sha256"
             ]
-        )
+        ])
         main_manifest.to_csv(output / "run_manifest.csv", index=False)
 
         with patch("ashare_quant.capital_sensitivity.run_backtest", side_effect=fake_backtest):
@@ -242,9 +243,9 @@ class CapitalSensitivityTests(unittest.TestCase):
 
         summary = pd.read_csv(paths["capital_sensitivity.csv"])
         audit = pd.read_csv(paths["capital_sensitivity_audit.csv"]).set_index("check")
-        self.assertEqual(summary["initial_cash"].tolist(), [100000.0, 300000.0, 1000000.0])
-        self.assertFalse(bool(summary.loc[summary["initial_cash"] == 100000, "passed"].iloc[0]))
-        self.assertTrue(bool(summary.loc[summary["initial_cash"] == 300000, "passed"].iloc[0]))
+        self.assertEqual(summary["initial_cash"].tolist(), [50000.0, 100000.0, 200000.0])
+        self.assertFalse(bool(summary.loc[summary["initial_cash"] == 50000, "passed"].iloc[0]))
+        self.assertTrue(bool(summary.loc[summary["initial_cash"] == 100000, "passed"].iloc[0]))
         self.assertTrue(
             bool(audit.loc["capital_sensitivity_reference_market_data_sha256", "passed"])
         )

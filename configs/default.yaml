@@ -59,10 +59,15 @@
     "min_avg_amount": 20000000,
     "liquidity_lookback": 20
   },
+  "capital_budget": {
+    "enabled": true,
+    "intended_account_capital": 100000,
+    "max_total_capital": 200000
+  },
   "backtest": {
     "start": "2023-01-01",
     "end": null,
-    "initial_cash": 1000000,
+    "initial_cash": 100000,
     "rebalance": "monthly"
   },
   "benchmark": {
@@ -159,7 +164,7 @@
     "min_time_fold_worst_excess_return": -0.15,
     "capital_mode_sensitivity_config": "configs/micro_capital_feasibility.yaml",
     "capital_sensitivity": {
-      "cash_levels": [100000, 300000, 600000, 1000000],
+      "cash_levels": [30000, 50000, 100000, 200000],
       "max_abs_return_drag": 0.02,
       "max_excess_cash_ratio_vs_reference": 0.06,
       "min_final_positions": 20
@@ -538,7 +543,7 @@
   },
   "rpa": {
     "max_single_order_amount": 100000,
-    "max_daily_order_amount": 500000,
+    "max_daily_order_amount": 200000,
     "require_manual_final_confirm": true,
     "never_click_submit": true,
     "require_account_reconciliation": true,
@@ -569,10 +574,10 @@
       "enabled": true,
       "max_orders_per_batch": 50,
       "max_single_order_amount": 100000,
-      "max_batch_buy_amount": 500000,
-      "max_batch_gross_amount": 1000000,
-      "max_daily_buy_amount": 500000,
-      "max_daily_gross_amount": 1000000,
+      "max_batch_buy_amount": 200000,
+      "max_batch_gross_amount": 400000,
+      "max_daily_buy_amount": 200000,
+      "max_daily_gross_amount": 400000,
       "allowed_sides": ["buy", "sell"]
     },
     "broker_adapter": "",

@@ -5,7 +5,66 @@ added directly below this introduction, newest first. It records verified facts;
 it is not a release-marketing document and does not replace generated audit
 artifacts.
 
-## 2026-08-12 - Version rebalance execution and reject non-robust small-capital evidence
+
+## 2026-08-12 - Enforce the CNY 200,000 system capital boundary
+
+**Objective**
+
+Make the user's CNY 200,000 maximum strategy size an application invariant
+across research, portfolio construction, RPA review, and automatic-live risk.
+
+**Changes**
+
+- Added an unconditional CNY 200,000 system ceiling; an optional strategy-family
+  budget can only make the limit stricter.
+- Added fail-closed checks for backtest cash, sensitivity levels, direct variant
+  construction, RPA limits, automatic-live buy limits, rollout stages, and gross
+  turnover above twice the effective capital limit.
+- Capped deployable equity in backtest, paper, shadow, and broker-preview paths,
+  so a larger broker account or retained profit cannot expand strategy exposure.
+- Runtime automatic-live risk limits clamp unsafe configured values before a
+  submission audit can pass.
+- Added capital policy to backtest identity, migrated the default to CNY 100,000,
+  migrated every repository config to at most CNY 200,000, and rebound isolated
+  extended-history validation to the new fixed strategy hash.
+- Added ADR 0021 and a repository-wide configuration regression test.
+
+**Evidence**
+
+- All 58 loadable repository configurations passed the capital scan. Maximum
+  backtest cash and maximum sensitivity level are both exactly CNY 200,000.
+- Current CNY 100,000 default run manifest matches the current configuration.
+  Total return was 26.51823% versus CSI 300 22.16332%, cumulative excess 4.35491%,
+  and maximum drawdown -14.30887%. It ended with eight positions, zero odd lots,
+  and zero cash-constrained buy rejects.
+- The same strategy still failed stability: 2024 and 2025 excess returns were
+  -13.13058% and -9.95370%; fixed-parameter walk-forward positive ratio was 1/3,
+  average test excess -8.21524%, and worst fold -21.40835%.
+- Four-level capital sensitivity completed on identical current market data:
+  CNY 30,000, 50,000, 100,000, and 200,000. Only CNY 200,000 met the existing
+  implementation-fidelity criteria; average cash ratios were 98.14%, 93.51%,
+  79.86%, and 62.44%, respectively. This confirms the 100-stock default is not
+  an acceptable small-account live strategy despite positive aggregate return.
+- Focused capital, execution-risk, manifest, portfolio, paper, broker-preview,
+  and backtest tests passed: 101 tests. The final expanded capital suite passed 74 tests.
+- Full regression passed: 1153 tests and 39 subtests in 161.38 seconds.
+
+**Safety**
+
+- No candidate was activated, no broker order was submitted, and no live ledger
+  was initialized. Current strategy evidence remains blocked for live use.
+- The Huatai Canary configuration remains emergency-stopped with broker submit
+  disabled. Gross rotation capacity does not raise deployable capital or buy
+  exposure above CNY 200,000.
+
+**Remaining work**
+
+- Design the next small-account candidate around a materially smaller position
+  count and preregister it before independent forward observation; do not tune
+  the current default on the same cache.
+- Regenerate longer-history evidence under the new fixed CNY 100,000 identity
+  before citing it. Continue broker read-only evidence refresh independently of
+  strategy promotion.`n`n## 2026-08-12 - Version rebalance execution and reject non-robust small-capital evidence
 
 **Objective**
 

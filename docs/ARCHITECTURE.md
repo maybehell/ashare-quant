@@ -179,9 +179,13 @@ Responsibilities:
 Rules:
 
 - Research modules never call broker or RPA modules.
-- An opt-in research capital budget fails before execution when initial cash or
-  any configured sensitivity level exceeds its hard ceiling. It does not
-  retroactively mutate frozen candidate evidence.
+- A non-configurable system capital ceiling limits every strategy to CNY
+  200,000. A strategy-family budget may lower but never raise it. Backtest cash,
+  capital-sensitivity variants, deployable portfolio equity, RPA buy limits,
+  and automatic-live buy exposure all consume the same effective ceiling.
+  Rebalance gross limits may be at most twice the ceiling to permit a full
+  sell-and-buy rotation without increasing deployed capital. Capital policy is
+  part of backtest identity and never mutates frozen evidence retroactively.
 - An opt-in small-capital admission gate binds capital fidelity, current market
   identity, drawdown, annual consistency, fixed-parameter walk-forward,
   symmetric cost-path stability, and order-level execution fidelity before

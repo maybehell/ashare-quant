@@ -9,6 +9,7 @@ from typing import Any
 import pandas as pd
 from pandas.errors import EmptyDataError
 
+from .capital_budget import SYSTEM_MAX_TOTAL_CAPITAL, capital_budget_limit
 from .config import project_path
 from .io_utils import atomic_to_csv
 
@@ -137,17 +138,28 @@ def auto_live_risk_limits(config: dict[str, Any]) -> dict[str, object]:
     stage_cash_amount = finite_float(rollout_stage_limits.get("min_cash_buffer_amount", stage_cash["amount"]), stage_cash["amount"])
     stage_cash_ratio = finite_float(rollout_stage_limits.get("min_cash_buffer_ratio", stage_cash["ratio"]), stage_cash["ratio"])
     cash_policy_source = "risk_limits" if "min_cash_buffer_amount" in risk or "min_cash_buffer_ratio" in risk else (f"rollout:{rollout_stage}" if rollout_stage in stage_cash_defaults else "default")
-    max_single = finite_float(risk.get("max_single_order_amount", rpa.get("max_single_order_amount", 100000)), 100000)
-    max_batch_buy = finite_float(risk.get("max_batch_buy_amount", rpa.get("max_daily_order_amount", 500000)), 500000)
-    max_daily_buy = finite_float(risk.get("max_daily_buy_amount", rpa.get("max_daily_order_amount", 500000)), 500000)
+    capital_limit = capital_budget_limit(config) or SYSTEM_MAX_TOTAL_CAPITAL
+    max_single = min(
+        finite_float(risk.get("max_single_order_amount", rpa.get("max_single_order_amount", 100000)), 100000),
+        capital_limit,
+    )
+    max_batch_buy = min(
+        finite_float(risk.get("max_batch_buy_amount", rpa.get("max_daily_order_amount", 200000)), 200000),
+        capital_limit,
+    )
+    max_daily_buy = min(
+        finite_float(risk.get("max_daily_buy_amount", rpa.get("max_daily_order_amount", 200000)), 200000),
+        capital_limit,
+    )
+    max_gross = capital_limit * 2
     return {
         "enabled": parse_bool(risk.get("enabled", True)),
         "max_orders_per_batch": int(max(0, finite_float(risk.get("max_orders_per_batch", 50), 50))),
         "max_single_order_amount": max_single,
         "max_batch_buy_amount": max_batch_buy,
-        "max_batch_gross_amount": finite_float(risk.get("max_batch_gross_amount", max_batch_buy * 2), max_batch_buy * 2),
+        "max_batch_gross_amount": min(finite_float(risk.get("max_batch_gross_amount", max_batch_buy * 2), max_batch_buy * 2), max_gross),
         "max_daily_buy_amount": max_daily_buy,
-        "max_daily_gross_amount": finite_float(risk.get("max_daily_gross_amount", max_daily_buy * 2), max_daily_buy * 2),
+        "max_daily_gross_amount": min(finite_float(risk.get("max_daily_gross_amount", max_daily_buy * 2), max_daily_buy * 2), max_gross),
         "min_cash_buffer_ratio": max(0.0, finite_float(risk.get("min_cash_buffer_ratio", stage_cash_ratio), stage_cash_ratio)),
         "min_cash_buffer_amount": max(0.0, finite_float(risk.get("min_cash_buffer_amount", stage_cash_amount), stage_cash_amount)),
         "cash_buffer_policy_source": cash_policy_source,

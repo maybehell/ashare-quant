@@ -8,7 +8,7 @@
   "backtest": {
     "start": "2023-01-01",
     "end": null,
-    "initial_cash": 1000000,
+    "initial_cash": 100000,
     "rebalance": "monthly"
   }
 }

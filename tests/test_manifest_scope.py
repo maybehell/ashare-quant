@@ -78,3 +78,9 @@ def test_rebalance_execution_schema_version_invalidates_backtest_evidence():
     current = {"trading": {"rebalance_execution_schema_version": 2, "lot_size": 100}}
 
     assert backtest_config_sha256(legacy) != backtest_config_sha256(current)
+
+def test_capital_budget_policy_invalidates_backtest_evidence():
+    low = {"capital_budget": {"enabled": True, "max_total_capital": 100000}}
+    high = {"capital_budget": {"enabled": True, "max_total_capital": 200000}}
+
+    assert backtest_config_sha256(low) != backtest_config_sha256(high)

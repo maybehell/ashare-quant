@@ -79,6 +79,7 @@ def effective_index_membership(config: dict[str, Any]) -> pd.DataFrame | None:
 
 
 BACKTEST_RELEVANT_CONFIG_KEYS = (
+    "capital_budget",
     "data",
     "universe",
     "backtest",

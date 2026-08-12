@@ -196,3 +196,39 @@ def test_partial_rebalance_sell_keeps_board_lot_quantity():
     )
 
     assert orders == []
+
+def test_rebalance_caps_deployable_equity_at_system_limit():
+    portfolio = Portfolio(cash=1_000_000.0)
+    config = {"trading": {"reserve_cash_ratio": 0.0, "lot_size": 100}}
+
+    orders = generate_rebalance_orders(
+        date(2026, 8, 12),
+        pd.Series({"600000": 1.0}),
+        portfolio,
+        {"600000": 10.0},
+        config,
+    )
+
+    assert [(order.side, order.quantity) for order in orders] == [("buy", 20000)]
+
+
+def test_rebalance_uses_stricter_strategy_family_capital_limit():
+    portfolio = Portfolio(cash=1_000_000.0)
+    config = {
+        "capital_budget": {
+            "enabled": True,
+            "intended_account_capital": 100000,
+            "max_total_capital": 100000,
+        },
+        "trading": {"reserve_cash_ratio": 0.0, "lot_size": 100},
+    }
+
+    orders = generate_rebalance_orders(
+        date(2026, 8, 12),
+        pd.Series({"600000": 1.0}),
+        portfolio,
+        {"600000": 10.0},
+        config,
+    )
+
+    assert [(order.side, order.quantity) for order in orders] == [("buy", 10000)]

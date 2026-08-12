@@ -4,7 +4,7 @@
     "state_db": "data/state_quarterly_low_turnover_research.sqlite3"
   },
   "backtest": {
-    "initial_cash": 600000,
+    "initial_cash": 200000,
     "rebalance": "quarterly"
   },
   "strategy": {

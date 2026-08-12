@@ -7,6 +7,7 @@ from typing import Any
 import pandas as pd
 
 from .capital_aware import build_capital_aware_target_weights, capital_aware_enabled
+from .capital_budget import strategy_deployable_equity
 from .data import DataStore, make_proxy_benchmark, scope_market_frames_to_committed_fetch
 from .factors import build_configured_target_portfolio
 from .portfolio import Portfolio, generate_rebalance_orders
@@ -104,7 +105,7 @@ def run_backtest(config: dict[str, Any]) -> dict[str, Path]:
             )
             if capital_aware_enabled(config):
                 weights = build_capital_aware_target_weights(
-                    scores, close_prices, equity_value, exposure, config, weights
+                    scores, close_prices, strategy_deployable_equity(equity_value, config), exposure, config, weights
                 )
             else:
                 weights = weights * exposure

@@ -24,6 +24,38 @@ class ValidationTests(unittest.TestCase):
 
         self.assertIn("trading.rebalance_execution_schema_version must be 2", errors)
 
+    def test_system_capital_ceiling_cannot_be_disabled(self):
+        config = {
+            "capital_budget": {"enabled": False, "max_total_capital": 999999},
+            "backtest": {"initial_cash": 200001},
+            "validation": {"capital_sensitivity": {"cash_levels": [100000, 200001]}},
+        }
+
+        errors = validate_config(config)
+
+        self.assertIn("backtest.initial_cash exceeds effective maximum total capital", errors)
+        self.assertIn(
+            "validation.capital_sensitivity.cash_levels contains a value above "
+            "effective maximum total capital",
+            errors,
+        )
+
+    def test_strategy_family_budget_cannot_raise_system_ceiling(self):
+        config = {
+            "capital_budget": {
+                "enabled": True,
+                "intended_account_capital": 100000,
+                "max_total_capital": 300000,
+            },
+            "backtest": {"initial_cash": 100000},
+        }
+
+        errors = validate_config(config)
+
+        self.assertIn(
+            "capital_budget.max_total_capital exceeds system maximum total capital", errors
+        )
+
     def test_small_capital_budget_rejects_strategy_values_above_ceiling(self):
         config = {
             "capital_budget": {
@@ -37,10 +69,49 @@ class ValidationTests(unittest.TestCase):
 
         errors = validate_config(config)
 
-        self.assertIn("backtest.initial_cash exceeds capital_budget.max_total_capital", errors)
+        self.assertIn("backtest.initial_cash exceeds effective maximum total capital", errors)
         self.assertIn(
             "validation.capital_sensitivity.cash_levels contains a value above "
-            "capital_budget.max_total_capital",
+            "effective maximum total capital",
+            errors,
+        )
+
+    def test_execution_buy_limits_cannot_exceed_effective_capital_limit(self):
+        config = {
+            "capital_budget": {
+                "enabled": True,
+                "intended_account_capital": 100000,
+                "max_total_capital": 100000,
+            },
+            "rpa": {"max_single_order_amount": 100001, "max_daily_order_amount": 100001},
+            "auto_live": {
+                "risk_limits": {
+                    "max_batch_buy_amount": 100001,
+                    "max_daily_buy_amount": 100001,
+                    "max_batch_gross_amount": 200001,
+                    "max_daily_gross_amount": 200001,
+                },
+                "rollout": {
+                    "stages": {
+                        "full": {"max_buy_amount": 100001, "max_gross_amount": 200001}
+                    }
+                },
+            },
+        }
+
+        errors = validate_config(config)
+
+        self.assertIn("rpa.max_single_order_amount exceeds effective maximum total capital", errors)
+        self.assertIn(
+            "auto_live.risk_limits.max_batch_buy_amount exceeds effective maximum total capital",
+            errors,
+        )
+        self.assertIn(
+            "auto_live.rollout.stages.full.max_buy_amount exceeds effective maximum total capital",
+            errors,
+        )
+        self.assertIn(
+            "auto_live.risk_limits.max_batch_gross_amount exceeds twice effective maximum total capital",
             errors,
         )
 
@@ -424,3 +495,21 @@ def test_target_aware_planning_rejects_missing_schema_without_exception():
         "strategy.capital_aware.respect_target_weights requires planning_schema_version 2"
         in errors
     )
+
+def test_all_repository_strategy_configs_respect_system_capital_ceiling():
+    from pathlib import Path
+
+    from ashare_quant.config import load_config
+
+    violations = {}
+    for path in sorted(Path("configs").glob("*.yaml")):
+        config = load_config(path)
+        capital_errors = [
+            error
+            for error in validate_config(config)
+            if "maximum total capital" in error or "system maximum" in error
+        ]
+        if capital_errors:
+            violations[path.name] = capital_errors
+
+    assert violations == {}

@@ -10,10 +10,10 @@ auto_live:
     enabled: true
     max_orders_per_batch: 50
     max_single_order_amount: 100000
-    max_batch_buy_amount: 500000
-    max_batch_gross_amount: 1000000
-    max_daily_buy_amount: 500000
-    max_daily_gross_amount: 1000000
+    max_batch_buy_amount: 200000
+    max_batch_gross_amount: 400000
+    max_daily_buy_amount: 200000
+    max_daily_gross_amount: 400000
     min_cash_buffer_ratio: 0.02
     min_cash_buffer_amount: 10000
     allowed_sides: [buy, sell]
@@ -70,8 +70,8 @@ auto_live:
       full:
         max_orders: 50
         max_single_order_amount: 100000
-        max_buy_amount: 500000
-        max_gross_amount: 1000000
+        max_buy_amount: 200000
+        max_gross_amount: 400000
   alerting:
     enabled: true
     required_before_submit: true

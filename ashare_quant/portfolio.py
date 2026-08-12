@@ -6,6 +6,7 @@ from typing import Any
 
 import pandas as pd
 
+from .capital_budget import strategy_deployable_equity
 from .models import Fill, Order, Position
 from .rules import buy_quantity_for_value, calc_fee, is_limit_down, is_limit_up, price_limit_rate, round_buy_quantity
 
@@ -158,7 +159,7 @@ def generate_rebalance_orders(
     close_prices: dict[str, float],
     config: dict[str, Any],
 ) -> list[Order]:
-    equity = portfolio.equity(close_prices)
+    equity = strategy_deployable_equity(portfolio.equity(close_prices), config)
     reserve = float(config["trading"]["reserve_cash_ratio"])
     investable = equity * (1 - reserve)
     symbols = set(target_weights.index.astype(str)) | set(portfolio.positions)

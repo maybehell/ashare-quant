@@ -8,7 +8,7 @@ import pandas as pd
 
 from .audit import backtest_config_sha256, capital_sensitivity_config_sha256, mapping_sha256
 from .backtest import run_backtest
-from .capital_budget import capital_budget_errors
+from .capital_budget import capital_budget_errors, capital_budget_limit
 from .config import project_path
 from .io_utils import atomic_to_csv
 
@@ -45,7 +45,7 @@ def run_capital_sensitivity(config: dict[str, Any]) -> dict[str, Path]:
     settings = config.get("validation", {}).get("capital_sensitivity", {})
     if not isinstance(settings, dict):
         settings = {}
-    configured_levels = settings.get("cash_levels", [100000, 300000, 600000, 1000000])
+    configured_levels = settings.get("cash_levels", [30000, 50000, 100000, 200000])
     levels = sorted({float(value) for value in configured_levels if number(value) > 0})
     if not levels:
         raise ValueError("validation.capital_sensitivity.cash_levels must contain positive values")
@@ -195,6 +195,12 @@ def run_capital_sensitivity(config: dict[str, Any]) -> dict[str, Path]:
 
 
 def capital_variant_config(config: dict[str, Any], initial_cash: float, run_root: Path) -> dict[str, Any]:
+    limit = capital_budget_limit(config)
+    if limit is None or initial_cash > limit:
+        raise ValueError(
+            f"capital sensitivity initial_cash {initial_cash:.2f} exceeds effective maximum "
+            f"total capital {limit if limit is not None else 'invalid'}"
+        )
     variant = deepcopy(config)
     label = format_level(initial_cash)
     variant.setdefault("backtest", {})["initial_cash"] = float(initial_cash)

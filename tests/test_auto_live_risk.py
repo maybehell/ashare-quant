@@ -55,6 +55,25 @@ class AutoLiveRiskTests(unittest.TestCase):
         self.assertIn("risk_daily_buy_amount_limit", set(audit["check"]))
         self.assertIn("risk_available_cash_buffer", set(audit["check"]))
 
+    def test_runtime_limits_clamp_configured_buy_cap_to_system_ceiling(self):
+        output = self.fresh_output("auto_live_risk_system_cap")
+        config = self.config(
+            output,
+            max_single_order_amount=900000,
+            max_batch_buy_amount=900000,
+            max_batch_gross_amount=900000,
+            max_daily_buy_amount=900000,
+            max_daily_gross_amount=900000,
+        )
+        audit = build_auto_live_risk_audit(
+            config, tickets=self.tickets(amount=200100)
+        ).set_index("check")
+
+        self.assertEqual(float(audit.loc["risk_single_order_amount_limit", "threshold"]), 200000.0)
+        self.assertEqual(float(audit.loc["risk_batch_buy_amount_limit", "threshold"]), 200000.0)
+        self.assertFalse(bool(audit.loc["risk_single_order_amount_limit", "passed"]))
+        self.assertFalse(bool(audit.loc["risk_batch_buy_amount_limit", "passed"]))
+
     def test_emergency_stop_file_blocks_submit_risk(self):
         output = self.fresh_output("auto_live_risk_stop")
         config = self.config(output)

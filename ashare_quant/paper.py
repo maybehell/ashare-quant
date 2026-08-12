@@ -11,6 +11,7 @@ import pandas as pd
 from .audit import mapping_sha256, orders_frame_sha256, signal_frame_sha256
 from .candidate import candidate_freeze_boundary_evidence, live_strategy_hash, load_candidate_manifest, matching_candidate_id
 from .capital_aware import build_capital_aware_target_weights, capital_aware_enabled
+from .capital_budget import strategy_deployable_equity
 from .data import DataStore, scope_market_frames_to_committed_fetch
 from .factors import build_configured_target_portfolio, decompose_reference_anchor_target
 from .models import Order, Position
@@ -167,7 +168,7 @@ def run_paper(
     combined_multiplier = market_multiplier * float(health_exposure["exposure"])
     if capital_aware_enabled(config):
         weights = build_capital_aware_target_weights(
-            scores, close_prices, portfolio.equity(close_prices), combined_multiplier, config, weights
+            scores, close_prices, strategy_deployable_equity(portfolio.equity(close_prices), config), combined_multiplier, config, weights
         )
     else:
         weights = weights * combined_multiplier
@@ -307,7 +308,7 @@ def run_shadow_signals(
     )
     if capital_aware_enabled(config):
         weights = build_capital_aware_target_weights(
-            scores, close_prices, portfolio.equity(close_prices), exposure_multiplier, config, base_weights
+            scores, close_prices, strategy_deployable_equity(portfolio.equity(close_prices), config), exposure_multiplier, config, base_weights
         )
     else:
         weights = base_weights * exposure_multiplier

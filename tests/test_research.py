@@ -28,7 +28,7 @@ class ResearchTests(unittest.TestCase):
                 "min_avg_amount": 0,
                 "liquidity_lookback": 20,
             },
-            "backtest": {"start": "2023-01-01", "end": None, "initial_cash": 1000000, "rebalance": "monthly"},
+            "backtest": {"start": "2023-01-01", "end": None, "initial_cash": 200000, "rebalance": "monthly"},
             "validation": {"holdout_split_ratio": 0.7},
             "risk_overlay": {"enabled": False},
             "strategy": {
@@ -224,7 +224,7 @@ class ResearchTests(unittest.TestCase):
                 "min_avg_amount": 0,
                 "liquidity_lookback": 20,
             },
-            "backtest": {"start": "2023-01-01", "end": None, "initial_cash": 1000000, "rebalance": "monthly"},
+            "backtest": {"start": "2023-01-01", "end": None, "initial_cash": 200000, "rebalance": "monthly"},
             "validation": {"holdout_split_ratio": 0.7},
             "risk_overlay": {"enabled": False},
             "strategy": {
@@ -273,7 +273,7 @@ class ResearchTests(unittest.TestCase):
                 "min_avg_amount": 0,
                 "liquidity_lookback": 20,
             },
-            "backtest": {"start": "2023-01-01", "end": None, "initial_cash": 1000000, "rebalance": "monthly"},
+            "backtest": {"start": "2023-01-01", "end": None, "initial_cash": 200000, "rebalance": "monthly"},
             "validation": {"holdout_split_ratio": 0.7},
             "risk_overlay": {"enabled": False},
             "strategy": {

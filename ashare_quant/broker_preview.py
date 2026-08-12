@@ -17,6 +17,7 @@ from .autolive import (
 )
 from .candidate import live_strategy_hash
 from .capital_aware import build_capital_aware_target_weights, capital_aware_enabled
+from .capital_budget import strategy_deployable_equity
 from .config import project_path
 from .data import DataStore, scope_market_frames_to_committed_fetch
 from .factors import build_configured_target_portfolio
@@ -740,7 +741,7 @@ def write_broker_order_preview(config: dict[str, Any], current_date: date | None
         combined_multiplier = market_multiplier * float(health_exposure["exposure"])
         if capital_aware_enabled(config):
             target_weights = build_capital_aware_target_weights(
-                scores, close_prices, portfolio.equity(close_prices), combined_multiplier, config, target_weights
+                scores, close_prices, strategy_deployable_equity(portfolio.equity(close_prices), config), combined_multiplier, config, target_weights
             )
         else:
             target_weights = target_weights * combined_multiplier

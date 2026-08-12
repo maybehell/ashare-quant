@@ -30,7 +30,7 @@ def write_rebalance_frequency_research(config: dict[str, Any]) -> dict[str, Path
         settings = {}
     baseline_config_path = str(settings.get("baseline_config", "configs/micro_capital_feasibility.yaml"))
     candidate_config_path = str(settings.get("candidate_config", "configs/quarterly_low_turnover_research.yaml"))
-    initial_cash = float(settings.get("initial_cash", 600000))
+    initial_cash = float(settings.get("initial_cash", 200000))
 
     baseline_config = load_config(project_path(baseline_config_path))
     baseline_cash = float(baseline_config.get("backtest", {}).get("initial_cash", 0))

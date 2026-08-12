@@ -7,7 +7,7 @@
     "research_only": true,
     "apply_active_execution": false,
     "capital_sensitivity": {
-      "cash_levels": [2500, 5000, 10000, 30000, 50000, 100000, 600000],
+      "cash_levels": [2500, 5000, 10000, 30000, 50000, 100000, 200000],
       "publish_output_dir": "outputs",
       "publish_prefix": "micro_",
       "max_abs_return_drag": 0.02,
