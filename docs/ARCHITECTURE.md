@@ -230,6 +230,9 @@ Rules:
   investable equity, and supported algorithm revisions carry an explicit schema
   version in backtest and capital-sensitivity identity.
 - Parameter selection and final evaluation evidence are distinguished.
+- New factor capability does not consume an experiment slot. Strategy parameters,
+  decision thresholds, input binding, and registry identity must be committed in
+  a later preregistration before that factor is historically evaluated.
 - Cross-date strategy experiments are recorded with failures as well as successes.
   A registry-bound historical experiment fixes its sequence, strategy identity,
   configuration path, decision thresholds, and multiple-testing budget before

@@ -263,6 +263,8 @@ def compute_factor_values(
     volatility_lookback = int(lookbacks.get("volatility", 60))
     drawdown_lookback = int(lookbacks.get("drawdown", volatility_lookback))
     reversal_lookback = int(lookbacks.get("short_reversal", 20))
+    medium_reversal_lookback = int(lookbacks.get("medium_reversal", 60))
+    medium_reversal_skip = int(lookbacks.get("medium_reversal_skip", 5))
     residual_reversal_lookback = int(lookbacks.get("residual_reversal", reversal_lookback))
     residual_beta_lookback = int(lookbacks.get("residual_beta", max(residual_reversal_lookback * 6, 120)))
     residual_momentum_lookback = int(lookbacks.get("residual_momentum", max(momentum_lookback * 3, 180)))
@@ -278,6 +280,15 @@ def compute_factor_values(
     downside_volatility = returns.clip(upper=0).rolling(volatility_lookback).std().iloc[-1]
     liquidity = amount.rolling(liquidity_lookback).mean().iloc[-1]
     short_reversal = -close.pct_change(reversal_lookback).iloc[-1]
+    medium_reversal_requested = (
+        "medium_reversal" in lookbacks or "medium_reversal_skip" in lookbacks
+    )
+    medium_reversal = (
+        -(close.shift(medium_reversal_skip).iloc[-1]
+          / close.shift(medium_reversal_lookback).iloc[-1] - 1.0)
+        if medium_reversal_requested
+        else pd.Series(index=close.columns, dtype=float)
+    )
     residual_requested = "residual_reversal" in lookbacks
     volume_ma_requested = "volume_ma_short" in lookbacks or "volume_ma_long" in lookbacks
     if volume_ma_requested:
@@ -338,6 +349,7 @@ def compute_factor_values(
             "liquidity": liquidity.reindex(close.columns).values,
             "avg_amount": liquidity.reindex(close.columns).values,
             "short_reversal": short_reversal.reindex(close.columns).values,
+            "medium_reversal": medium_reversal.reindex(close.columns).values,
             "residual_reversal": residual_reversal.reindex(close.columns).values,
             "low_drawdown": drawdown.reindex(close.columns).values,
             "trend_quality": trend_quality.reindex(close.columns).values,
@@ -360,6 +372,7 @@ def compute_factor_values(
     factors["low_downside_volatility"] = zscore(factors["low_downside_volatility"])
     factors["liquidity"] = zscore(factors["liquidity"])
     factors["short_reversal"] = zscore(factors["short_reversal"])
+    factors["medium_reversal"] = zscore(factors["medium_reversal"])
     factors["residual_reversal"] = zscore(factors["residual_reversal"])
     factors["low_drawdown"] = zscore(factors["low_drawdown"])
     factors["trend_quality"] = zscore(factors["trend_quality"])

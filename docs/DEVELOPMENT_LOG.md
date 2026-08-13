@@ -5,6 +5,43 @@ added directly below this introduction, newest first. It records verified facts;
 it is not a release-marketing document and does not replace generated audit
 artifacts.
 
+## 2026-08-13 - Add skipped medium-reversal research capability
+
+**Objective**
+
+Prepare one independently motivated factor for a possible fourth P1 hypothesis
+without registering or evaluating that hypothesis on the known history cache.
+
+**Roadmap phase**
+
+P1 strategy evidence. This is research capability only; the experiment family
+remains at three rejected trials out of four permitted trials.
+
+**Changes**
+
+- Added an opt-in medium-reversal factor: negative return from 60 trading days
+  ago to 5 trading days ago, leaving the latest week outside the signal.
+- Added synthetic formula and opt-in tests, ADR 0031, and Chinese research notes
+  linked to the pre-evaluation independent rationale.
+
+**Architecture and safety**
+
+- No candidate configuration, experiment registry entry, input binding, forward
+  manifest, execution order, account state, or broker setting changed.
+- The factor is neutral unless explicitly configured. It cannot promote a
+  strategy, initialize a ledger, or call the broker boundary.
+- Broker submission remains disabled and the emergency stop policy is unchanged.
+
+**Verification**
+
+- Synthetic medium-reversal formula tests: 2 passed in 0.68s.
+- Expanded factor, validation, and governance regression: 54 passed in 1.25s.
+- Full regression: 1,209 tests and 39 subtests passed in 272.74 seconds.
+
+**Remaining work**
+
+- In a separate commit, add parameter validation and preregister the fourth
+  experiment with exact strategy hash, input binding, thresholds, and alpha
 ## 2026-08-13 - Add cross-experiment selection accounting
 
 **Objective**
