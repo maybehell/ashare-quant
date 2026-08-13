@@ -5,6 +5,55 @@ added directly below this introduction, newest first. It records verified facts;
 it is not a release-marketing document and does not replace generated audit
 artifacts.
 
+## 2026-08-13 - Add explicit permanent history rejection
+
+**Objective**
+
+Make an exact candidate history failure a durable, auditable promotion blocker
+without coupling research validation to candidate-state mutation.
+
+**Roadmap phase**
+
+P1 strategy evidence. This closes the rejection-recording path for the current
+failed candidate but does not create or approve a successor.
+
+**Changes**
+
+- Added `candidate-history-reject --decision-sha256 ... --confirm` with current
+  decision recomputation, exact hash binding, candidate identity checks,
+  conflict rejection, and idempotent append-only behavior.
+- Extended candidate failure history with evidence source, decision hash,
+  evidence hash, and failed checks while preserving legacy rows.
+- Historical rejection now appears as `quarantined_history_rejection`; existing
+  forward failures retain `quarantined_forward_failure`.
+
+**Architecture and safety**
+
+- `candidate_rejection.py` owns the explicit durable write; ADR 0034 records the
+  boundary and state semantics.
+- The action preserves the candidate manifest and forward evidence. It is not
+  called by history validation or daily observation and cannot activate a
+  successor, initialize an account, generate orders, or access a broker.
+- Broker submission remains disabled and the emergency stop remains active.
+
+**Verification**
+
+- Candidate rejection, legacy schema, activation, and research isolation suite:
+  53 passed in 11.50s.
+- Full regression and committed-code real-candidate registration are recorded
+  below before the final result commit.
+- The first full-regression attempt stopped during collection with five import
+  errors because the new CLI branch split the existing decision branch. After
+  restoring two complete branches, Python compilation passed and the candidate
+  plus CLI focused suite passed 133 tests in 29.88 seconds.
+- Full regression after the fix: 1,227 tests and 39 subtests passed in 368.52
+  seconds.
+
+**Remaining work**
+
+- Commit and test this implementation before using it to write the real
+  candidate rejection record.
+
 ## 2026-08-13 - Add read-only candidate history decision
 
 **Objective**

@@ -39,8 +39,17 @@ CANDIDATE_FAILURE_COLUMNS = [
     "observed_forward_trading_days",
     "forward_excess_return",
     "recorded_at",
+    "evidence_source",
+    "decision_sha256",
+    "evidence_sha256",
+    "failed_checks",
 ]
-QUARANTINE_STATUSES = {"early_forward_degradation", "failed_forward_excess", "failed_forward_risk"}
+QUARANTINE_STATUSES = {
+    "early_forward_degradation",
+    "failed_forward_excess",
+    "failed_forward_risk",
+    "authoritative_history_rejected",
+}
 
 
 FORWARD_PROGRESS_COLUMNS = [
@@ -227,6 +236,12 @@ def candidate_quarantine_record(
     if matched.empty:
         return None
     return matched.iloc[-1].to_dict()
+
+def candidate_quarantine_status(record: dict[str, Any] | None) -> str:
+    if record and str(record.get("status", "") or "") == "authoritative_history_rejected":
+        return "quarantined_history_rejection"
+    return "quarantined_forward_failure"
+
 
 
 def is_candidate_quarantined(config: dict[str, Any], strategy_hash: str | None = None) -> bool:
@@ -1434,7 +1449,7 @@ def build_candidate_validation(
         elif not hash_match:
             status = "config_mismatch"
         elif quarantine is not None:
-            status = "quarantined_forward_failure"
+            status = candidate_quarantine_status(quarantine)
         elif not boundary_ok:
             status = "unsafe_freeze_boundary"
         elif not membership_ok:
@@ -1523,7 +1538,7 @@ def build_candidate_validation(
     if not hash_match:
         status = "config_mismatch"
     elif quarantine is not None:
-        status = "quarantined_forward_failure"
+        status = candidate_quarantine_status(quarantine)
     elif not membership_ok:
         status = "index_membership_evidence_mismatch"
     elif not frozen_input_ok:
@@ -1699,7 +1714,7 @@ def build_candidate_forward_progress(
         overfit_status = "invalid_candidate"
         next_action = "旧候选冻结边界未覆盖登记时已知数据；重新登记候选并从新数据开始累计，禁止迁移旧前向天数。"
     elif quarantine is not None:
-        status = "quarantined_forward_failure"
+        status = candidate_quarantine_status(quarantine)
         overfit_status = "quarantined"
         next_action = (
             f"该策略已因 {quarantine.get('status', 'forward_failure')} 于 "

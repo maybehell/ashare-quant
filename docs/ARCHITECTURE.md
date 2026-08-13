@@ -262,7 +262,7 @@ Rules:
 
 ### 3.4 Strategy governance and promotion
 
-Owners: `candidate.py`, `candidate_family.py`, `challengers.py`, `candidate_history.py`,
+Owners: `candidate.py`, `candidate_family.py`, `challengers.py`, `candidate_history.py`, `candidate_rejection.py`,
 `research_governance.py`, `selected_candidate_refresh.py`, `shadow.py`,
 `shadow_policy.py`, `evidence.py`, `readiness.py`, `validation.py`,
 `deployment_gate.py`, `strategy_health.py`, and `strategy_activation.py`.
@@ -291,6 +291,12 @@ Rules:
   `rejected` decision does not silently mutate failure history, stop scheduled
   observation, activate a successor, initialize a ledger, or create orders.
 - Candidate changes create a new identity and restart applicable evidence.
+- Permanent history rejection is a separate explicit action. It requires the
+  complete current rejected-decision hash, confirmation, and a matching frozen
+  candidate identity. The append-only record binds evidence and failed gates,
+  is idempotent for the same decision, and rejects conflicts. It preserves the
+  candidate manifest and forward evidence and cannot activate a successor,
+  initialize an account, create orders, or call a broker.
 - A recorded early or terminal forward failure permanently quarantines the matching
   strategy or behavior fingerprint. Validation, progress, strict readiness, and
   activation consume the same append-only failure history; later returns cannot

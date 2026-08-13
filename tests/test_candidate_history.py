@@ -3,10 +3,17 @@ import json
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from ashare_quant.audit import backtest_config_sha256
-from ashare_quant.candidate import live_strategy_hash
+from ashare_quant.candidate import (
+    build_candidate_forward_progress,
+    candidate_failure_history_path,
+    is_candidate_quarantined,
+    live_strategy_hash,
+)
 from ashare_quant.candidate_history import build_candidate_history_decision
+from ashare_quant.candidate_rejection import record_candidate_history_rejection
 from ashare_quant.config import load_config
 
 
@@ -76,6 +83,15 @@ def setup_evidence(tmp_path: Path) -> dict:
     return config
 
 
+def reject_evidence(config: dict) -> str:
+    history_config = json.loads(Path(config["validation"]["authoritative_history_validation_config"]).read_text())
+    history = Path(history_config["paths"]["output_dir"])
+    metrics = pd.read_csv(history / "performance_metrics.csv")
+    metrics.loc[metrics["metric"] == "excess_total_return", "value"] = -0.08
+    metrics.to_csv(history / "performance_metrics.csv", index=False)
+    return str(build_candidate_history_decision(config).iloc[0]["decision_sha256"])
+
+
 def test_exact_candidate_with_all_gates_passed_is_supported(tmp_path: Path) -> None:
     row = build_candidate_history_decision(setup_evidence(tmp_path)).iloc[0]
     assert row["decision"] == "supported"
@@ -85,13 +101,12 @@ def test_exact_candidate_with_all_gates_passed_is_supported(tmp_path: Path) -> N
 
 def test_exact_candidate_performance_failure_is_rejected(tmp_path: Path) -> None:
     config = setup_evidence(tmp_path)
-    history_config = json.loads(Path(config["validation"]["authoritative_history_validation_config"]).read_text())
-    history = Path(history_config["paths"]["output_dir"])
-    metrics = pd.read_csv(history / "performance_metrics.csv")
-    metrics.loc[metrics["metric"] == "excess_total_return", "value"] = -0.08
-    metrics.to_csv(history / "performance_metrics.csv", index=False)
+    row = build_candidate_history_decision(config).iloc[0]
+    assert row["decision"] == "supported"
+    decision_sha = reject_evidence(config)
     row = build_candidate_history_decision(config).iloc[0]
     assert row["decision"] == "rejected"
+    assert row["decision_sha256"] == decision_sha
     assert "total_excess_return" in row["failed_checks"]
 
 
@@ -104,3 +119,60 @@ def test_identity_mismatch_blocks_instead_of_rejecting(tmp_path: Path) -> None:
     row = build_candidate_history_decision(config).iloc[0]
     assert row["decision"] == "blocked"
     assert "candidate_strategy_mismatch" in row["failed_checks"]
+
+
+def test_history_rejection_requires_confirmation_and_exact_hash(tmp_path: Path) -> None:
+    config = setup_evidence(tmp_path)
+    decision_sha = reject_evidence(config)
+    with pytest.raises(RuntimeError, match="explicit --confirm"):
+        record_candidate_history_rejection(config, decision_sha256=decision_sha)
+    with pytest.raises(RuntimeError, match="does not match current evidence"):
+        record_candidate_history_rejection(config, decision_sha256="0" * 64, confirm=True)
+    assert not candidate_failure_history_path(config).exists()
+
+
+def test_supported_history_cannot_be_recorded_as_rejected(tmp_path: Path) -> None:
+    config = setup_evidence(tmp_path)
+    decision_sha = str(build_candidate_history_decision(config).iloc[0]["decision_sha256"])
+    with pytest.raises(RuntimeError, match="current rejected decision"):
+        record_candidate_history_rejection(config, decision_sha256=decision_sha, confirm=True)
+
+
+def test_history_rejection_is_idempotent_and_quarantines_candidate(tmp_path: Path) -> None:
+    config = setup_evidence(tmp_path)
+    decision_sha = reject_evidence(config)
+    candidate_path = Path(config["validation"]["candidate_path"])
+    candidate_before = candidate_path.read_bytes()
+    path = record_candidate_history_rejection(config, decision_sha256=decision_sha, confirm=True)
+    first = path.read_bytes()
+    repeated = record_candidate_history_rejection(config, decision_sha256=decision_sha, confirm=True)
+    assert repeated == path
+    assert path.read_bytes() == first
+    assert candidate_path.read_bytes() == candidate_before
+    history = pd.read_csv(path, encoding="utf-8-sig")
+    assert len(history) == 1
+    row = history.iloc[0]
+    assert row["status"] == "authoritative_history_rejected"
+    assert row["decision_sha256"] == decision_sha
+    assert row["evidence_source"] == "candidate_history_decision"
+    assert len(row["evidence_sha256"]) == 64
+    assert is_candidate_quarantined(config)
+    progress = build_candidate_forward_progress(config, pd.DataFrame()).iloc[0]
+    assert progress["status"] == "quarantined_history_rejection"
+
+
+def test_legacy_failure_history_is_upgraded_without_losing_row(tmp_path: Path) -> None:
+    config = setup_evidence(tmp_path)
+    path = candidate_failure_history_path(config)
+    pd.DataFrame([{
+        "candidate_id": "legacy", "strategy_hash": "x", "behavior_hash": "y",
+        "strategy_name": "legacy", "status": "failed_forward_excess",
+        "freeze_price_end": "2026-01-01", "observed_forward_trading_days": 60,
+        "forward_excess_return": -0.1, "recorded_at": "2026-01-02T00:00:00+08:00",
+    }]).to_csv(path, index=False)
+    decision_sha = reject_evidence(config)
+    record_candidate_history_rejection(config, decision_sha256=decision_sha, confirm=True)
+    history = pd.read_csv(path, encoding="utf-8-sig")
+    assert len(history) == 2
+    assert history.iloc[0]["candidate_id"] == "legacy"
+    assert "decision_sha256" in history.columns

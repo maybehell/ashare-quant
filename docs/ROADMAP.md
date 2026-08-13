@@ -38,7 +38,7 @@ As of 2026-08-13:
 |---|---|---|
 | Local operation | Startup entry plus one supervisor and one daemon | operating |
 | Market history | 800/800 cached symbols | complete for the bound cache |
-| Formal candidate | `d55d124b5800e123`, 0/60 forward sessions; exact history failed | rejection review |
+| Formal candidate | `d55d124b5800e123`, 0/60 forward sessions; exact history failed | permanent rejection pending |
 | Candidate history validation | matching 1,965-day evidence completed; performance thresholds failed | blocked |
 | Broker read-only | Huatai process found; trading UI not loaded | blocked |
 | Account binding | 8/13 checks | blocked |
