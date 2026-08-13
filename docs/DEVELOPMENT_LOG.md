@@ -5,6 +5,68 @@ added directly below this introduction, newest first. It records verified facts;
 it is not a release-marketing document and does not replace generated audit
 artifacts.
 
+## 2026-08-13 - Preregister independent 52-week-high research family
+
+**Objective**
+
+Define a genuinely independent, falsifiable successor research phase without
+retuning the exhausted family or granting candidate authority.
+
+**Roadmap phase**
+
+P1 strategy evidence. The successor definition gate is complete; experiment one
+is preregistered but has not been historically evaluated.
+
+**Changes**
+
+- Added the opt-in `near_52_week_high` price factor, explicit 252-session
+  lookback validation, and availability filtering for incomplete histories.
+- Added an isolated CNY 100,000, twenty-stock, point-in-time CSI 300 history
+  configuration with a CNY 200,000 hard ceiling.
+- Added the `small_capital_52week_high_v1` two-experiment registry. Experiment
+  one has fixed strategy SHA-256
+  `2f8b788f99df6a7e2829887f0b25602939f002af54b3df6183ba12783eaf9d72`,
+  nominal alpha 0.025, fixed economic gates, and preregistration SHA-256
+  `6b0b0dc33a71492a345c74a4fc9c6ee9186f3b9c39c4c8507433030d4f295099`.
+- Added ADR 0036 and updated architecture and roadmap state.
+
+**Architecture and safety**
+
+- Residual momentum, reference anchoring, and volume-distance directions were
+  excluded because they already have governed rejection evidence. Fundamental
+  factors were deferred because point-in-time history is not authoritative.
+- The factor is neutral unless explicitly configured. Required-factor filtering
+  removes stocks lacking the complete high lookback before scoring.
+- No history validation was run. No candidate manifest, daily observation entry,
+  account, order, strategy activation, or broker artifact was created.
+- Broker submission remains disabled; the new config is research-only with
+  emergency stop true and active-execution application false.
+
+**Verification**
+
+- New factor plus existing factor compatibility: 21 passed in 1.01 seconds.
+- Factor, frozen identity, registry, decision, and history-config tests: 22
+  passed in 1.14 seconds.
+- Full regression is recorded below after completion.
+- Final focused factor, identity, registry, decision, and documentation suite:
+  22 passed in 1.19 seconds; final compile plus targeted suite: 12 passed in
+  0.94 seconds.
+- Full regression: 1,238 tests and 39 subtests passed in 360.46 seconds.
+- New output, SQLite state, research candidate, and research-governance paths
+  remained absent, proving the historical experiment was not run.
+- Existing candidate manifest SHA-256 remained
+  `e61f89a45cc7d34c95399e6036e10081b2ec83498dac283c0c66c66e7fa89b31`;
+  failure-history SHA-256 remained
+  `8b262ea7d330ec8d328f3ceb4a21a14caa029cb30a9f9e4c6c77359f62fd5f09`.
+- Live ledger, live orders, generic orders, RPA orders, and active strategy
+  remained absent.
+
+**Remaining work**
+
+- Run experiment one exactly once against the frozen long-history gate. Do not
+  alter its strategy, thresholds, data binding, or registration first.
+- Do not create a forward candidate unless every historical gate passes.
+
 ## 2026-08-13 - Stop scheduling permanently rejected candidates
 
 **Objective**

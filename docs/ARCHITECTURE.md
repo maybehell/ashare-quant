@@ -233,6 +233,13 @@ Rules:
 - New factor capability does not consume an experiment slot. Strategy parameters,
   decision thresholds, input binding, and registry identity must be committed in
   a later preregistration before that factor is historically evaluated.
+- A new research family cannot relabel an already rejected local hypothesis. The
+  independent 52-week-high family has at most two experiments, family-wise alpha
+  0.05, and Bonferroni nominal alpha 0.025 per experiment. Its first experiment
+  uses only hash-bound prices, point-in-time CSI 300 membership, and a fixed
+  252-session high-proximity definition. Missing lookback history excludes a
+  symbol before scoring. Preregistration creates no candidate, observation, or
+  execution authority. See ADR 0036.
 - Cross-date strategy experiments are recorded with failures as well as successes.
   A registry-bound historical experiment fixes its sequence, strategy identity,
   configuration path, decision thresholds, and multiple-testing budget before

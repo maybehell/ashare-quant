@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "family_id": "small_capital_52week_high_v1",
+  "family_wise_alpha": 0.05,
+  "multiple_testing_method": "bonferroni_fixed_family",
+  "max_experiments": 2,
+  "experiments": [
+    {
+      "sequence": 1,
+      "experiment_id": "hs300_52week_high20_v1",
+      "config_path": "configs/hs300_small_capital_52week_high_v1_history.yaml",
+      "strategy_sha256": "2f8b788f99df6a7e2829887f0b25602939f002af54b3df6183ba12783eaf9d72",
+      "hypothesis": "Stocks nearer their trailing 252-trading-day high can outperform CSI 300 in a twenty-stock, industry-neutral, board-lot-aware CNY 100,000 portfolio.",
+      "registered_at": "2026-08-13T23:10:00+08:00",
+      "nominal_alpha": 0.025,
+      "status": "preregistered",
+      "thresholds": {
+        "min_total_excess_return": 0.02,
+        "min_information_ratio": 0.30,
+        "max_drawdown": 0.25,
+        "min_out_of_sample_excess_return": 0.02,
+        "min_walk_forward_folds": 3,
+        "min_walk_forward_positive_ratio": 0.60
+      }
+    }
+  ]
+}

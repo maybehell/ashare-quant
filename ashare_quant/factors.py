@@ -273,6 +273,7 @@ def compute_factor_values(
     liquidity_lookback = int(lookbacks.get("liquidity", 20))
     volume_ma_short = int(lookbacks.get("volume_ma_short", 21))
     volume_ma_long = int(lookbacks.get("volume_ma_long", 200))
+    high_52_week_lookback = int(lookbacks.get("high_52_week", 252))
 
     momentum = close.pct_change(momentum_lookback).iloc[-1]
     long_momentum = close.pct_change(long_momentum_lookback).iloc[-1]
@@ -338,6 +339,17 @@ def compute_factor_values(
     drawdown = (close / rolling_high - 1).iloc[-1]
     trend_quality = momentum / volatility.replace(0, pd.NA)
     long_trend_quality = long_momentum / volatility.replace(0, pd.NA)
+    high_52_week_requested = "high_52_week" in lookbacks
+    near_52_week_high = (
+        close.iloc[-1].divide(
+            close.rolling(high_52_week_lookback, min_periods=high_52_week_lookback)
+            .max()
+            .iloc[-1]
+            .replace(0, pd.NA)
+        )
+        if high_52_week_requested
+        else pd.Series(index=close.columns, dtype=float)
+    )
 
     factors = pd.DataFrame(
         {
@@ -355,6 +367,8 @@ def compute_factor_values(
             "low_drawdown": drawdown.reindex(close.columns).values,
             "trend_quality": trend_quality.reindex(close.columns).values,
             "long_trend_quality": long_trend_quality.reindex(close.columns).values,
+            "near_52_week_high": near_52_week_high.reindex(close.columns).values,
+            "near_52_week_high_available": near_52_week_high.reindex(close.columns).notna().values,
             "residual_momentum": residual_cross_section["residual_momentum"].reindex(close.columns).values,
             "low_idiosyncratic_volatility": residual_cross_section["low_idiosyncratic_volatility"].reindex(close.columns).values,
             "residual_momentum_available": residual_cross_section["residual_momentum"].reindex(close.columns).notna().values,
@@ -378,6 +392,7 @@ def compute_factor_values(
     factors["low_drawdown"] = zscore(factors["low_drawdown"])
     factors["trend_quality"] = zscore(factors["trend_quality"])
     factors["long_trend_quality"] = zscore(factors["long_trend_quality"])
+    factors["near_52_week_high"] = zscore(factors["near_52_week_high"])
     factors["residual_momentum"] = zscore(factors["residual_momentum"])
     factors["low_volume_ma_distance"] = zscore(factors["low_volume_ma_distance"])
     factors["low_idiosyncratic_volatility"] = zscore(factors["low_idiosyncratic_volatility"])

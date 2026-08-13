@@ -1,0 +1,102 @@
+extends: hs300_small_capital_defensive_trend_v1_history.yaml
+
+paths:
+  cache_dir: data/cache
+  output_dir: outputs_hs300_small_capital_52week_high_v1_history
+  state_db: data/state_hs300_small_capital_52week_high_v1_history.sqlite3
+
+capital_budget:
+  enabled: true
+  intended_account_capital: 100000
+  max_total_capital: 200000
+
+validation:
+  candidate_path: data/research_candidate_hs300_small_capital_52week_high_v1_history.json
+  research_governance_state_path: data/research_governance_hs300_small_capital_52week_high_v1_history.json
+  research_only: true
+  apply_active_execution: false
+  optimized_on_current_cache: false
+  experiment_status: preregistered_history_validation
+  fixed_strategy_sha256: 2f8b788f99df6a7e2829887f0b25602939f002af54b3df6183ba12783eaf9d72
+  experiment_reason: >-
+    First experiment in a new two-test family. Evaluate a simple 252-trading-day
+    high-proximity signal without inheriting authority or thresholds from the
+    exhausted small-capital benchmark-relative family.
+  research_rationale: >-
+    Test the published but contested 52-week-high anchoring hypothesis in a
+    point-in-time CSI 300, long-only, twenty-position, board-lot-aware CNY
+    100,000 portfolio. The first experiment intentionally excludes seasonal and
+    turnover interactions so the basic mechanism is tested before any extension.
+  experiment_registration:
+    required: true
+    registry_path: configs/research_experiment_registry_52week_high_v1.json
+    experiment_id: hs300_52week_high20_v1
+    config_path: configs/hs300_small_capital_52week_high_v1_history.yaml
+
+backtest:
+  start: "2018-01-01"
+  end: "2026-08-07"
+  initial_cash: 100000
+  rebalance: monthly
+
+strategy:
+  name: hs300_small_capital_52week_high20_v1_history
+  top_n: 20
+  max_stock_weight: 0.05
+  max_industry_weight: 0.25
+  weighting: equal
+  benchmark_membership:
+    enabled: true
+    index_symbol: "000300"
+    max_staleness_days: 120
+  reference_anchor:
+    enabled: false
+  lookbacks:
+    high_52_week: 252
+    liquidity: 60
+  required_factors:
+    - near_52_week_high
+  weights:
+    momentum: 0.00
+    long_momentum: 0.00
+    valuation: 0.00
+    quality: 0.00
+    low_volatility: 0.00
+    low_downside_volatility: 0.00
+    low_drawdown: 0.00
+    trend_quality: 0.00
+    short_reversal: 0.00
+    residual_momentum: 0.00
+    low_idiosyncratic_volatility: 0.00
+    medium_reversal: 0.00
+    near_52_week_high: 0.90
+    liquidity: 0.10
+  industry_neutralization:
+    enabled: true
+    min_group_size: 5
+  cross_sectional_neutralization:
+    enabled: false
+  capital_aware:
+    enabled: true
+    min_positions: 15
+    max_positions: 20
+    max_candidate_rank: 60
+    require_industry: true
+    allow_additional_lots: true
+    planning_schema_version: 2
+    respect_target_weights: true
+    planning_equity_step: 1000
+    planning_commission_rate: 0.0008
+    planning_min_commission: 5
+    planning_transfer_fee_rate: 0.00001
+
+risk_overlay:
+  enabled: false
+
+trading:
+  reserve_cash_ratio: 0.05
+
+auto_live:
+  enabled: false
+  allow_broker_submit: false
+  emergency_stop: true

@@ -270,6 +270,20 @@ def validate_config(config: dict[str, Any]) -> list[str]:
                 errors.append(
                     "strategy low_volume_ma_distance factor requires volume_ma_short and volume_ma_long lookbacks"
                 )
+            high_52_week_active = False
+            for weights in active_weights:
+                if not isinstance(weights, dict) or "near_52_week_high" not in weights:
+                    continue
+                try:
+                    high_52_week_weight = float(weights.get("near_52_week_high", 0.0))
+                except (TypeError, ValueError):
+                    errors.append("strategy near_52_week_high weight must be numeric")
+                    continue
+                high_52_week_active = high_52_week_active or abs(high_52_week_weight) > 1e-12
+            if high_52_week_active and "high_52_week" not in lookbacks:
+                errors.append(
+                    "strategy near_52_week_high factor requires high_52_week lookback"
+                )
             if not isinstance(required_factors, list):
                 errors.append("strategy.required_factors must be a list")
             else:
