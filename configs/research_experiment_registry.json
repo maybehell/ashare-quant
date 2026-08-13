@@ -49,8 +49,9 @@
       "hypothesis": "A 60-trading-day reversal signal that skips the latest 5 sessions can outperform CSI 300 in a twenty-stock, long-only, board-lot-aware CNY 100,000 portfolio.",
       "registered_at": "2026-08-13T19:33:07+08:00",
       "nominal_alpha": 0.0125,
-      "status": "preregistered",
-      "thresholds": {"min_total_excess_return": 0.02, "min_information_ratio": 0.30, "max_drawdown": 0.25, "min_out_of_sample_excess_return": 0.02, "min_walk_forward_folds": 3, "min_walk_forward_positive_ratio": 0.60}
+      "status": "rejected",
+      "thresholds": {"min_total_excess_return": 0.02, "min_information_ratio": 0.30, "max_drawdown": 0.25, "min_out_of_sample_excess_return": 0.02, "min_walk_forward_folds": 3, "min_walk_forward_positive_ratio": 0.60},
+      "result": {"excess_total_return": -0.082922, "information_ratio": -0.131145, "max_drawdown": -0.107241, "out_of_sample_excess_return": -0.014618, "walk_forward_positive_ratio": 0.384615, "bootstrap_two_sided_p_value": 0.93}
     }
   ]
 }

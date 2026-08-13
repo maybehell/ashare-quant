@@ -5,6 +5,51 @@ added directly below this introduction, newest first. It records verified facts;
 it is not a release-marketing document and does not replace generated audit
 artifacts.
 
+## 2026-08-13 - Reject fourth fixed-family history experiment
+
+**Objective**
+
+Run the preregistered fourth and final P1 historical experiment exactly once,
+apply its frozen economic and statistical gates, and preserve the result without
+promotion.
+
+**Roadmap phase**
+
+P1 strategy evidence remains blocked. All four experiments in the fixed family
+are rejected; this result grants no forward, activation, or execution authority.
+
+**Result**
+
+- The fixed CNY 100,000 strategy returned 31.2675% from 2018-07-04 through
+  2026-08-07 versus 39.5598% for CSI 300, for total excess of -8.2922%.
+- Out-of-sample excess was -1.4618%; information ratio was -0.1311; maximum
+  drawdown was -10.7241%.
+- Five of 13 non-overlapping walk-forward tests were positive (38.4615%). The
+  paired moving-block bootstrap two-sided p-value was 0.93.
+- The machine decision was `rejected` because total excess, information ratio,
+  out-of-sample excess, walk-forward consistency, positive observed excess, and
+  Bonferroni significance all failed their preregistered gates.
+
+**Evidence and safety**
+
+- The run completed with exact experiment registration SHA-256
+  `14089a3a08ce82840848b438911eab4ab57a325709593c900fe50fe0bc42f26c`,
+  strategy SHA-256 `a7833559e04e85a9931f6e3fb3eee68664ebfcd431e61106583b435e77ed9352`,
+  and formal price SHA-256
+  `b1eb8529bcd3b948e705bdac27859bf6a21b6f91921c05329f4479f553b84c5c`.
+- All 800 requested symbols completed, with 1,965 effective trading days. The
+  command exited 0 and generated the final signed status evidence.
+- Research output contained neither `orders.csv` nor `rpa_orders.csv`; protected
+  live account, live order, and active-strategy artifacts remained absent.
+- A second production invocation was intentionally not performed because the
+  safety reviewer did not authorize a command that could overwrite frozen
+  evidence. Reuse semantics remain covered by focused automated tests.
+
+**Remaining work**
+
+- Do not tune this family on the same history. Define a new research phase and
+  independent evidence budget before evaluating another strategy family.
+
 ## 2026-08-13 - Preregister fourth fixed-family history experiment
 
 **Objective**
