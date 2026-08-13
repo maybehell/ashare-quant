@@ -1,5 +1,6 @@
 from copy import deepcopy
 
+from ashare_quant.candidate import live_strategy_hash
 from ashare_quant.config import load_config
 from ashare_quant.history_config import history_validation_config_issues
 
@@ -40,4 +41,39 @@ def test_history_config_rejects_output_redirection_and_live_capability() -> None
         for issue in history_validation_config_issues(
             config, output_dir="test_outputs/history", allow_output_override=True
         )
+    )
+
+
+def test_current_candidate_history_config_preserves_identity_and_isolates_state() -> None:
+    forward = load_config("configs/hs300_small_capital_defensive_trend_v1_forward.yaml")
+    history = load_config("configs/hs300_small_capital_defensive_trend_v1_history.yaml")
+
+    assert live_strategy_hash(history) == live_strategy_hash(forward)
+    assert history_validation_config_issues(
+        history,
+        output_dir="outputs_hs300_small_capital_defensive_trend_v1_history",
+    ) == []
+    assert history["paths"]["cache_dir"] == "data/cache"
+    assert history["paths"]["state_db"] != forward["paths"]["state_db"]
+    assert history["paths"]["output_dir"] != forward["paths"]["output_dir"]
+    assert history["validation"]["history_input_binding"]["required"] is True
+
+
+def test_required_history_input_binding_rejects_missing_or_different_cache() -> None:
+    config = load_config("configs/hs300_small_capital_defensive_trend_v1_history.yaml")
+    missing = deepcopy(config)
+    missing["validation"]["history_input_binding"].pop("prices_sha256")
+    different = deepcopy(config)
+    different["validation"]["history_input_binding"]["cache_dir"] = "data/other"
+
+    assert any(
+        issue.startswith("history_input_binding_missing:prices_sha256")
+        for issue in history_validation_config_issues(
+            missing,
+            output_dir="outputs_hs300_small_capital_defensive_trend_v1_history",
+        )
+    )
+    assert "history_input_binding_cache_dir_mismatch" in history_validation_config_issues(
+        different,
+        output_dir="outputs_hs300_small_capital_defensive_trend_v1_history",
     )

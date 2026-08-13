@@ -5,6 +5,76 @@ added directly below this introduction, newest first. It records verified facts;
 it is not a release-marketing document and does not replace generated audit
 artifacts.
 
+## 2026-08-13 - Complete candidate-matching long-history evidence
+
+**Objective**
+
+Execute the first unmet P1 milestone by evaluating the unchanged frozen
+small-capital candidate against a preregistered, completed 800-symbol history
+input, without granting strategy or broker authority.
+
+**Roadmap phase**
+
+P1 strategy evidence. The candidate-matching historical experiment is complete,
+but P1 remains blocked because performance thresholds failed and the forward
+window remains 0/60 sessions.
+
+**Changes**
+
+- Added a candidate-specific history configuration that inherits the frozen
+  forward candidate, preserving strategy hash
+  `1af970df4011e6b8bc0bce601c813b42d8c58105ae8ab587a3f1f0a5ffcaadd9`.
+- Added required history-input binding for the shared read-only research cache:
+  resolved cache path, formal-price SHA-256, progress frame and timestamp,
+  800/800 symbol counts, and the 2018-01-01 to 2026-08-07 interval.
+- Persisted the input-binding identity in validation status and required it for
+  deterministic completed-result reuse. Legacy unbound status remains readable.
+- Registered the candidate history configuration as the authoritative history
+  evidence source for the local operator. The operator now separates current
+  evidence identity from performance against the candidate's existing frozen
+  live-guard thresholds.
+- Added ADR 0029 and updated architecture and roadmap baseline.
+
+**Architecture and safety**
+
+- Shared history is read-only and preregistered; candidate forward cache,
+  candidate history output, research state, default outputs, broker outputs, and
+  live ledger retain separate owners.
+- The validation cannot promote itself, initialize a ledger, create `orders.csv`
+  or `rpa_orders.csv`, or invoke a broker.
+- No frozen strategy parameter or threshold changed. Emergency stop remains
+  active and broker/service submission remain disabled.
+
+**Verification**
+
+- History config role and exact real-cache input binding passed; binding identity
+  is `01b1b6b54575c2d93e1250fbfa65cc55f9e552f180e067bc2f07451b5a061909`.
+- Real fixed-candidate validation completed over 800/800 symbols and 1,965
+  effective trading days. Strategy return was 25.96%, benchmark return 39.56%,
+  cumulative excess -13.60%, information ratio -0.1603, and maximum drawdown
+  -11.57%.
+- The result failed the existing frozen minimum 2% excess and 0.30 information
+  ratio thresholds; drawdown remained within the 25% maximum. Local status now
+  reports `authoritative_candidate=match;performance=fail` and `passed=False`.
+- Exact completed evidence was deterministically reused in 5.8 seconds without
+  changing its generated timestamp or metrics.
+- Final P1 and documentation-governance regression: 52 passed in 3.32 seconds.
+- First JUnit full regression found one transient Windows ACL failure in the
+  directory-retry test; the isolated test then passed in 0.81 seconds. Final
+  JUnit full regression: 1,238 tests, zero failures/errors/skips in 393.035
+  seconds.
+- Candidate history execution processes exited. Protected live ledger, generic
+  orders, active execution strategy, and research-output execution order files
+  remain absent.
+
+**Remaining work**
+
+- Keep the failed historical result immutable and continue the candidate's
+  untuned 60-session forward observation. It does not qualify for P2, P4, or live
+  execution from this evidence.
+- If research continues, create a newly preregistered successor experiment with
+  independent rationale and a new forward window; never tune this frozen
+  candidate against the observed historical result.
 ## 2026-08-13 - Establish an evidence-gated delivery roadmap
 
 **Objective**

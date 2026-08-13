@@ -241,6 +241,10 @@ Rules:
   evidence only and grants no strategy authority. A reproducible experiment is
   applicable to the authoritative candidate only when their strategy identities
   match; otherwise its metrics remain visible as non-applicable research evidence.
+- A candidate-matching history experiment may read a shared completed research
+  cache only through a preregistered cache path, formal-price hash, progress
+  identity, symbol count, and requested-interval binding. Candidate history output
+  and state remain isolated, and the candidate forward cache is never replaced.
 - History daemon schema 4 records its output owner and a bounded validation error
   tail. Failed retry states preserve that diagnostic; successful fixed validation
   writes `complete` and terminates the daemon instead of remaining resident.

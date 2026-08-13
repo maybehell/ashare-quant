@@ -9,7 +9,9 @@ from ashare_quant.candidate import live_strategy_hash
 from ashare_quant.data import DataStore
 from ashare_quant.history_validation import (
     assert_research_only_history_config,
+    file_sha256,
     require_completed_history_progress,
+    require_history_input_binding,
     run_extended_history_validation,
 )
 
@@ -99,6 +101,7 @@ class ExtendedHistoryValidationTests(unittest.TestCase):
         }
         with self.assertRaisesRegex(ValueError, "does not match current strategy"):
             assert_research_only_history_config(mismatched)
+
     def test_research_only_boundary_rejects_execution_capability(self):
         unsafe = {
             **self.config,
@@ -109,6 +112,36 @@ class ExtendedHistoryValidationTests(unittest.TestCase):
         }
         with self.assertRaisesRegex(ValueError, "allow_broker_submit"):
             assert_research_only_history_config(unsafe)
+
+    def test_required_input_binding_rejects_any_cache_identity_drift(self):
+        self.write_progress()
+        progress = require_completed_history_progress(self.store, self.config)
+        prices_path = self.store.cache_dir / "prices.parquet"
+        if not prices_path.exists():
+            prices_path = self.store.cache_dir / "prices.csv"
+        prices_sha256 = file_sha256(prices_path)
+        self.config["validation"]["history_input_binding"] = {
+            "required": True,
+            "schema_version": 1,
+            "cache_dir": str(self.store.cache_dir),
+            "prices_sha256": prices_sha256,
+            "progress_frame": "history_backfill_progress_extended_test",
+            "progress_generated_at": "2026-08-10T01:00:00",
+            "requested_symbols": 2,
+            "completed_symbols": 2,
+            "requested_start": "2018-01-01",
+            "requested_end": "2026-08-07",
+        }
+
+        identity = require_history_input_binding(
+            self.config, self.store, progress, prices_path, prices_sha256
+        )
+        self.assertEqual(len(identity), 64)
+        self.config["validation"]["history_input_binding"]["prices_sha256"] = "0" * 64
+        with self.assertRaisesRegex(RuntimeError, "prices_sha256"):
+            require_history_input_binding(
+                self.config, self.store, progress, prices_path, prices_sha256
+            )
 
     def test_runs_fixed_backtest_once_and_reuses_exact_completed_evidence(self):
         self.write_progress()

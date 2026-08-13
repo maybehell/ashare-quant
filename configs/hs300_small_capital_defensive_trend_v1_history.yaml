@@ -1,0 +1,52 @@
+extends: hs300_small_capital_defensive_trend_v1_forward.yaml
+
+operations:
+  config_role: research_history_validation
+
+paths:
+  cache_dir: data/cache
+  output_dir: outputs_hs300_small_capital_defensive_trend_v1_history
+  state_db: data/state_hs300_small_capital_defensive_trend_v1_history.sqlite3
+
+data:
+  history_staging_namespace: extended_history_validation
+
+backtest:
+  start: "2018-01-01"
+  end: "2026-08-07"
+  initial_cash: 100000
+  rebalance: monthly
+
+validation:
+  candidate_path: data/live_candidate_hs300_small_capital_defensive_trend_v1_history.json
+  research_governance_state_path: data/research_governance_hs300_small_capital_defensive_trend_v1_history.json
+  research_only: true
+  apply_active_execution: false
+  optimized_on_current_cache: false
+  experiment_status: preregistered_candidate_history_validation
+  fixed_strategy_sha256: 1af970df4011e6b8bc0bce601c813b42d8c58105ae8ab587a3f1f0a5ffcaadd9
+  experiment_reason: >-
+    Evaluate the already frozen forward candidate on the completed independent
+    long-history cache. This experiment may reject or support later review but
+    cannot modify the candidate, promote itself, or authorize execution.
+  min_backtest_trading_days: 1500
+  history_input_binding:
+    required: true
+    schema_version: 1
+    cache_dir: data/cache
+    prices_sha256: b1eb8529bcd3b948e705bdac27859bf6a21b6f91921c05329f4479f553b84c5c
+    progress_frame: history_backfill_progress_extended_history_validation
+    progress_generated_at: "2026-08-11T13:40:49"
+    requested_symbols: 800
+    completed_symbols: 800
+    requested_start: "2018-01-01"
+    requested_end: "2026-08-07"
+
+observation_task:
+  required: false
+  startup_required: false
+
+auto_live:
+  enabled: false
+  allow_broker_submit: false
+  emergency_stop: true

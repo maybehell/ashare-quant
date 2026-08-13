@@ -60,6 +60,37 @@ def history_validation_config_issues(
         issues.append("auto_live.allow_broker_submit=true")
     if not bool(auto_live.get("emergency_stop", True)):
         issues.append("auto_live.emergency_stop=false")
+    input_binding = validation.get("history_input_binding", {})
+    if input_binding and not isinstance(input_binding, dict):
+        issues.append("validation.history_input_binding=invalid")
+    elif isinstance(input_binding, dict) and bool(input_binding.get("required", False)):
+        required_binding_fields = (
+            "schema_version",
+            "cache_dir",
+            "prices_sha256",
+            "progress_frame",
+            "progress_generated_at",
+            "requested_symbols",
+            "completed_symbols",
+            "requested_start",
+            "requested_end",
+        )
+        missing = [
+            field
+            for field in required_binding_fields
+            if str(input_binding.get(field, "") or "").strip() == ""
+        ]
+        if missing:
+            issues.append("history_input_binding_missing:" + ",".join(missing))
+        configured_cache = str(paths.get("cache_dir", "") or "").strip()
+        bound_cache = str(input_binding.get("cache_dir", "") or "").strip()
+        if (
+            configured_cache
+            and bound_cache
+            and project_path(configured_cache).resolve()
+            != project_path(bound_cache).resolve()
+        ):
+            issues.append("history_input_binding_cache_dir_mismatch")
     fixed_hash = str(
         validation.get("fixed_strategy_sha256", "") or ""
     ).strip().lower()

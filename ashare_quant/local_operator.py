@@ -105,8 +105,25 @@ def write_local_operator_status(
     history_daemon_status = _read_json(
         project_path("outputs_extended_history_validation/history_backfill_daemon_status.json")
     )
+    history_validation_config_path = str(
+        strategy_config.get("validation", {}).get(
+            "authoritative_history_validation_config",
+            "configs/extended_history_validation.yaml",
+        )
+        or ""
+    ).strip()
+    history_validation_config = (
+        load_config(history_validation_config_path)
+        if history_validation_config_path
+        else {}
+    )
+    history_validation_dir = project_path(
+        history_validation_config.get("paths", {}).get(
+            "output_dir", "outputs_extended_history_validation"
+        )
+    )
     history_validation = _read_csv(
-        project_path("outputs_extended_history_validation/history_validation_status.csv")
+        history_validation_dir / "history_validation_status.csv"
     )
     scheduled_observation = _read_csv(strategy_dir / "daily_observation_summary.csv")
     broker_refresh = _read_csv(live_dir / "huatai_read_only_refresh.csv")
@@ -198,6 +215,7 @@ def write_local_operator_status(
     history_validation_ok, history_validation_value, history_validation_message = (
         _current_extended_history_validation_status(
             history_validation,
+            validation_config=history_validation_config or None,
             required_strategy_sha256=authoritative_candidate_hash or None,
         )
     )
@@ -605,6 +623,7 @@ def _current_extended_history_validation_status(
     expected_strategy_sha256: str | None = None,
     expected_backtest_config_sha256: str | None = None,
     current_prices_sha256: str | None = None,
+    validation_config: dict[str, Any] | None = None,
     required_strategy_sha256: str | None = None,
 ) -> tuple[bool, str, str]:
     if frame.empty:
@@ -620,7 +639,9 @@ def _current_extended_history_validation_status(
         or current_prices is None
     ):
         try:
-            extended_config = load_config("configs/extended_history_validation.yaml")
+            extended_config = validation_config or load_config(
+                "configs/extended_history_validation.yaml"
+            )
             expected_strategy = live_strategy_hash(extended_config)
             expected_backtest = backtest_config_sha256(extended_config)
             cache_dir = project_path(extended_config["paths"]["cache_dir"])
@@ -656,7 +677,7 @@ def _current_extended_history_validation_status(
         row.get("effective_trading_days", 0), errors="coerce"
     )
     days = 0 if pd.isna(effective_days) else max(int(effective_days), 0)
-    passed = bool(
+    evidence_current = bool(
         status == "completed"
         and requested_count > 0
         and completed_count == requested_count
@@ -665,6 +686,31 @@ def _current_extended_history_validation_status(
         and prices_current
         and target_strategy_match
     )
+    performance_required = validation_config is not None
+    guard = (
+        validation_config.get("live_guard", {})
+        if isinstance(validation_config, dict)
+        else {}
+    )
+    excess = pd.to_numeric(row.get("excess_total_return", ""), errors="coerce")
+    information_ratio = pd.to_numeric(
+        row.get("information_ratio", ""), errors="coerce"
+    )
+    max_drawdown = pd.to_numeric(row.get("max_drawdown", ""), errors="coerce")
+    performance_passed = bool(
+        not performance_required
+        or (
+            not pd.isna(excess)
+            and float(excess) >= float(guard.get("min_total_excess_return", 0.0))
+            and not pd.isna(information_ratio)
+            and float(information_ratio)
+            >= float(guard.get("min_information_ratio", 0.0))
+            and not pd.isna(max_drawdown)
+            and abs(float(max_drawdown))
+            <= float(guard.get("max_strategy_drawdown", 1.0))
+        )
+    )
+    passed = evidence_current and performance_passed
     value = (
         f"status={status or 'missing'};scope={completed_count}/{requested_count};"
         f"days={days};excess={row.get('excess_total_return', '')};"
@@ -673,7 +719,8 @@ def _current_extended_history_validation_status(
         f"strategy={'current' if strategy_current else 'stale'};"
         f"backtest={'current' if backtest_current else 'stale'};"
         f"prices={'current' if prices_current else 'stale'};"
-        f"authoritative_candidate={'match' if target_strategy_match else 'not_applicable'}"
+        f"authoritative_candidate={'match' if target_strategy_match else 'not_applicable'};"
+        f"performance={'pass' if performance_passed else 'fail' if performance_required else 'not_evaluated'}"
     )
     if (
         status == "completed"
@@ -683,6 +730,12 @@ def _current_extended_history_validation_status(
         and not target_strategy_match
     ):
         return False, value, "该长历史实验自身可复现，但策略身份与当前权威冻结候选不同，结果不适用于当前候选，也不能支持晋级或下单。"
+    if evidence_current and performance_required and not performance_passed:
+        return (
+            False,
+            value,
+            "\u957f\u5386\u53f2\u8bc1\u636e\u8eab\u4efd\u6709\u6548\uff0c\u4f46\u7d2f\u8ba1\u8d85\u989d\u6536\u76ca\u3001\u4fe1\u606f\u6bd4\u7387\u6216\u6700\u5927\u56de\u64a4\u672a\u8fbe\u5230\u51bb\u7ed3\u524d\u95e8\u69db\uff1b\u4e0d\u652f\u6301\u664b\u7ea7\u6216\u4e0b\u5355\u3002",
+        )
     if passed:
         return True, value, "\u957f\u5386\u53f2\u56fa\u5b9a\u7b56\u7565\u9a8c\u8bc1\u5df2\u5b8c\u6210\u4e14\u8eab\u4efd\u4e0e\u5f53\u524d\u6b63\u5f0f\u6570\u636e\u4e00\u81f4\uff1b\u4ecd\u4e0d\u81ea\u52a8\u6388\u6743\u664b\u7ea7\u6216\u4e0b\u5355\u3002"
     return False, value, "\u957f\u5386\u53f2\u9a8c\u8bc1\u7f3a\u5931\u3001\u672a\u5b8c\u6210\u6216\u5df2\u4e0e\u5f53\u524d\u7b56\u7565\u3001\u56de\u6d4b\u914d\u7f6e\u6216\u6b63\u5f0f\u4ef7\u683c\u6587\u4ef6\u5931\u914d\u3002"

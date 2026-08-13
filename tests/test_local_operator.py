@@ -68,6 +68,48 @@ class LocalOperatorTests(unittest.TestCase):
         self.assertFalse(not_applicable)
         self.assertIn("authoritative_candidate=not_applicable", not_applicable_value)
         self.assertIn("不适用于当前候选", not_applicable_message)
+    def test_candidate_history_evidence_must_also_pass_frozen_performance_thresholds(self):
+        frame = pd.DataFrame([{
+            "status": "completed",
+            "requested_symbols": 800,
+            "completed_symbols": 800,
+            "effective_trading_days": 1965,
+            "excess_total_return": -0.136,
+            "information_ratio": -0.16,
+            "max_drawdown": -0.116,
+            "strategy_sha256": "strategy",
+            "backtest_config_sha256": "backtest",
+            "formal_prices_sha256": "prices",
+        }])
+        config = {
+            "live_guard": {
+                "min_total_excess_return": 0.02,
+                "min_information_ratio": 0.30,
+                "max_strategy_drawdown": 0.25,
+            }
+        }
+        kwargs = {
+            "expected_strategy_sha256": "strategy",
+            "expected_backtest_config_sha256": "backtest",
+            "current_prices_sha256": "prices",
+            "required_strategy_sha256": "strategy",
+            "validation_config": config,
+        }
+
+        failed, failed_value, failed_message = (
+            _current_extended_history_validation_status(frame, **kwargs)
+        )
+        passed, passed_value, _ = _current_extended_history_validation_status(
+            frame.assign(excess_total_return=0.05, information_ratio=0.40),
+            **kwargs,
+        )
+
+        self.assertFalse(failed)
+        self.assertIn("performance=fail", failed_value)
+        self.assertIn("\u672a\u8fbe\u5230\u51bb\u7ed3\u524d\u95e8\u69db", failed_message)
+        self.assertTrue(passed)
+        self.assertIn("performance=pass", passed_value)
+
     def test_history_backfill_source_outage_is_visible_without_claiming_completion(self):
         passed, value, message = _history_backfill_daemon_status({
             "state": "source_unavailable",

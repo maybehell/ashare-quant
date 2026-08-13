@@ -7,7 +7,7 @@ from typing import Any
 
 import pandas as pd
 
-from .audit import backtest_config_sha256
+from .audit import backtest_config_sha256, mapping_sha256
 from .backtest import run_backtest
 from .candidate import live_strategy_hash
 from .config import project_path
@@ -28,6 +28,7 @@ STATUS_COLUMNS = [
     "formal_prices_sha256",
     "backtest_config_sha256",
     "strategy_sha256",
+    "history_input_binding_sha256",
     "survivorship_audit_sha256",
     "effective_trading_days",
     "minimum_trading_days",
@@ -51,6 +52,9 @@ def run_extended_history_validation(config: dict[str, Any]) -> dict[str, Path]:
     report_path = output_dir / "report.html"
     prices_path = formal_prices_path(store)
     prices_sha256 = file_sha256(prices_path)
+    input_binding_sha256 = require_history_input_binding(
+        config, store, progress, prices_path, prices_sha256
+    )
     config_sha256 = backtest_config_sha256(config)
     strategy_sha256 = live_strategy_hash(config)
     survivorship_paths = write_survivorship_bias_audit(config)
@@ -71,6 +75,7 @@ def run_extended_history_validation(config: dict[str, Any]) -> dict[str, Path]:
         prices_sha256,
         config_sha256,
         strategy_sha256,
+        input_binding_sha256,
         survivorship_sha256,
         minimum_trading_days,
         str(progress["generated_at"]),
@@ -82,7 +87,13 @@ def run_extended_history_validation(config: dict[str, Any]) -> dict[str, Path]:
         }
 
     base = {
-        **status_base(progress, prices_sha256, config_sha256, strategy_sha256),
+        **status_base(
+            progress,
+            prices_sha256,
+            config_sha256,
+            strategy_sha256,
+            input_binding_sha256,
+        ),
         "survivorship_audit_sha256": survivorship_sha256,
         "minimum_trading_days": minimum_trading_days,
     }
@@ -216,6 +227,71 @@ def formal_prices_path(store: DataStore) -> Path:
     raise RuntimeError("Formal prices cache is missing.")
 
 
+def require_history_input_binding(
+    config: dict[str, Any],
+    store: DataStore,
+    progress: pd.Series,
+    prices_path: Path,
+    prices_sha256: str,
+) -> str:
+    validation = config.get("validation", {})
+    configured = (
+        validation.get("history_input_binding", {})
+        if isinstance(validation, dict)
+        else {}
+    )
+    if not isinstance(configured, dict) or not configured:
+        return ""
+    if not bool(configured.get("required", False)):
+        return ""
+
+    progress_frame = history_staging_frame_name(config, "history_backfill_progress")
+    actual = {
+        "schema_version": 1,
+        "cache_dir": str(store.cache_dir.resolve()),
+        "prices_path": str(prices_path.resolve()),
+        "prices_sha256": prices_sha256,
+        "progress_frame": progress_frame,
+        "progress_generated_at": str(progress.get("generated_at", "")),
+        "requested_symbols": int(progress.get("requested_symbols", 0)),
+        "completed_symbols": int(progress.get("completed_symbols", 0)),
+        "requested_start": str(progress.get("requested_start", "")),
+        "requested_end": str(progress.get("requested_end", "")),
+    }
+    expected = {
+        "schema_version": int(configured.get("schema_version", 0) or 0),
+        "cache_dir": str(project_path(configured.get("cache_dir", "")).resolve()),
+        "prices_sha256": str(configured.get("prices_sha256", "") or "").lower(),
+        "progress_frame": str(configured.get("progress_frame", "") or ""),
+        "progress_generated_at": str(
+            configured.get("progress_generated_at", "") or ""
+        ),
+        "requested_symbols": int(configured.get("requested_symbols", 0) or 0),
+        "completed_symbols": int(configured.get("completed_symbols", 0) or 0),
+        "requested_start": str(configured.get("requested_start", "") or ""),
+        "requested_end": str(configured.get("requested_end", "") or ""),
+    }
+    comparisons = {
+        "schema_version": actual["schema_version"] == expected["schema_version"],
+        "cache_dir": actual["cache_dir"].casefold() == expected["cache_dir"].casefold(),
+        "prices_sha256": actual["prices_sha256"] == expected["prices_sha256"],
+        "progress_frame": actual["progress_frame"] == expected["progress_frame"],
+        "progress_generated_at": actual["progress_generated_at"]
+        == expected["progress_generated_at"],
+        "requested_symbols": actual["requested_symbols"]
+        == expected["requested_symbols"],
+        "completed_symbols": actual["completed_symbols"]
+        == expected["completed_symbols"],
+        "requested_start": actual["requested_start"] == expected["requested_start"],
+        "requested_end": actual["requested_end"] == expected["requested_end"],
+    }
+    mismatches = [name for name, matches in comparisons.items() if not matches]
+    if mismatches:
+        raise RuntimeError(
+            "Historical validation input binding mismatch: " + ",".join(mismatches)
+        )
+    return mapping_sha256(actual)
+
 def file_sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -230,6 +306,7 @@ def reusable_completed_validation(
     prices_sha256: str,
     config_sha256: str,
     strategy_sha256: str,
+    history_input_binding_sha256: str,
     survivorship_audit_sha256: str,
     minimum_trading_days: int,
     progress_generated_at: str,
@@ -243,6 +320,14 @@ def reusable_completed_validation(
         and str(row.get("formal_prices_sha256", "")) == prices_sha256
         and str(row.get("backtest_config_sha256", "")) == config_sha256
         and str(row.get("strategy_sha256", "")) == strategy_sha256
+        and (
+            str(row.get("history_input_binding_sha256", ""))
+            == history_input_binding_sha256
+            or (
+                not history_input_binding_sha256
+                and pd.isna(row.get("history_input_binding_sha256", ""))
+            )
+        )
         and str(row.get("survivorship_audit_sha256", "")) == survivorship_audit_sha256
         and pd.notna(
             pd.to_numeric(row.get("effective_trading_days", 0), errors="coerce")
@@ -260,6 +345,7 @@ def status_base(
     prices_sha256: str,
     config_sha256: str,
     strategy_sha256: str,
+    history_input_binding_sha256: str = "",
 ) -> dict[str, object]:
     return {
         "generated_at": datetime.now().isoformat(timespec="seconds"),
@@ -271,6 +357,7 @@ def status_base(
         "formal_prices_sha256": prices_sha256,
         "backtest_config_sha256": config_sha256,
         "strategy_sha256": strategy_sha256,
+        "history_input_binding_sha256": history_input_binding_sha256,
         "effective_trading_days": "",
         "total_return": "",
         "benchmark_total_return": "",

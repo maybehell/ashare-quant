@@ -108,6 +108,7 @@
     "forward_only_candidate_configs": [
       "configs/hs300_small_capital_defensive_trend_v1_forward.yaml"
     ],
+    "authoritative_history_validation_config": "configs/hs300_small_capital_defensive_trend_v1_history.yaml",
     "forward_selection": {
       "min_common_trading_days": 60,
       "block_days": 5,
