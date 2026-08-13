@@ -38,7 +38,7 @@ As of 2026-08-13:
 |---|---|---|
 | Local operation | Startup entry plus one supervisor and one daemon | operating |
 | Market history | 800/800 cached symbols | complete for the bound cache |
-| Formal candidate | `d55d124b5800e123`, 0/60 forward sessions; exact history failed | permanent rejection pending |
+| Formal candidate | `d55d124b5800e123`, exact history decision and permanent record bound | rejected |
 | Candidate history validation | matching 1,965-day evidence completed; performance thresholds failed | blocked |
 | Broker read-only | Huatai process found; trading UI not loaded | blocked |
 | Account binding | 8/13 checks | blocked |
@@ -202,9 +202,11 @@ Exit criteria:
 Work is selected from the earliest phase whose exit criteria are not met:
 
 1. Keep daily observation and protected-state audits healthy.
-2. Build candidate-matching independent long-history validation without changing
-   the frozen candidate.
-3. Accumulate the genuine 60-session forward window.
+2. Define an independently motivated, preregistered successor research phase;
+   do not continue tuning the exhausted four-test family or inherit the rejected
+   candidate's authority.
+3. Accumulate a genuine 60-session forward window only for a newly
+   preregistered successor that first passes its independent history gate.
 4. Complete the four-tier small-capital evidence for the approved candidate.
 5. Restore and soak Huatai read-only account evidence.
 6. Implement P4 shadow reconciliation only after P1-P3 gates pass.

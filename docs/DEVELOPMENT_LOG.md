@@ -40,19 +40,28 @@ failed candidate but does not create or approve a successor.
 
 - Candidate rejection, legacy schema, activation, and research isolation suite:
   53 passed in 11.50s.
-- Full regression and committed-code real-candidate registration are recorded
-  below before the final result commit.
+- The implementation was committed and pushed as `7428c6a` before the real
+  candidate record was written.
 - The first full-regression attempt stopped during collection with five import
   errors because the new CLI branch split the existing decision branch. After
   restoring two complete branches, Python compilation passed and the candidate
   plus CLI focused suite passed 133 tests in 29.88 seconds.
 - Full regression after the fix: 1,227 tests and 39 subtests passed in 368.52
   seconds.
+- Candidate `d55d124b5800e123` was permanently recorded as
+  `authoritative_history_rejected` at 2026-08-13T21:49:50+08:00, bound to
+  decision SHA-256 `4f79a6e3a6fcfb929c370f3428755cd12a0e936bc66965f94989ffc08f9eeeb7`
+  and evidence SHA-256
+  `f79962c2d999dc871e3e3e3c3e0b917817a4eecdc723d8fdca2aae6a06a845eb`.
+- Failure history grew from five to six rows. A repeated command kept six rows
+  and the exact file SHA-256
+  `8b262ea7d330ec8d328f3ceb4a21a14caa029cb30a9f9e4c6c77359f62fd5f09`.
+  The candidate manifest hash remained unchanged.
 
 **Remaining work**
 
-- Commit and test this implementation before using it to write the real
-  candidate rejection record.
+- Define a new independent successor research phase. Do not resume promotion
+  review or forward accumulation for this rejected candidate.
 
 ## 2026-08-13 - Add read-only candidate history decision
 
