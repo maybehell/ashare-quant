@@ -476,6 +476,11 @@ The following are architectural requirements, not optional implementation detail
 
 ## 8. Evolution plan
 
+The phase ordering below describes architectural evolution. The current
+delivery baseline, capital ceiling, milestone deliverables, and evidence-based
+exit criteria are authoritative in `docs/ROADMAP.md`. Roadmap completion never
+changes the safety invariants in this document.
+
 ### P0: safety and evidence foundation (current)
 
 - Maintain fail-closed live gates and Huatai read-only evidence.

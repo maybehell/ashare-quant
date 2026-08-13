@@ -8,9 +8,10 @@ test, and documentation change in this repository.
 Before editing, read:
 
 1. `docs/ARCHITECTURE.md`
-2. `docs/DEVELOPMENT_PROCESS.md`
-3. The latest entries in `docs/DEVELOPMENT_LOG.md`
-4. Relevant records under `docs/adr/`
+2. `docs/ROADMAP.md`
+3. `docs/DEVELOPMENT_PROCESS.md`
+4. The latest entries in `docs/DEVELOPMENT_LOG.md`
+5. Relevant records under `docs/adr/`
 
 ## Rules for every change
 
@@ -27,6 +28,8 @@ Before editing, read:
    execution semantics, data trust, or live-safety policy.
 8. Do not describe a gate as passed unless an authoritative current artifact
    or test proves it.
+9. Identify the roadmap phase for every change. Work from the earliest unmet
+   gate, and never mark roadmap progress without current generated evidence.
 
 ## Live-trading invariants
 

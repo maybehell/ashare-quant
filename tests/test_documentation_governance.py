@@ -8,6 +8,7 @@ def test_architecture_governance_documents_exist_and_are_linked() -> None:
     required = [
         ROOT / "AGENTS.md",
         ROOT / "docs" / "ARCHITECTURE.md",
+        ROOT / "docs" / "ROADMAP.md",
         ROOT / "docs" / "DEVELOPMENT_PROCESS.md",
         ROOT / "docs" / "DEVELOPMENT_LOG.md",
         ROOT / "docs" / "adr" / "README.md",
@@ -20,6 +21,7 @@ def test_architecture_governance_documents_exist_and_are_linked() -> None:
     agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
     for target in (
         "docs/ARCHITECTURE.md",
+        "docs/ROADMAP.md",
         "docs/DEVELOPMENT_PROCESS.md",
         "docs/DEVELOPMENT_LOG.md",
         "docs/adr/",
@@ -28,12 +30,31 @@ def test_architecture_governance_documents_exist_and_are_linked() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     for target in (
         "docs/ARCHITECTURE.md",
+        "docs/ROADMAP.md",
         "docs/DEVELOPMENT_PROCESS.md",
         "docs/DEVELOPMENT_LOG.md",
         "docs/adr/README.md",
         "AGENTS.md",
     ):
         assert target in readme
+
+
+def test_roadmap_is_linked_and_preserves_live_delivery_gates() -> None:
+    roadmap = (ROOT / "docs" / "ROADMAP.md").read_text(encoding="utf-8")
+    process = (ROOT / "docs" / "DEVELOPMENT_PROCESS.md").read_text(encoding="utf-8")
+    normalized_roadmap = " ".join(roadmap.split())
+    required_phrases = [
+        "no strategy portfolio above CNY 200,000",
+        "60-session forward observation",
+        "broker_read_only_ready=true",
+        "minimum 20-session shadow soak",
+        "one controlled real order of at most CNY 1,000",
+        "requires a new explicit user authorization",
+        "Never mark a phase complete by editing this document alone",
+    ]
+    for phrase in required_phrases:
+        assert phrase in normalized_roadmap
+    assert "docs/ROADMAP.md" in process
 
 
 def test_architecture_contains_required_live_safety_boundaries() -> None:

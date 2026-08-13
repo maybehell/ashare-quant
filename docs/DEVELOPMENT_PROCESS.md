@@ -2,12 +2,12 @@
 
 Status: mandatory
 
-Last reviewed: 2026-08-09
+Last reviewed: 2026-08-13
 
 ## 1. Before editing
 
-1. Read `AGENTS.md`, `docs/ARCHITECTURE.md`, the latest development-log entries,
-   and relevant ADRs.
+1. Read `AGENTS.md`, `docs/ARCHITECTURE.md`, `docs/ROADMAP.md`, the latest
+   development-log entries, and relevant ADRs.
 2. Inspect the current worktree and generated evidence. Do not rely on an old
    report or conversation summary as proof of current behavior.
 3. Classify the change:
@@ -19,6 +19,9 @@ Last reviewed: 2026-08-09
    - infrastructure/documentation.
 4. Identify the owning module, affected artifacts, compatibility requirements,
    safety invariants, and evidence needed for completion.
+5. Identify the roadmap phase and the unmet exit criterion addressed by the
+   change. Do not skip an earlier authority gate merely because later code can
+   be implemented.
 
 ## 2. Plan and design
 

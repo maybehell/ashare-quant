@@ -5,6 +5,52 @@ added directly below this introduction, newest first. It records verified facts;
 it is not a release-marketing document and does not replace generated audit
 artifacts.
 
+## 2026-08-13 - Establish an evidence-gated delivery roadmap
+
+**Objective**
+
+Create one authoritative implementation sequence from the current safe local
+system to a possible limited live rollout, with explicit capital, evidence, and
+authorization gates.
+
+**Roadmap phase**
+
+P0 governance and safe operating baseline. This change defines sequencing only;
+it grants no strategy or broker authority.
+
+**Changes**
+
+- Added `docs/ROADMAP.md` with the current baseline and P0-P6 deliverables,
+  exit criteria, blockers, priorities, and prohibited authority shortcuts.
+- Fixed the strategy capital ceiling at CNY 200,000, retained CNY 1,000 as the
+  maximum one-order Canary, and separated forward evidence, small-capital
+  executability, broker read-only soak, shadow reconciliation, Canary, and
+  limited rollout.
+- Added the roadmap to `AGENTS.md`, the development process, README, architecture
+  cross-reference, and documentation-governance tests so future changes must
+  identify their phase and unmet gate.
+
+**Architecture and safety**
+
+- The architecture remains the source of truth for system boundaries; the
+  roadmap owns delivery order and exit criteria. Editing roadmap status cannot
+  authorize execution.
+- Emergency stop, broker submission, service submission, strategy identity,
+  live ledger, account state, and order artifacts are unchanged.
+
+**Verification**
+
+- Documentation-governance test: 4 passed in 0.14 seconds.
+- Required roadmap links are present in `AGENTS.md`, README, architecture, and
+  development process; all changed documents decode as UTF-8.
+- `git diff --check` passed with a line-ending notice only. Protected live
+  ledger, generic order, and active execution strategy artifacts remain absent.
+
+**Remaining work**
+
+- Execute work from the earliest unmet phase: preserve P0 while independently
+  validating the frozen candidate under P1 and accumulating its 60-session
+  forward window.
 ## 2026-08-13 - Bind and complete isolated long-history validation
 
 **Objective**
