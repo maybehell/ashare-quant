@@ -5,6 +5,53 @@ added directly below this introduction, newest first. It records verified facts;
 it is not a release-marketing document and does not replace generated audit
 artifacts.
 
+## 2026-08-13 - Add read-only candidate history decision
+
+**Objective**
+
+Close the P1 visibility gap where an exact frozen candidate could keep appearing
+as merely collecting forward data after its authoritative history failed.
+
+**Roadmap phase**
+
+P1 strategy evidence. This change exposes a bound historical decision but does
+not permanently quarantine the candidate or advance P2.
+
+**Changes**
+
+- Added `candidate-history-decision`, a read-only audit that binds the frozen
+  candidate, authoritative history config, completed status, backtest identity,
+  formal-price hash, input binding, fixed thresholds, and result artifacts.
+- The decision is `supported`, `rejected`, or `blocked`; incomplete identity
+  evidence blocks rather than being interpreted as a strategy failure.
+- Bound candidate `d55d124b5800e123` to its existing exact-strategy historical
+  validation configuration and updated the roadmap baseline.
+
+**Architecture and safety**
+
+- Owned by strategy governance in `candidate_history.py`; ADR 0033 records the
+  durable boundary.
+- The command writes one audit CSV only. It does not change the candidate
+  manifest or failure history, stop observation, activate a strategy, initialize
+  any account, generate orders, or call a broker.
+- Broker submission remains disabled and the emergency stop remains active.
+
+**Verification**
+
+- Synthetic exact-pass, performance-rejection, and identity-block tests passed;
+  focused candidate/history/documentation regression: 38 passed in 7.90s.
+- The real audit was `rejected`, decision SHA-256
+  `4f79a6e3a6fcfb929c370f3428755cd12a0e936bc66965f94989ffc08f9eeeb7`.
+- It failed total excess, information ratio, held-out excess, walk-forward
+  consistency and both bootstrap gates. Candidate and failure-history hashes
+  were unchanged.
+- Full regression: 1,223 tests and 39 subtests passed in 369.90 seconds.
+
+**Remaining work**
+
+- Add a separate explicit, idempotent permanent rejection action bound to the
+  decision hash. Do not couple it to historical validation or daily observation.
+
 ## 2026-08-13 - Reject fourth fixed-family history experiment
 
 **Objective**

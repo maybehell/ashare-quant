@@ -64,6 +64,7 @@ from .broker_preview import (
 )
 from .candidate import build_candidate_forward_progress, build_candidate_validation, candidate_frame, candidate_freeze_boundary_evidence, candidate_benchmark_mapping_evidence, candidate_frozen_input_evidence, candidate_index_membership_evidence, candidate_shadow_observation, forward_risk_evaluation_evidence, forward_risk_evaluation_identity, candidate_validation_path, freeze_live_candidate, live_strategy_hash, load_candidate_manifest, matching_candidate_id, preregister_forward_candidate, record_candidate_failure, seal_candidate_frozen_inputs
 from .challengers import primary_challenger_config_paths
+from .candidate_history import write_candidate_history_decision
 from .compare import compare_backtest_outputs, write_strategy_promotion_decision
 from .config import load_config
 from .config import project_path
@@ -160,6 +161,7 @@ def main(argv: list[str] | None = None) -> None:
 
     sub.add_parser("backtest", help="Run daily multi-factor backtest")
     sub.add_parser("history-validate", help="Validate a completed research-only historical backfill with fixed strategy parameters")
+    sub.add_parser("candidate-history-decision", help="Audit exact frozen-candidate historical support without changing candidate state")
     history_config_check = sub.add_parser("history-config-check", help="Fail-closed audit of an isolated fixed-strategy history-validation configuration")
     history_config_check.add_argument("--output-dir", required=True, help="Output directory owned by the history-validation daemon")
     history_config_check.add_argument("--allow-output-override", action="store_true", help="Allow isolated DryRun output redirection; production launchers never set this")
@@ -499,6 +501,8 @@ def run_command(args: argparse.Namespace, config: dict) -> None:
         print_paths(run_backtest(config).values())
     elif args.command == "history-validate":
         print_paths(run_extended_history_validation(config).values())
+    elif args.command == "candidate-history-decision":
+        print(write_candidate_history_decision(config).resolve())
     elif args.command == "history-config-check":
         print(require_history_validation_config(
             config,

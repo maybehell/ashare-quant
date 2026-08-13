@@ -15,6 +15,7 @@ capital_budget:
 
 validation:
   candidate_path: data/live_candidate_hs300_small_capital_defensive_trend_v1_forward.json
+  authoritative_history_validation_config: configs/hs300_small_capital_defensive_trend_v1_history.yaml
   research_governance_state_path: data/research_governance_hs300_small_capital_defensive_trend_v1_forward.json
   research_only: true
   apply_active_execution: false

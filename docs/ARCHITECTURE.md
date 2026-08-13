@@ -262,7 +262,7 @@ Rules:
 
 ### 3.4 Strategy governance and promotion
 
-Owners: `candidate.py`, `candidate_family.py`, `challengers.py`,
+Owners: `candidate.py`, `candidate_family.py`, `challengers.py`, `candidate_history.py`,
 `research_governance.py`, `selected_candidate_refresh.py`, `shadow.py`,
 `shadow_policy.py`, `evidence.py`, `readiness.py`, `validation.py`,
 `deployment_gate.py`, `strategy_health.py`, and `strategy_activation.py`.
@@ -284,6 +284,12 @@ Rules:
 - Small-capital candidates selected or tuned on the current cache remain blocked
   from forward preregistration regardless of their historical metrics.
 - Historical reruns cannot increase forward-observation days.
+- Candidate historical support is decided only from an explicitly configured
+  authoritative history validation whose frozen strategy, completed status,
+  backtest identity, formal-price hash, and input binding match the candidate.
+  Missing or mismatched evidence blocks instead of rejecting. A read-only
+  `rejected` decision does not silently mutate failure history, stop scheduled
+  observation, activate a successor, initialize a ledger, or create orders.
 - Candidate changes create a new identity and restart applicable evidence.
 - A recorded early or terminal forward failure permanently quarantines the matching
   strategy or behavior fingerprint. Validation, progress, strict readiness, and
