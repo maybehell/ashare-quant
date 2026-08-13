@@ -5,6 +5,54 @@ added directly below this introduction, newest first. It records verified facts;
 it is not a release-marketing document and does not replace generated audit
 artifacts.
 
+## 2026-08-13 - Stop scheduling permanently rejected candidates
+
+**Objective**
+
+Carry durable history rejection into one-click and scheduled observation so the
+rejected identity is not refreshed or recomputed as though it could still advance.
+
+**Roadmap phase**
+
+P1 strategy evidence and daily operational correctness. This preserves the
+rejected candidate audit while waiting for an independently motivated successor.
+
+**Changes**
+
+- Added an observation eligibility guard backed by append-only candidate failure
+  history and evaluated after exact identity matching but before market access.
+- Forward preflight skips permanent history rejections; observation writes a
+  `permanently_rejected` row carrying the decision hash and successor requirement.
+- Daily orchestration accepts only `observed` and `permanently_rejected` as known
+  states; all other candidate errors continue to fail closed.
+- Added ADR 0035 and focused tests for preflight, observation, and refresh paths.
+
+**Architecture and safety**
+
+- The rejected registration and immutable evidence remain intact. No successor is
+  inferred, selected, activated, or granted an observation window.
+- The guard runs before download, freshness checks, shadow computation, or audit
+  generation for the rejected candidate. It cannot initialize an account, create
+  an order, or call a broker.
+- Broker submission remains disabled; no active strategy, live ledger, or order exists.
+
+**Verification**
+
+- Focused scheduler, preflight, and CLI regression: 108 passed in 23.28 seconds.
+- Full regression: 1,230 tests and 39 subtests passed in 291.40 seconds.
+- A real-config no-refresh acceptance wrote candidate `d55d124b5800e123` as
+  `permanently_rejected` with decision SHA-256
+  `4f79a6e3a6fcfb929c370f3428755cd12a0e936bc66965f94989ffc08f9eeeb7`.
+- Candidate manifest and failure-history hashes remained unchanged; live account,
+  order, RPA order, and active strategy artifacts remained absent.
+- Candidate market data was not refreshed.
+
+
+**Remaining work**
+
+- The later selected-evidence/report phases remain read-only but can be shortened
+  when every registered candidate is permanently rejected.
+
 ## 2026-08-13 - Add explicit permanent history rejection
 
 **Objective**

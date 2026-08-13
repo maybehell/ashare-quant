@@ -297,6 +297,11 @@ Rules:
   is idempotent for the same decision, and rejects conflicts. It preserves the
   candidate manifest and forward evidence and cannot activate a successor,
   initialize an account, create orders, or call a broker.
+- Daily candidate scheduling resolves permanent history rejection before any
+  market refresh, freshness check, shadow signal, or observation audit. It keeps
+  a `permanently_rejected` summary row and continues independent read-only
+  reporting, but cannot resume that candidate's forward window or infer a
+  successor. See ADR 0035.
 - A recorded early or terminal forward failure permanently quarantines the matching
   strategy or behavior fingerprint. Validation, progress, strict readiness, and
   activation consume the same append-only failure history; later returns cannot
@@ -465,7 +470,7 @@ Additional constraints:
    fail-closed phase before rendering the daily report and alert state.
 2. Reclassify the capital operating mode from current broker and research
    evidence; never reuse stale balances.
-3. Update frozen candidate observations without tuning.
+3. Update eligible frozen candidate observations without tuning; summarize and skip permanently rejected identities before market access.
 4. Recompute strategy/readiness reports.
 5. Generate paper orders only when the corresponding gate permits it.
 6. Notify on data, strategy, broker, and operational failures.

@@ -62,7 +62,7 @@ from .broker_preview import (
     write_broker_capital_feasibility,
     write_broker_order_preview,
 )
-from .candidate import build_candidate_forward_progress, build_candidate_validation, candidate_frame, candidate_freeze_boundary_evidence, candidate_benchmark_mapping_evidence, candidate_frozen_input_evidence, candidate_index_membership_evidence, candidate_shadow_observation, forward_risk_evaluation_evidence, forward_risk_evaluation_identity, candidate_validation_path, freeze_live_candidate, live_strategy_hash, load_candidate_manifest, matching_candidate_id, preregister_forward_candidate, record_candidate_failure, seal_candidate_frozen_inputs
+from .candidate import build_candidate_forward_progress, build_candidate_validation, candidate_frame, candidate_freeze_boundary_evidence, candidate_benchmark_mapping_evidence, candidate_frozen_input_evidence, candidate_index_membership_evidence, candidate_quarantine_record, candidate_shadow_observation, forward_risk_evaluation_evidence, forward_risk_evaluation_identity, candidate_validation_path, freeze_live_candidate, live_strategy_hash, load_candidate_manifest, matching_candidate_id, preregister_forward_candidate, record_candidate_failure, seal_candidate_frozen_inputs
 from .challengers import primary_challenger_config_paths
 from .candidate_history import write_candidate_history_decision
 from .candidate_rejection import record_candidate_history_rejection
@@ -1388,6 +1388,20 @@ def candidate_market_freshness(config: dict, *, now: datetime | None = None) -> 
         prices, benchmark, calendar, config, now=now
     )
 
+
+class PermanentlyRejectedCandidate(RuntimeError):
+    """Stops observation before market access while preserving an audit row."""
+
+
+def require_candidate_observation_eligibility(candidate_config: dict) -> None:
+    record = candidate_quarantine_record(candidate_config)
+    if record and str(record.get("status", "") or "") == "authoritative_history_rejected":
+        decision = str(record.get("decision_sha256", "") or "")
+        raise PermanentlyRejectedCandidate(
+            "candidate was permanently rejected by authoritative history evidence; "
+            f"decision_sha256={decision or 'missing'}; successor research is required"
+        )
+
 def run_forward_only_candidate_observations(
     config: dict,
     *,
@@ -1459,6 +1473,7 @@ def run_forward_only_candidate_observations(
             )
             if not candidate_id:
                 raise RuntimeError("forward-only candidate hash no longer matches its preregistration")
+            require_candidate_observation_eligibility(candidate_config)
             boundary_ok, _, _ = candidate_freeze_boundary_evidence(manifest)
             if not boundary_ok:
                 raise RuntimeError("forward-only candidate freeze boundary is unsafe; re-register without migrating old observations")
@@ -1590,6 +1605,10 @@ def run_forward_only_candidate_observations(
                 f"first_attribution_close_after={first_attribution_requires_close_after or 'none'}; "
                 "no historical backtest or executable order was created."
             )
+        except PermanentlyRejectedCandidate as exc:
+            status = "permanently_rejected"
+            forward_observation_status = "permanently_rejected"
+            message = str(exc)
         except Exception as exc:
             message = f"{type(exc).__name__}: {exc}"
         rows.append(
@@ -1668,6 +1687,10 @@ def preflight_forward_candidate_configs(configured: list[object]) -> list[tuple[
                 raise RuntimeError("no valid preregistration manifest")
             if not matching_candidate_id(candidate_config, manifest):
                 raise RuntimeError("strategy hash no longer matches preregistration")
+            try:
+                require_candidate_observation_eligibility(candidate_config)
+            except PermanentlyRejectedCandidate:
+                continue
             boundary_ok, _, _ = candidate_freeze_boundary_evidence(manifest)
             if not boundary_ok:
                 raise RuntimeError("unsafe freeze boundary")
@@ -1720,7 +1743,13 @@ def run_forward_daily(config: dict, args: argparse.Namespace) -> dict[str, Path]
     summary = read_output_csv(project_path(config["paths"]["output_dir"]) / "forward_only_candidate_observation.csv")
     if summary.empty:
         raise RuntimeError("Forward candidate observation produced no summary rows.")
-    failed = summary[summary.get("status", pd.Series("", index=summary.index)).astype(str).str.lower() != "observed"]
+    acceptable_statuses = {"observed", "permanently_rejected"}
+    failed = summary[
+        ~summary.get("status", pd.Series("", index=summary.index))
+        .astype(str)
+        .str.lower()
+        .isin(acceptable_statuses)
+    ]
     if not failed.empty:
         messages = failed.get("message", pd.Series("forward observation failed", index=failed.index)).astype(str)
         raise RuntimeError("Forward candidate observation failed: " + "; ".join(messages))
