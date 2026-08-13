@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "family_id": "small_capital_benchmark_relative_history_v1",
+  "family_wise_alpha": 0.05,
+  "multiple_testing_method": "bonferroni_fixed_family",
+  "max_experiments": 4,
+  "experiments": [
+    {
+      "sequence": 1,
+      "experiment_id": "sc_concentrated10_extended_v5",
+      "config_path": "configs/small_capital_100k_v5_extended_history.yaml",
+      "strategy_sha256": "95310e6619d742d340f03e2ebc3a667e6b4408ca1652d983aaf55bc7f450b406",
+      "hypothesis": "A concentrated quarterly portfolio can reduce board-lot cash drag for a CNY 100,000 account.",
+      "registered_at": "2026-08-12T19:48:19+08:00",
+      "nominal_alpha": 0.0125,
+      "status": "rejected",
+      "thresholds": {"min_total_excess_return": 0.02, "min_information_ratio": 0.30, "max_drawdown": 0.30, "min_out_of_sample_excess_return": 0.00, "min_walk_forward_folds": 3, "min_walk_forward_positive_ratio": 0.60},
+      "result": {"excess_total_return": -0.062276, "information_ratio": -0.034571, "max_drawdown": -0.461746}
+    },
+    {
+      "sequence": 2,
+      "experiment_id": "hs300_low_risk120_quarterly_v1",
+      "config_path": "configs/hs300_point_in_time_low_risk_quarterly_v1_forward.yaml",
+      "strategy_sha256": "46b08e964344a7ec4c9eba57573f487fe2a3164d9f7559c22e225534b2bb7d31",
+      "hypothesis": "A broad industry-neutral low-risk CSI 300 portfolio can improve benchmark-relative risk-adjusted return.",
+      "registered_at": "2026-08-11T16:50:00+08:00",
+      "nominal_alpha": 0.0125,
+      "status": "rejected",
+      "thresholds": {"min_total_excess_return": 0.02, "min_information_ratio": 0.30, "max_drawdown": 0.25, "min_out_of_sample_excess_return": 0.00, "min_walk_forward_folds": 3, "min_walk_forward_positive_ratio": 0.60},
+      "result": {"excess_total_return": -0.111461, "information_ratio": -0.458341, "max_drawdown": -0.123121}
+    },
+    {
+      "sequence": 3,
+      "experiment_id": "hs300_defensive_trend20_v1",
+      "config_path": "configs/hs300_small_capital_defensive_trend_v1_history.yaml",
+      "strategy_sha256": "1af970df4011e6b8bc0bce601c813b42d8c58105ae8ab587a3f1f0a5ffcaadd9",
+      "hypothesis": "A twenty-stock defensive trend portfolio can preserve small-account implementability while outperforming CSI 300.",
+      "registered_at": "2026-08-13T14:30:51+08:00",
+      "nominal_alpha": 0.0125,
+      "status": "rejected",
+      "thresholds": {"min_total_excess_return": 0.02, "min_information_ratio": 0.30, "max_drawdown": 0.25, "min_out_of_sample_excess_return": 0.02, "min_walk_forward_folds": 3, "min_walk_forward_positive_ratio": 0.60},
+      "result": {"excess_total_return": -0.136010, "information_ratio": -0.160274, "max_drawdown": -0.115661}
+    }
+  ]
+}

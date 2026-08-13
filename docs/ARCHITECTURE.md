@@ -230,6 +230,10 @@ Rules:
   investable equity, and supported algorithm revisions carry an explicit schema
   version in backtest and capital-sensitivity identity.
 - Parameter selection and final evaluation evidence are distinguished.
+- Cross-date strategy experiments are recorded with failures as well as successes.
+  A registry-bound historical experiment fixes its sequence, strategy identity,
+  configuration path, decision thresholds, and multiple-testing budget before
+  evaluation; registry membership grants no forward or execution authority.
 - Every formal result binds configuration, input data, benchmark, and code-level
   assumptions through manifests or hashes.
 - Extended-history validation requires an authoritative zero-remaining,

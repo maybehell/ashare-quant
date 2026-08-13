@@ -5,6 +5,47 @@ added directly below this introduction, newest first. It records verified facts;
 it is not a release-marketing document and does not replace generated audit
 artifacts.
 
+## 2026-08-13 - Add cross-experiment selection accounting
+
+**Objective**
+
+Close the P1 credibility gap caused by evaluating distinct strategy hypotheses
+over time without one machine-readable cumulative trial count.
+
+**Roadmap phase**
+
+P1 strategy evidence. This adds governance before a possible fourth historical
+hypothesis; it does not register or run that hypothesis yet.
+
+**Changes**
+
+- Added a versioned registry for the three already evaluated small-capital,
+  benchmark-relative historical experiments, including rejected outcomes.
+- Added opt-in history-validation binding for experiment sequence, config and
+  strategy identity, complete decision thresholds, and a fixed Bonferroni alpha
+  budget of 0.0125 within a four-test family.
+- Added ADR 0030 and architecture rules for cross-date experiment selection.
+
+**Architecture and safety**
+
+- The registry belongs to strategy governance and does not alter strategy or
+  backtest hashes. Existing completed evidence remains compatible.
+- Registry validation occurs before a bound backtest starts and cannot promote a
+  candidate, create execution orders, initialize a live ledger, or call a broker.
+- Broker submission remains disabled and no live safety switch changed.
+
+**Verification**
+
+- Focused experiment-registry and history-validation tests: 13 passed in 0.99s.
+- Expanded governance regression: 22 passed in 1.21s.
+- Final focused registry, history, configuration, and governance regression: 24 passed in 1.34s.
+- Final full regression: 1,207 tests and 39 subtests passed in 247.48 seconds.
+
+**Remaining work**
+
+- Preregister the fourth and final family experiment in a separate commit before
+  its first historical evaluation, or stop the family without consuming it.
+
 ## 2026-08-13 - Complete candidate-matching long-history evidence
 
 **Objective**

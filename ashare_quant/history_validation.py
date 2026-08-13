@@ -12,6 +12,7 @@ from .backtest import run_backtest
 from .candidate import live_strategy_hash
 from .config import project_path
 from .data import DataStore, history_staging_frame_name
+from .experiment_registry import require_history_experiment_registration
 from .io_utils import atomic_to_csv
 from .report import regenerate_report
 from .survivorship import survivorship_evidence_sha256, write_survivorship_bias_audit
@@ -29,6 +30,11 @@ STATUS_COLUMNS = [
     "backtest_config_sha256",
     "strategy_sha256",
     "history_input_binding_sha256",
+    "experiment_id",
+    "experiment_sequence",
+    "experiment_family_id",
+    "experiment_nominal_alpha",
+    "experiment_preregistration_sha256",
     "survivorship_audit_sha256",
     "effective_trading_days",
     "minimum_trading_days",
@@ -44,6 +50,7 @@ STATUS_COLUMNS = [
 
 def run_extended_history_validation(config: dict[str, Any]) -> dict[str, Path]:
     assert_research_only_history_config(config)
+    experiment_registration = require_history_experiment_registration(config)
     store = DataStore.from_config(config)
     progress = require_completed_history_progress(store, config)
     output_dir = project_path(config["paths"]["output_dir"])
@@ -77,6 +84,7 @@ def run_extended_history_validation(config: dict[str, Any]) -> dict[str, Path]:
         strategy_sha256,
         input_binding_sha256,
         survivorship_sha256,
+        str(experiment_registration.get("experiment_preregistration_sha256", "")),
         minimum_trading_days,
         str(progress["generated_at"]),
     ):
@@ -94,6 +102,7 @@ def run_extended_history_validation(config: dict[str, Any]) -> dict[str, Path]:
             strategy_sha256,
             input_binding_sha256,
         ),
+        **experiment_registration,
         "survivorship_audit_sha256": survivorship_sha256,
         "minimum_trading_days": minimum_trading_days,
     }
@@ -308,6 +317,7 @@ def reusable_completed_validation(
     strategy_sha256: str,
     history_input_binding_sha256: str,
     survivorship_audit_sha256: str,
+    experiment_preregistration_sha256: str,
     minimum_trading_days: int,
     progress_generated_at: str,
 ) -> bool:
@@ -329,6 +339,14 @@ def reusable_completed_validation(
             )
         )
         and str(row.get("survivorship_audit_sha256", "")) == survivorship_audit_sha256
+        and (
+            str(row.get("experiment_preregistration_sha256", ""))
+            == experiment_preregistration_sha256
+            or (
+                not experiment_preregistration_sha256
+                and pd.isna(row.get("experiment_preregistration_sha256", ""))
+            )
+        )
         and pd.notna(
             pd.to_numeric(row.get("effective_trading_days", 0), errors="coerce")
         )
