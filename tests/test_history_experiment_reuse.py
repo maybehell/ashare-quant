@@ -5,7 +5,12 @@ import pandas as pd
 from ashare_quant.history_validation import reusable_completed_validation
 
 
-def reusable(tmp_path: Path, registration: str, status_registration: str | None) -> bool:
+def reusable(
+    tmp_path: Path,
+    registration: str,
+    status_registration: str | None,
+    decision: str = "passed",
+) -> bool:
     report = tmp_path / "report.html"
     report.write_text("<html></html>", encoding="utf-8")
     row = {
@@ -20,6 +25,8 @@ def reusable(tmp_path: Path, registration: str, status_registration: str | None)
     }
     if status_registration is not None:
         row["experiment_preregistration_sha256"] = status_registration
+        if decision:
+            row["experiment_decision"] = decision
     status = tmp_path / "status.csv"
     pd.DataFrame([row]).to_csv(status, index=False)
     return reusable_completed_validation(
@@ -31,6 +38,11 @@ def reusable(tmp_path: Path, registration: str, status_registration: str | None)
 def test_registry_bound_result_requires_exact_preregistration_identity(tmp_path: Path) -> None:
     assert reusable(tmp_path, "registered", "registered") is True
     assert reusable(tmp_path, "registered", "different") is False
+    assert reusable(tmp_path, "registered", "registered", decision="") is False
+
+
+def test_registry_bound_rejected_result_is_reusable_without_becoming_authority(tmp_path: Path) -> None:
+    assert reusable(tmp_path, "registered", "registered", decision="rejected") is True
 
 
 def test_legacy_unbound_result_remains_reusable_without_registry_requirement(tmp_path: Path) -> None:

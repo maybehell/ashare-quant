@@ -350,6 +350,7 @@ def compute_factor_values(
             "avg_amount": liquidity.reindex(close.columns).values,
             "short_reversal": short_reversal.reindex(close.columns).values,
             "medium_reversal": medium_reversal.reindex(close.columns).values,
+            "medium_reversal_available": medium_reversal.reindex(close.columns).notna().values,
             "residual_reversal": residual_reversal.reindex(close.columns).values,
             "low_drawdown": drawdown.reindex(close.columns).values,
             "trend_quality": trend_quality.reindex(close.columns).values,

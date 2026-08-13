@@ -162,6 +162,20 @@ def validate_config(config: dict[str, Any]) -> list[str]:
                 if parsed is None or parsed <= 0:
                     errors.append(f"strategy.lookbacks.{name} must be positive")
             residual_beta = parsed_lookbacks.get("residual_beta")
+            medium_reversal_window = parsed_lookbacks.get("medium_reversal")
+            medium_reversal_skip = parsed_lookbacks.get("medium_reversal_skip")
+            if medium_reversal_window is not None and medium_reversal_window < 20:
+                errors.append("strategy.lookbacks.medium_reversal must be at least 20")
+            if medium_reversal_skip is not None and medium_reversal_skip < 1:
+                errors.append("strategy.lookbacks.medium_reversal_skip must be at least 1")
+            if (
+                medium_reversal_window is not None
+                and medium_reversal_skip is not None
+                and medium_reversal_skip >= medium_reversal_window
+            ):
+                errors.append(
+                    "strategy.lookbacks.medium_reversal_skip must be less than medium_reversal"
+                )
             residual_window = parsed_lookbacks.get("residual_reversal")
             if residual_beta is not None and residual_beta < 20:
                 errors.append("strategy.lookbacks.residual_beta must be at least 20")
@@ -198,6 +212,26 @@ def validate_config(config: dict[str, Any]) -> list[str]:
                     errors.append("strategy residual_reversal weight must be numeric")
                     continue
                 residual_active = residual_active or abs(residual_weight) > 1e-12
+            medium_reversal_active = False
+            for weights in active_weights:
+                if not isinstance(weights, dict) or "medium_reversal" not in weights:
+                    continue
+                try:
+                    medium_reversal_weight = float(weights.get("medium_reversal", 0.0))
+                except (TypeError, ValueError):
+                    errors.append("strategy medium_reversal weight must be numeric")
+                    continue
+                medium_reversal_active = (
+                    medium_reversal_active or abs(medium_reversal_weight) > 1e-12
+                )
+            if medium_reversal_active and not {
+                "medium_reversal",
+                "medium_reversal_skip",
+            }.issubset(lookbacks):
+                errors.append(
+                    "strategy medium_reversal factor requires medium_reversal and "
+                    "medium_reversal_skip lookbacks"
+                )
             if residual_active and not {"residual_beta", "residual_reversal"}.issubset(lookbacks):
                 errors.append("strategy residual_reversal factor requires residual_beta and residual_reversal lookbacks")
             residual_factor_requirements = {

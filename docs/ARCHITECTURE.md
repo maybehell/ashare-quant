@@ -237,6 +237,10 @@ Rules:
   A registry-bound historical experiment fixes its sequence, strategy identity,
   configuration path, decision thresholds, and multiple-testing budget before
   evaluation; registry membership grants no forward or execution authority.
+- Historical workflow completion and registered experiment decision are separate.
+  Registered evidence must pass every fixed economic, held-out, walk-forward,
+  drawdown, and multiple-testing check; missing evidence rejects, and either
+  decision remains research-only.
 - Every formal result binds configuration, input data, benchmark, and code-level
   assumptions through manifests or hashes.
 - Extended-history validation requires an authoritative zero-remaining,

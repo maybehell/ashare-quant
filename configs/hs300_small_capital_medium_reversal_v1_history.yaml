@@ -1,0 +1,74 @@
+extends: hs300_small_capital_defensive_trend_v1_history.yaml
+
+paths:
+  cache_dir: data/cache
+  output_dir: outputs_hs300_small_capital_medium_reversal_v1_history
+  state_db: data/state_hs300_small_capital_medium_reversal_v1_history.sqlite3
+
+validation:
+  candidate_path: data/research_candidate_hs300_small_capital_medium_reversal_v1_history.json
+  research_governance_state_path: data/research_governance_hs300_small_capital_medium_reversal_v1_history.json
+  research_only: true
+  apply_active_execution: false
+  optimized_on_current_cache: false
+  experiment_status: preregistered_history_validation
+  fixed_strategy_sha256: a7833559e04e85a9931f6e3fb3eee68664ebfcd431e61106583b435e77ed9352
+  experiment_reason: >-
+    Fourth and final fixed-family historical rejection test. Evaluate a published
+    medium-reversal definition without inheriting performance authority from the
+    three rejected strategies or changing any result after evaluation.
+  research_rationale: >-
+    Test the negative return from 60 trading days ago to 5 trading days ago in a
+    point-in-time CSI 300, long-only, twenty-position, board-lot-aware portfolio.
+    Liquidity receives a fixed ten-percent implementation weight; no low-risk,
+    trend, residual-momentum, valuation, or accounting factor is active.
+  experiment_registration:
+    required: true
+    registry_path: configs/research_experiment_registry.json
+    experiment_id: hs300_medium_reversal20_v1
+    config_path: configs/hs300_small_capital_medium_reversal_v1_history.yaml
+
+strategy:
+  name: hs300_small_capital_medium_reversal20_v1_history
+  top_n: 20
+  max_stock_weight: 0.05
+  max_industry_weight: 0.25
+  weighting: equal
+  benchmark_membership:
+    enabled: true
+    index_symbol: "000300"
+    max_staleness_days: 120
+  reference_anchor:
+    enabled: false
+  lookbacks:
+    medium_reversal: 60
+    medium_reversal_skip: 5
+  required_factors:
+    - medium_reversal
+  weights:
+    momentum: 0.00
+    long_momentum: 0.00
+    valuation: 0.00
+    quality: 0.00
+    low_volatility: 0.00
+    low_downside_volatility: 0.00
+    low_drawdown: 0.00
+    trend_quality: 0.00
+    short_reversal: 0.00
+    residual_momentum: 0.00
+    low_idiosyncratic_volatility: 0.00
+    medium_reversal: 0.90
+    liquidity: 0.10
+  industry_neutralization:
+    enabled: true
+    min_group_size: 5
+  cross_sectional_neutralization:
+    enabled: false
+
+risk_overlay:
+  enabled: false
+
+auto_live:
+  enabled: false
+  allow_broker_submit: false
+  emergency_stop: true

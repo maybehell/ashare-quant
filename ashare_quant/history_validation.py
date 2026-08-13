@@ -13,6 +13,7 @@ from .candidate import live_strategy_hash
 from .config import project_path
 from .data import DataStore, history_staging_frame_name
 from .experiment_registry import require_history_experiment_registration
+from .experiment_decision import evaluate_registered_history_experiment
 from .io_utils import atomic_to_csv
 from .report import regenerate_report
 from .survivorship import survivorship_evidence_sha256, write_survivorship_bias_audit
@@ -35,6 +36,12 @@ STATUS_COLUMNS = [
     "experiment_family_id",
     "experiment_nominal_alpha",
     "experiment_preregistration_sha256",
+    "experiment_decision",
+    "experiment_decision_failures",
+    "experiment_oos_excess_return",
+    "experiment_walk_forward_folds",
+    "experiment_walk_forward_positive_ratio",
+    "experiment_bootstrap_two_sided_p_value",
     "survivorship_audit_sha256",
     "effective_trading_days",
     "minimum_trading_days",
@@ -122,6 +129,11 @@ def run_extended_history_validation(config: dict[str, Any]) -> dict[str, Path]:
                 + ", ".join(created)
             )
         metrics = read_metrics(output_dir / "performance_metrics.csv")
+        experiment_decision = evaluate_registered_history_experiment(
+            output_dir,
+            experiment_registration,
+            metrics,
+        )
         equity = read_optional_csv(output_dir / "equity_curve.csv")
         effective_trading_days = len(equity)
         if effective_trading_days < minimum_trading_days:
@@ -132,6 +144,7 @@ def run_extended_history_validation(config: dict[str, Any]) -> dict[str, Path]:
             )
         completed = {
             **base,
+            **experiment_decision,
             "status": "completed",
             "effective_trading_days": effective_trading_days,
             "total_return": metrics.get("total_return", ""),
@@ -346,6 +359,10 @@ def reusable_completed_validation(
                 not experiment_preregistration_sha256
                 and pd.isna(row.get("experiment_preregistration_sha256", ""))
             )
+        )
+        and (
+            not experiment_preregistration_sha256
+            or str(row.get("experiment_decision", "")) in {"passed", "rejected"}
         )
         and pd.notna(
             pd.to_numeric(row.get("effective_trading_days", 0), errors="coerce")

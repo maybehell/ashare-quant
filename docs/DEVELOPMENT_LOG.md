@@ -5,7 +5,52 @@ added directly below this introduction, newest first. It records verified facts;
 it is not a release-marketing document and does not replace generated audit
 artifacts.
 
+## 2026-08-13 - Preregister fourth fixed-family history experiment
+
+**Objective**
+
+Freeze the fourth and final P1 historical hypothesis before its first evaluation,
+with machine-enforced economic and multiple-testing decisions.
+
+**Roadmap phase**
+
+P1 strategy evidence. The experiment is preregistered but has not been run and
+therefore has no pass, rejection, forward, activation, or execution authority.
+
+**Changes**
+
+- Added explicit medium-reversal lookback validation and factor-availability
+  filtering for stocks without the required 60-session history.
+- Preregistered experiment 4/4 as a CNY 100,000, twenty-stock, point-in-time CSI
+  300 portfolio with fixed 90% medium-reversal and 10% liquidity weights.
+- Bound strategy SHA-256 `a7833559e04e85a9931f6e3fb3eee68664ebfcd431e61106583b435e77ed9352`,
+  the existing 800/800 history input, fixed economic thresholds, and Bonferroni
+  nominal alpha 0.0125.
+- Added a registered-experiment decision engine and ADR 0032. Workflow completion
+  is now distinct from experiment `passed` or `rejected` status.
+
+**Architecture and safety**
+
+- The change is owned by research and strategy governance. It does not register a
+  forward candidate, initialize any ledger, generate execution orders, or call a
+  broker.
+- Missing held-out, walk-forward, bootstrap, or economic evidence rejects the
+  experiment. A completed rejected result remains reusable audit evidence only.
+- Broker submission remains disabled and emergency-stop policy is unchanged.
+
+**Verification**
+
+- Focused registration, factor, decision, history, and compatibility suite:
+  37 passed in 1.90s.
+- Full regression: 1,220 tests and 39 subtests passed in 201.68 seconds.
+- No historical validation output or state database existed after verification.
+
+**Remaining work**
+
+- Commit and push this preregistration before the one allowed historical run.
+
 ## 2026-08-13 - Add skipped medium-reversal research capability
+
 
 **Objective**
 
@@ -42,6 +87,8 @@ remains at three rejected trials out of four permitted trials.
 
 - In a separate commit, add parameter validation and preregister the fourth
   experiment with exact strategy hash, input binding, thresholds, and alpha
+  budget before its first backtest.
+
 ## 2026-08-13 - Add cross-experiment selection accounting
 
 **Objective**

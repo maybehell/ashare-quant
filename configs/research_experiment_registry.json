@@ -40,6 +40,17 @@
       "status": "rejected",
       "thresholds": {"min_total_excess_return": 0.02, "min_information_ratio": 0.30, "max_drawdown": 0.25, "min_out_of_sample_excess_return": 0.02, "min_walk_forward_folds": 3, "min_walk_forward_positive_ratio": 0.60},
       "result": {"excess_total_return": -0.136010, "information_ratio": -0.160274, "max_drawdown": -0.115661}
+    },
+    {
+      "sequence": 4,
+      "experiment_id": "hs300_medium_reversal20_v1",
+      "config_path": "configs/hs300_small_capital_medium_reversal_v1_history.yaml",
+      "strategy_sha256": "a7833559e04e85a9931f6e3fb3eee68664ebfcd431e61106583b435e77ed9352",
+      "hypothesis": "A 60-trading-day reversal signal that skips the latest 5 sessions can outperform CSI 300 in a twenty-stock, long-only, board-lot-aware CNY 100,000 portfolio.",
+      "registered_at": "2026-08-13T19:33:07+08:00",
+      "nominal_alpha": 0.0125,
+      "status": "preregistered",
+      "thresholds": {"min_total_excess_return": 0.02, "min_information_ratio": 0.30, "max_drawdown": 0.25, "min_out_of_sample_excess_return": 0.02, "min_walk_forward_folds": 3, "min_walk_forward_positive_ratio": 0.60}
     }
   ]
 }

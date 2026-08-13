@@ -127,4 +127,5 @@ def require_history_experiment_registration(config: dict[str, Any]) -> dict[str,
         "experiment_family_id": family_id,
         "experiment_nominal_alpha": nominal_alpha,
         "experiment_preregistration_sha256": mapping_sha256(identity),
+        "_experiment_thresholds": dict(thresholds),
     }
