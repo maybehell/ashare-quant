@@ -1,4 +1,7 @@
 {
+  "operations": {
+    "config_role": "research_history_validation"
+  },
   "paths": {
     "output_dir": "outputs_extended_history_validation",
     "state_db": "data/state_extended_history_validation.sqlite3"

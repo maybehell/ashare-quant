@@ -5,6 +5,84 @@ added directly below this introduction, newest first. It records verified facts;
 it is not a release-marketing document and does not replace generated audit
 artifacts.
 
+## 2026-08-13 - Bind and complete isolated long-history validation
+
+**Objective**
+
+Replace stale, ambiguous long-history daemon evidence with a configuration-bound
+research workflow, while keeping the frozen strategy and all live capabilities
+unchanged.
+
+**Changes**
+
+- Added the explicit `research_history_validation` role and a structured
+  `history-config-check` CLI audit for isolated output ownership, research-only
+  policy, fixed strategy identity, emergency stop, and disabled submission.
+- Required the history daemon and Startup installer to run that audit before
+  writing state or installing a launcher. Startup verification now binds the
+  current daemon hash, exact config/output paths, and live PID.
+- Upgraded daemon status to schema 4 with owned output and a bounded validation
+  error tail that survives the retry-wait transition.
+- Made current formal frozen-candidate evidence take precedence over legacy
+  research-promotion rows in Chinese operator guidance, including candidate ID
+  and config filename.
+- Separated long-history artifact currency from authoritative-candidate
+  applicability. The reproducible 1,965-day legacy experiment is retained but
+  labeled `authoritative_candidate=not_applicable` for the current frozen hash.
+- Added ADR 0028 and updated the unified architecture.
+
+**Architecture and safety**
+
+- The history workflow remains research-only and cannot use the default
+  observation role or Huatai broker role. Only explicit `DryRun` may redirect
+  output for isolated tests.
+- The old daemon PID 24148 was stopped only after matching its start time, script,
+  research config, and output path. No cache or evidence was deleted.
+- Direct fixed-strategy validation reused the authoritative 800/800 completed
+  cache, produced no generic/live order artifact, and exited 0. The fixed
+  strategy hash remained
+  `4852068647783a8365d3ed625d0ae3b86a7bbc46ad6712d692cb5db5e0d125bc`.
+- No strategy parameter, frozen candidate identity, account state, broker adapter,
+  submission switch, or emergency-stop setting changed.
+
+**Verification**
+
+- Direct `history-validate`: completed from local cache with exit code 0 in about
+  six minutes and refreshed bound long-history evidence.
+- History role, daemon, validation, local operator, and CLI focused regression:
+  154 passed in 10.36 seconds.
+- Applicability-focused regression after binding the authoritative candidate:
+  154 passed in 10.53 seconds.
+- Expanded history-governance regression: 161 passed in 10.76 seconds.
+- Full regression after the final status-display fix: 1,194 tests and 39
+  subtests passed in 186.71 seconds.
+- Final history-role, daemon, operator, and documentation regression: 49 passed
+  in 14.63 seconds.
+- The current daemon published schema-4 `complete` state for 800/800 symbols,
+  preserved validation exit code 0, and exited. No unnecessary history Startup
+  entry or history-daemon process remains.
+- The observation-only Startup entry was restored and verified with exactly one
+  current supervisor and one current daemon under `configs/default.yaml`; the
+  Huatai configuration is attached only for broker read-only refresh.
+- Final broker refresh failed closed because the running Huatai process had no
+  identifiable trading root window. The deployment gate therefore keeps
+  `broker_read_only_ready=false`, `broker_execution_ready=false`, and
+  `ready_to_request_canary=false`; `safe_default=true`.
+- Emergency stop remains active, broker and service submission remain disabled,
+  and no arming certificate exists. Protected live ledger, generic order, and
+  active execution strategy artifacts remain absent.
+
+**Remaining work**
+
+- Continue the formal candidate's untuned 60-session forward observation. Live
+  ledger initialization and all broker submission remain blocked.
+- Produce an independently governed long-history validation whose fixed strategy
+  identity matches the current authoritative candidate before using historical
+  evidence in any promotion review. The retained 1,965-day experiment is
+  reproducible but not applicable to that candidate.
+- Reopen the Huatai trading module on the `funds-and-positions` page and rerun read-only
+  refresh when current broker evidence is needed; do not weaken freshness or UI
+  identity checks to make the gate pass.
 ## 2026-08-12 - Enforce one observation configuration role and truth source
 
 **Objective**

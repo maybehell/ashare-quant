@@ -34,19 +34,22 @@ def strategy_operating_mode(
         return "operator_live_review", "策略严格门禁已通过；仍需账户、券商和人工确认链复核。"
     if paper_allowed:
         return "paper_observation", "策略仅允许模拟盘观察；严格实盘门禁尚未通过。"
-    if not promotion_decision.empty:
-        row = promotion_decision.iloc[-1]
-        candidate = str(row.get("candidate_strategy_name", "") or "").strip()
-        decision = str(row.get("decision", "") or "").strip()
-        if candidate and challenger_observation_ok and not decision.startswith("do_not_promote"):
-            return (
-                "successor_observation",
-                f"正式策略已暂停；继续观察替代候选 {candidate}，中央决策={decision or 'missing'}，不得生成工单。",
-            )
+
     formal = formal_candidate_observation if formal_candidate_observation is not None else pd.DataFrame()
     if formal_candidate_observation_ok and not formal.empty:
-        name_column = "candidate_name" if "candidate_name" in formal.columns else "candidate_id"
-        names = [str(value).strip() for value in formal[name_column].tolist() if str(value).strip()]
+        labels: list[str] = []
+        for _, row in formal.iterrows():
+            name = str(row.get("candidate_name", "") or "").strip()
+            candidate_id = str(row.get("candidate_id", "") or "").strip()
+            config = str(row.get("candidate_config", "") or "").strip()
+            config_name = Path(config).name if config else ""
+            identity = candidate_id or config_name
+            label = name or identity or "已登记候选"
+            if identity and identity != label:
+                label = f"{label}（ID {identity}）"
+            if config_name and config_name not in label:
+                label = f"{label}，配置 {config_name}"
+            labels.append(label)
         observed = pd.to_numeric(
             formal["max_observed_trading_days"]
             if "max_observed_trading_days" in formal.columns
@@ -63,14 +66,22 @@ def strategy_operating_mode(
             zip(observed.tolist(), required.tolist()),
             key=lambda pair: pair[0] / max(pair[1], 1),
         )
-        label = "、".join(dict.fromkeys(names)) or "已登记候选"
+        label = "、".join(dict.fromkeys(labels)) or "已登记候选"
         return (
             "successor_observation",
-            f"正式策略已暂停；冻结替代候选 {label} 正在前向观察，统一门禁进度={weakest[0]}/{weakest[1]}，不得生成工单。",
+            f"正式策略已暂停；权威冻结候选 {label} 正在前向观察，统一门禁进度={weakest[0]}/{weakest[1]}，不得生成工单。",
         )
+
+    if not promotion_decision.empty:
+        row = promotion_decision.iloc[-1]
+        candidate = str(row.get("candidate_strategy_name", "") or "").strip()
+        decision = str(row.get("decision", "") or "").strip()
+        if candidate and challenger_observation_ok and not decision.startswith("do_not_promote"):
+            return (
+                "successor_observation",
+                f"正式策略已暂停；尚无当前权威冻结候选，仅继续观察研究候选 {candidate}，中央决策={decision or 'missing'}，不得生成工单。",
+            )
     return "strategy_halted", "正式策略已暂停且没有可用替代候选；仅刷新研究证据，不得生成工单。"
-
-
 def write_local_operator_status(
     strategy_config: dict[str, Any],
     live_config: dict[str, Any],
@@ -175,8 +186,20 @@ def write_local_operator_status(
     history_daemon_ok, history_daemon_value, history_daemon_message = (
         _history_backfill_daemon_status(history_daemon_status, max_age_seconds=5400)
     )
+    authoritative_candidate_hash = ""
+    expected_formal_configs = strategy_validation.get("forward_only_candidate_configs", [])
+    if formal_ok and isinstance(expected_formal_configs, list) and len(expected_formal_configs) == 1:
+        try:
+            authoritative_candidate_hash = live_strategy_hash(
+                load_config(str(expected_formal_configs[0]))
+            )
+        except (KeyError, OSError, TypeError, ValueError):
+            authoritative_candidate_hash = ""
     history_validation_ok, history_validation_value, history_validation_message = (
-        _current_extended_history_validation_status(history_validation)
+        _current_extended_history_validation_status(
+            history_validation,
+            required_strategy_sha256=authoritative_candidate_hash or None,
+        )
     )
     observation_settings = strategy_config.get("observation_task", {}) if isinstance(strategy_config.get("observation_task"), dict) else {}
     scheduled_required = str(observation_settings.get("required", False)).strip().lower() in {"true", "1", "yes"}
@@ -544,7 +567,12 @@ def _history_backfill_daemon_status(
     requested = safe_count(progress.get("requested_symbols", 0))
     next_run = str(payload.get("next_run_at", "") or "").strip()
     backoff = safe_count(payload.get("source_backoff_minutes", 0))
-    exit_code = str(payload.get("last_exit_code", "") or "").strip()
+    raw_exit_code = payload.get("last_exit_code", "")
+    exit_code = (
+        ""
+        if raw_exit_code is None or str(raw_exit_code).strip() == ""
+        else str(raw_exit_code).strip()
+    )
     age = _timestamp_age_seconds(payload.get("updated_at", ""))
     fresh = age is not None and -30 <= age <= max(max_age_seconds, 60)
     reported_hash = str(payload.get("script_sha256", "") or "").strip().lower()
@@ -577,6 +605,7 @@ def _current_extended_history_validation_status(
     expected_strategy_sha256: str | None = None,
     expected_backtest_config_sha256: str | None = None,
     current_prices_sha256: str | None = None,
+    required_strategy_sha256: str | None = None,
 ) -> tuple[bool, str, str]:
     if frame.empty:
         return False, "missing", "\u957f\u5386\u53f2\u56fa\u5b9a\u7b56\u7565\u9a8c\u8bc1\u5c1a\u672a\u5b8c\u6210\u3002"
@@ -615,6 +644,10 @@ def _current_extended_history_validation_status(
         current_prices
         and str(row.get("formal_prices_sha256", "") or "") == current_prices
     )
+    target_strategy_match = bool(
+        not required_strategy_sha256
+        or str(row.get("strategy_sha256", "") or "") == required_strategy_sha256
+    )
     requested = pd.to_numeric(row.get("requested_symbols", 0), errors="coerce")
     completed = pd.to_numeric(row.get("completed_symbols", 0), errors="coerce")
     requested_count = 0 if pd.isna(requested) else max(int(requested), 0)
@@ -630,6 +663,7 @@ def _current_extended_history_validation_status(
         and strategy_current
         and backtest_current
         and prices_current
+        and target_strategy_match
     )
     value = (
         f"status={status or 'missing'};scope={completed_count}/{requested_count};"
@@ -638,8 +672,17 @@ def _current_extended_history_validation_status(
         f"drawdown={row.get('max_drawdown', '')};"
         f"strategy={'current' if strategy_current else 'stale'};"
         f"backtest={'current' if backtest_current else 'stale'};"
-        f"prices={'current' if prices_current else 'stale'}"
+        f"prices={'current' if prices_current else 'stale'};"
+        f"authoritative_candidate={'match' if target_strategy_match else 'not_applicable'}"
     )
+    if (
+        status == "completed"
+        and strategy_current
+        and backtest_current
+        and prices_current
+        and not target_strategy_match
+    ):
+        return False, value, "该长历史实验自身可复现，但策略身份与当前权威冻结候选不同，结果不适用于当前候选，也不能支持晋级或下单。"
     if passed:
         return True, value, "\u957f\u5386\u53f2\u56fa\u5b9a\u7b56\u7565\u9a8c\u8bc1\u5df2\u5b8c\u6210\u4e14\u8eab\u4efd\u4e0e\u5f53\u524d\u6b63\u5f0f\u6570\u636e\u4e00\u81f4\uff1b\u4ecd\u4e0d\u81ea\u52a8\u6388\u6743\u664b\u7ea7\u6216\u4e0b\u5355\u3002"
     return False, value, "\u957f\u5386\u53f2\u9a8c\u8bc1\u7f3a\u5931\u3001\u672a\u5b8c\u6210\u6216\u5df2\u4e0e\u5f53\u524d\u7b56\u7565\u3001\u56de\u6d4b\u914d\u7f6e\u6216\u6b63\u5f0f\u4ef7\u683c\u6587\u4ef6\u5931\u914d\u3002"

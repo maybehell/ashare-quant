@@ -58,6 +58,16 @@ class LocalOperatorTests(unittest.TestCase):
         self.assertIn("\u4ecd\u4e0d\u81ea\u52a8\u6388\u6743", message)
         self.assertFalse(stale)
         self.assertIn("strategy=stale", stale_value)
+        not_applicable, not_applicable_value, not_applicable_message = (
+            _current_extended_history_validation_status(
+                frame,
+                **expectations,
+                required_strategy_sha256="current-frozen-candidate",
+            )
+        )
+        self.assertFalse(not_applicable)
+        self.assertIn("authoritative_candidate=not_applicable", not_applicable_value)
+        self.assertIn("不适用于当前候选", not_applicable_message)
     def test_history_backfill_source_outage_is_visible_without_claiming_completion(self):
         passed, value, message = _history_backfill_daemon_status({
             "state": "source_unavailable",
@@ -110,6 +120,13 @@ class LocalOperatorTests(unittest.TestCase):
 
         self.assertTrue(passed)
         self.assertIn("completed=145/800", value)
+        complete_ok, complete_value, _ = _history_backfill_daemon_status({
+            **payload,
+            "state": "complete",
+            "last_exit_code": 0,
+        })
+        self.assertTrue(complete_ok)
+        self.assertIn("exit=0", complete_value)
         self.assertIn("script=current", value)
         self.assertIn("startup=current", value)
         self.assertIn("\u672a\u5b8c\u6210\u6570\u636e\u4e0d\u4f1a\u8fdb\u5165\u6b63\u5f0f\u56de\u6d4b", message)
@@ -313,6 +330,38 @@ class LocalOperatorTests(unittest.TestCase):
         self.assertIn("frozen_b", message)
         self.assertIn("1/60", message)
         self.assertIn("不得生成工单", message)
+
+    def test_formal_candidate_takes_precedence_over_legacy_research_promotion(self):
+        health = pd.DataFrame([
+            {"check": "paper_orders_allowed", "value": False},
+            {"check": "strict_live_allowed", "value": False},
+        ])
+        promotion = pd.DataFrame([{
+            "candidate_strategy_name": "legacy-research-name",
+            "decision": "research_only",
+        }])
+        formal = pd.DataFrame([{
+            "candidate_id": "frozen-current",
+            "candidate_name": "defensive20",
+            "candidate_config": "configs/current_forward.yaml",
+            "max_observed_trading_days": 0,
+            "required_forward_trading_days": 60,
+        }])
+
+        mode, message = strategy_operating_mode(
+            health,
+            promotion,
+            True,
+            formal_candidate_observation=formal,
+            formal_candidate_observation_ok=True,
+        )
+
+        self.assertEqual(mode, "successor_observation")
+        self.assertIn("权威冻结候选", message)
+        self.assertIn("defensive20", message)
+        self.assertIn("frozen-current", message)
+        self.assertIn("current_forward.yaml", message)
+        self.assertNotIn("legacy-research-name", message)
 
     def test_formal_candidate_status_requires_every_registered_candidate(self):
         now = pd.Timestamp.now(tz="UTC").isoformat()

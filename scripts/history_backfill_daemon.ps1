@@ -37,6 +37,12 @@ $quietEndTime = [datetime]::ParseExact($QuietEnd, "HH:mm", [Globalization.Cultur
 $resolvedConfig = Resolve-ProjectPath $Config
 $resolvedOutput = Resolve-ProjectPath $OutputDir
 if (-not (Test-Path -LiteralPath $resolvedConfig)) { throw "Missing config: $resolvedConfig" }
+$configAuditArguments = @("--config", $resolvedConfig, "history-config-check", "--output-dir", $resolvedOutput)
+if ($DryRun) { $configAuditArguments += "--allow-output-override" }
+$configAudit = & $aqScript @configAuditArguments 2>&1
+if ($LASTEXITCODE -ne 0) {
+    throw "History daemon configuration is invalid: $($configAudit -join ' | ')"
+}
 $defaultConfig = Join-Path $projectRoot "configs\default.yaml"
 if (-not (Test-Path -LiteralPath $defaultConfig)) { throw "Missing default config: $defaultConfig" }
 $defaultConfigHash = (Get-FileHash -LiteralPath $defaultConfig -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -60,6 +66,7 @@ $sourceFailureStreak = 0
 $sourceBackoffMinutes = 0
 $sourceResumeAt = $null
 $script:lastBatchSourceUnavailable = $false
+$script:lastValidationErrorTail = ""
 if (Test-Path -LiteralPath $statusPath) {
     try {
         $previousStatus = Get-Content -LiteralPath $statusPath -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -81,14 +88,15 @@ if (Test-Path -LiteralPath $statusPath) {
     }
 }
 
-function Write-Status([string]$State, [string]$Message, [object]$Progress, [object]$ExitCode, [object]$NextRunAt) {
+function Write-Status([string]$State, [string]$Message, [object]$Progress, [object]$ExitCode, [object]$NextRunAt, [string]$ErrorTail = "") {
     $payload = [ordered]@{
-        schema_version = 3
+        schema_version = 4
         state = $State
         mode = "research_history_backfill"
         script_sha256 = $daemonScriptHash
         pid = $PID
         config = $resolvedConfig
+        output_dir = $resolvedOutput
         source_plan_identity = $sourcePlanIdentity
         updated_at = (Get-Date).ToString("o")
         last_exit_code = $ExitCode
@@ -97,6 +105,7 @@ function Write-Status([string]$State, [string]$Message, [object]$Progress, [obje
         source_backoff_minutes = $sourceBackoffMinutes
         progress = $Progress
         message = $Message
+        error_tail = $ErrorTail
     }
     $temporary = "$statusPath.tmp.$PID"
     $payload | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $temporary -Encoding UTF8
@@ -213,13 +222,22 @@ function Invoke-HistoryValidation {
         $exitCode = $process.ExitCode
         $message = if ($exitCode -eq 0) { "Fixed-strategy history validation completed." } else { "Fixed-strategy history validation failed and will be retried." }
     }
+    $diagnosticLines = @()
     foreach ($path in @($stdout, $stderr)) {
         if (Test-Path -LiteralPath $path) {
-            Get-Content -LiteralPath $path -Encoding UTF8 | Add-Content -LiteralPath $logPath -Encoding UTF8
+            $lines = @(Get-Content -LiteralPath $path -Encoding UTF8)
+            $lines | Add-Content -LiteralPath $logPath -Encoding UTF8
+            $diagnosticLines += $lines
             Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
         }
     }
-    Write-Status $(if ($exitCode -eq 0) { "complete" } else { "validation_failed" }) $message $progress $exitCode $null
+    $errorTail = ""
+    if ($exitCode -ne 0) {
+        $errorTail = (($diagnosticLines | Where-Object { $_ -and $_.Trim() } | Select-Object -Last 20) -join " | ")
+        if ($errorTail.Length -gt 2000) { $errorTail = $errorTail.Substring($errorTail.Length - 2000) }
+    }
+    $script:lastValidationErrorTail = $errorTail
+    Write-Status $(if ($exitCode -eq 0) { "complete" } else { "validation_failed" }) $message $progress $exitCode $null $errorTail
     return $exitCode
 }
 
@@ -246,7 +264,7 @@ try {
             if ($validationExitCode -eq 0) { exit 0 }
             if ($RunOnce) { exit $validationExitCode }
             $nextRun = (Get-Date).AddMinutes($IntervalMinutes)
-            Write-Status "validation_failed" "Waiting to retry fixed-strategy history validation." $progress $validationExitCode $nextRun
+            Write-Status "validation_failed" "Waiting to retry fixed-strategy history validation." $progress $validationExitCode $nextRun $script:lastValidationErrorTail
             Start-Sleep -Seconds ($IntervalMinutes * 60)
             continue
         }

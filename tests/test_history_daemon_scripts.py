@@ -27,7 +27,12 @@ def test_history_daemon_has_audited_source_outage_backoff():
     assert "source_plan_identity" in text
     assert "Get-FileHash" in text
     assert "script_sha256" in text
-    assert "schema_version = 3" in text
+    assert "schema_version = 4" in text
+    assert '"history-config-check"' in text
+    assert "output_dir = $resolvedOutput" in text
+    assert "error_tail = $ErrorTail" in text
+    assert "$diagnosticLines" in text
+    assert "$script:lastValidationErrorTail" in text
     assert "validated partial data is preserved" in text
     assert '"history-validate"' in text
     assert '"auto-live-run"' not in text
@@ -144,12 +149,65 @@ def test_history_daemon_honors_backoff_for_current_source_plan(tmp_path):
     assert status["source_failure_streak"] == 2
     assert "still active" in status["message"]
 
+@pytest.mark.skipif(not sys.platform.startswith("win"), reason="Windows role guard")
+def test_history_daemon_rejects_default_orchestrator_before_state_creation(tmp_path):
+    output_dir = tmp_path / "wrong-role"
+    completed = subprocess.run(
+        [
+            "powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
+            "-File", str(DAEMON),
+            "-Config", "configs/default.yaml",
+            "-OutputDir", str(output_dir),
+            "-RunOnce", "-DryRun",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=20,
+        check=False,
+    )
+
+    assert completed.returncode != 0
+    assert "config_role=observation_orchestrator" in completed.stderr
+    assert not (output_dir / "history_backfill_daemon_status.json").exists()
+    assert not (output_dir / "history_backfill_daemon.lock").exists()
+
+
+@pytest.mark.skipif(not sys.platform.startswith("win"), reason="Windows role guard")
+def test_history_startup_installer_rejects_broker_config_before_preview(tmp_path):
+    completed = subprocess.run(
+        [
+            "powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
+            "-File", str(INSTALLER),
+            "-Config", "configs/huatai_desktop_canary.yaml",
+            "-OutputDir", str(tmp_path / "broker-output"),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=20,
+        check=False,
+    )
+
+    assert completed.returncode != 0
+    assert "config_role=broker_live" in completed.stderr
+    assert "Preview only" not in completed.stdout
+
+
 def test_history_startup_installer_persists_source_backoff_setting():
     text = INSTALLER.read_text(encoding="utf-8")
 
     assert "SourceFailureBackoffMinutes" in text
     assert '"-SourceFailureBackoffMinutes"' in text
     assert "Source-wide failure backoff" in text
+    assert '"history-config-check"' in text
+    assert "$expectedDaemonHash" in text
+    assert "status.script_sha256" in text
+    assert "status.output_dir" in text
 
 
 def test_history_daemon_rejects_unsafe_healthy_intervals(tmp_path):

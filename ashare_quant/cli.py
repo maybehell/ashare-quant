@@ -89,6 +89,7 @@ from .local_operator import _formal_candidate_observation_status, strategy_opera
 from .index_membership import refresh_benchmark_membership
 from .observation_plan import write_observation_schedule
 from .observation_config import require_observation_orchestrator_config
+from .history_config import require_history_validation_config
 from .observation_task import write_observation_task_status
 from .observation_progress import capture_observation_snapshot, observation_progress_blockers, write_observation_progress
 from .order_audit import write_order_liquidity_audit
@@ -159,6 +160,9 @@ def main(argv: list[str] | None = None) -> None:
 
     sub.add_parser("backtest", help="Run daily multi-factor backtest")
     sub.add_parser("history-validate", help="Validate a completed research-only historical backfill with fixed strategy parameters")
+    history_config_check = sub.add_parser("history-config-check", help="Fail-closed audit of an isolated fixed-strategy history-validation configuration")
+    history_config_check.add_argument("--output-dir", required=True, help="Output directory owned by the history-validation daemon")
+    history_config_check.add_argument("--allow-output-override", action="store_true", help="Allow isolated DryRun output redirection; production launchers never set this")
     sub.add_parser("capital-sensitivity", help="Rerun isolated lot-aware backtests across configured capital levels")
     sub.add_parser("small-capital-readiness", help="Audit whether a capped small-capital strategy may enter forward-only observation")
 
@@ -495,6 +499,12 @@ def run_command(args: argparse.Namespace, config: dict) -> None:
         print_paths(run_backtest(config).values())
     elif args.command == "history-validate":
         print_paths(run_extended_history_validation(config).values())
+    elif args.command == "history-config-check":
+        print(require_history_validation_config(
+            config,
+            output_dir=args.output_dir,
+            allow_output_override=bool(args.allow_output_override),
+        ))
     elif args.command == "capital-sensitivity":
         print_paths(run_capital_sensitivity(config).values())
     elif args.command == "small-capital-readiness":

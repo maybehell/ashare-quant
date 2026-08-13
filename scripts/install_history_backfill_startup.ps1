@@ -17,7 +17,9 @@ param(
 $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $daemon = Join-Path $PSScriptRoot "history_backfill_daemon.ps1"
+$aqScript = Join-Path $PSScriptRoot "aq.ps1"
 if (-not (Test-Path -LiteralPath $daemon)) { throw "Missing daemon: $daemon" }
+if (-not (Test-Path -LiteralPath $aqScript)) { throw "Missing aq runner: $aqScript" }
 if ($IntervalMinutes -lt 15) { throw "IntervalMinutes must be at least 15." }
 if ($HealthyIntervalMinutes -lt 15) { throw "HealthyIntervalMinutes must be at least 15." }
 if ($HealthyIntervalMinutes -gt $IntervalMinutes) { throw "HealthyIntervalMinutes cannot exceed IntervalMinutes." }
@@ -32,6 +34,11 @@ function Resolve-ProjectPath([string]$Value) {
 $resolvedConfig = Resolve-ProjectPath $Config
 $resolvedOutput = Resolve-ProjectPath $OutputDir
 if (-not (Test-Path -LiteralPath $resolvedConfig)) { throw "Missing config: $resolvedConfig" }
+$configAudit = & $aqScript "--config" $resolvedConfig "history-config-check" "--output-dir" $resolvedOutput 2>&1
+if ($LASTEXITCODE -ne 0) {
+    throw "History Startup configuration is invalid: $($configAudit -join ' | ')"
+}
+$expectedDaemonHash = (Get-FileHash -LiteralPath $daemon -Algorithm SHA256).Hash.ToLowerInvariant()
 $startup = [Environment]::GetFolderPath([Environment+SpecialFolder]::Startup)
 if (-not $startup) { throw "Current user Startup folder is unavailable." }
 $target = Join-Path $startup $EntryName
@@ -81,7 +88,16 @@ if ($StartNow) {
             $status = Get-Content -LiteralPath $statusPath -Raw -Encoding UTF8 | ConvertFrom-Json
             $age = (Get-Date) - [DateTimeOffset]::Parse([string]$status.updated_at).LocalDateTime
             $process = Get-Process -Id ([int]$status.pid) -ErrorAction SilentlyContinue
-            $verified = [string]$status.mode -eq "research_history_backfill" -and $age.TotalSeconds -le $VerifySeconds -and $null -ne $process
+            $statusConfig = [IO.Path]::GetFullPath([string]$status.config)
+            $statusOutput = [IO.Path]::GetFullPath([string]$status.output_dir)
+            $verified = (
+                [string]$status.mode -eq "research_history_backfill" -and
+                $age.TotalSeconds -le $VerifySeconds -and
+                $null -ne $process -and
+                [string]$status.script_sha256 -eq $expectedDaemonHash -and
+                $statusConfig.Equals($resolvedConfig, [StringComparison]::OrdinalIgnoreCase) -and
+                $statusOutput.Equals($resolvedOutput, [StringComparison]::OrdinalIgnoreCase)
+            )
         } catch {
             $verified = $false
         }

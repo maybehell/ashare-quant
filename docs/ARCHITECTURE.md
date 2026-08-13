@@ -4,7 +4,7 @@ Status: authoritative
 
 Version: 1.0
 
-Last reviewed: 2026-08-12
+Last reviewed: 2026-08-13
 
 ## 1. Purpose
 
@@ -66,9 +66,15 @@ Rules:
 - A research scheduler may invoke fixed-parameter validation after authoritative
   data completion, but cannot promote a candidate, activate a strategy, create
   execution orders, or call the broker boundary.
-- Required unattended observation and research backfill must have a fresh status
-  bound to the current script plus a verified current-user Startup entry; stale
-  status files are not liveness evidence.
+- Required unattended observation and incomplete research backfill must have a
+  fresh status bound to the current script plus a verified current-user Startup
+  entry; stale status files are not liveness evidence. A completed fixed-history
+  validation exits and does not require a persistent Startup entry.
+- Extended-history orchestration uses an explicit
+  `research_history_validation` configuration role. Its daemon and installer
+  bind research-only policy, fixed strategy identity, isolated output ownership,
+  current script hash, exact config, and live PID before accepting runtime state.
+  Only an explicit daemon `DryRun` may redirect output.
 - The single daily observation entry uses an explicit
   `observation_orchestrator` configuration whose owned output contains the
   authoritative scheduler state. Broker-live and frozen research-candidate
@@ -232,7 +238,12 @@ Rules:
   current committed pool with available cached history but must remain failed
   for point-in-time completeness until authoritative daily membership, delisted
   securities, and historical eligibility state exist. Completed validation is
-  evidence only and grants no strategy authority.
+  evidence only and grants no strategy authority. A reproducible experiment is
+  applicable to the authoritative candidate only when their strategy identities
+  match; otherwise its metrics remain visible as non-applicable research evidence.
+- History daemon schema 4 records its output owner and a bounded validation error
+  tail. Failed retry states preserve that diagnostic; successful fixed validation
+  writes `complete` and terminates the daemon instead of remaining resident.
 
 ### 3.4 Strategy governance and promotion
 
