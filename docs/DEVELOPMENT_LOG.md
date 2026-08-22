@@ -5,6 +5,75 @@ added directly below this introduction, newest first. It records verified facts;
 it is not a release-marketing document and does not replace generated audit
 artifacts.
 
+## 2026-08-22 - Reject first independent 52-week-high experiment
+
+**Objective**
+
+Run the preregistered first experiment in the independent 52-week-high family
+exactly once against its frozen long-history gate, then preserve the result
+without tuning or promotion.
+
+**Roadmap phase**
+
+P1 strategy evidence remains unmet. Experiment one is rejected; the family has
+one unused slot, but no second experiment has been defined or registered.
+
+**Result**
+
+- The CNY 100,000 strategy returned 7.5493% from 2019-01-16 through
+  2026-08-07 versus 50.0466% for CSI 300, for total excess of -42.4973%.
+- The last-30% held-out excess was -35.0571%; information ratio was -0.3311;
+  maximum drawdown was -12.6588%.
+- Six of 13 non-overlapping walk-forward tests were positive (46.1538%). Mean
+  fold excess was -2.0371% and the worst fold excess was -29.1503%.
+- The paired moving-block bootstrap observed -42.4973% excess, estimated a
+  25.05% probability of positive excess, and produced a two-sided p-value of
+  0.501 against the preregistered nominal alpha of 0.025.
+- The machine decision was `rejected`: total excess, information ratio,
+  held-out excess, walk-forward consistency, positive observed excess, and
+  Bonferroni significance all failed their frozen gates.
+
+**Evidence and safety**
+
+- The completed status is bound to experiment `hs300_52week_high20_v1`,
+  strategy SHA-256
+  `2f8b788f99df6a7e2829887f0b25602939f002af54b3df6183ba12783eaf9d72`,
+  preregistration SHA-256
+  `6b0b0dc33a71492a345c74a4fc9c6ee9186f3b9c39c4c8507433030d4f295099`,
+  formal-price SHA-256
+  `b1eb8529bcd3b948e705bdac27859bf6a21b6f91921c05329f4479f553b84c5c`,
+  and input-binding SHA-256
+  `01b1b6b54575c2d93e1250fbfa65cc55f9e552f180e067bc2f07451b5a061909`.
+- All 800 requested symbols completed and yielded 1,833 effective trading days.
+  The generated status timestamp is 2026-08-22T21:21:28.
+- The immutable experiment registry hash remained
+  `f8caa9803eeb4d63b2ed259d79f7d19c7d51eed02ff31d62ade5e1a4adc35500`.
+  Existing candidate and failure-history hashes also remained unchanged.
+- Research output contains `backtest_orders.csv` but no generic, RPA, or live
+  order artifact. No live account, active execution strategy, or successor
+  candidate was created. Broker submission remains disabled and emergency stop
+  remains active.
+
+**Verification**
+
+- Pure preflight reported `research_history_validation_ready` for the exact
+  frozen strategy, registry, price cache, and input binding.
+- Generated `history_validation_status.csv` reports `status=completed`,
+  `experiment_decision=rejected`, 13 walk-forward folds, and the six explicit
+  failure classes above.
+- Protected-state audit after evaluation confirmed unchanged registry,
+  candidate, and failure-history hashes; live account, live orders, generic
+  orders, RPA orders, and active strategy remained absent.
+- Frozen-config, experiment-decision, registry-reuse, integration, and
+  documentation-governance regression: 22 passed in 1.44 seconds.
+
+**Remaining work**
+
+- Do not tune or rerun experiment one and do not create a forward candidate.
+- Before consuming the final family slot, document an independently motivated
+  interaction from external evidence and preregister it without inspecting a
+  parameter sweep on the current cache. Otherwise close the family as rejected.
+
 ## 2026-08-13 - Preregister independent 52-week-high research family
 
 **Objective**

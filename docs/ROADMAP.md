@@ -2,7 +2,7 @@
 
 Status: authoritative delivery plan
 
-Last reviewed: 2026-08-13
+Last reviewed: 2026-08-22
 
 ## 1. Purpose
 
@@ -32,7 +32,7 @@ an earlier phase has not earned.
 
 ## 3. Current baseline
 
-As of 2026-08-13:
+As of 2026-08-22:
 
 | Area | Current evidence | State |
 |---|---|---|
@@ -40,7 +40,7 @@ As of 2026-08-13:
 | Market history | 800/800 cached symbols | complete for the bound cache |
 | Formal candidate | `d55d124b5800e123`, exact history decision and permanent record bound | rejected |
 | Candidate history validation | matching 1,965-day evidence completed; performance thresholds failed | blocked |
-| Successor research | independent 52-week-high family experiment 1 preregistered; not evaluated | research only |
+| Successor research | independent 52-week-high experiment 1 completed on 1,833 effective days; all promotion dimensions failed | rejected; one undefined family slot remains |
 | Broker read-only | Huatai process found; trading UI not loaded | blocked |
 | Account binding | 8/13 checks | blocked |
 | Live strategy authority | no active execution strategy | absent by design |
@@ -206,10 +206,12 @@ Work is selected from the earliest phase whose exit criteria are not met:
 2. Define an independently motivated, preregistered successor research phase;
    do not continue tuning the exhausted four-test family or inherit the rejected
    candidate's authority.
-   This definition gate is now complete; the next action is one exact historical
-   evaluation of the frozen 52-week-high experiment, not a parameter sweep.
-3. Accumulate a genuine 60-session forward window only for a newly
-   preregistered successor that first passes its independent history gate.
+   The first 52-week-high experiment is rejected. Review its failure and the
+   external economic evidence before deciding whether the one remaining family
+   slot justifies a separately preregistered interaction; do not tune experiment
+   one or search the current cache.
+3. Accumulate a genuine 60-session forward window only for a successor that
+   first passes its independent history gate.
 4. Complete the four-tier small-capital evidence for the approved candidate.
 5. Restore and soak Huatai read-only account evidence.
 6. Implement P4 shadow reconciliation only after P1-P3 gates pass.
