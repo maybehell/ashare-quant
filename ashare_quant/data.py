@@ -28,12 +28,14 @@ from .index_symbols import canonical_index_symbol, provider_index_symbol
 
 
 PRICE_COLUMNS = ["date", "symbol", "open", "high", "low", "close", "volume", "amount"]
+OPTIONAL_PRICE_COLUMNS = ["turnover"]
 STOCK_COLUMNS = ["symbol", "name", "board", "industry", "list_date", "is_st"]
 FUNDAMENTAL_COLUMNS = ["date", "symbol", "pe", "pb", "roe"]
 BENCHMARK_COLUMNS = ["date", "symbol", "name", "close"]
 TRADE_CALENDAR_COLUMNS = ["date", "is_trading_day", "source", "retrieved_at"]
 HISTORY_PROVENANCE_COLUMNS = [
     "symbol", "source", "first_date", "last_date", "rows", "amount_quality",
+    "turnover_quality",
     "overlap_status", "overlap_rows",
     "overlap_close_median_relative_error",
     "overlap_volume_median_relative_error",
@@ -167,11 +169,15 @@ def normalize_prices(frame: pd.DataFrame) -> pd.DataFrame:
     missing = set(PRICE_COLUMNS) - set(frame.columns)
     if missing:
         raise ValueError(f"prices missing columns: {sorted(missing)}")
-    out = frame[PRICE_COLUMNS].copy()
+    selected = PRICE_COLUMNS + [
+        column for column in OPTIONAL_PRICE_COLUMNS if column in frame.columns
+    ]
+    out = frame[selected].copy()
     out["date"] = pd.to_datetime(out["date"]).dt.date
     out["symbol"] = out["symbol"].map(normalize_symbol)
-    for col in ["open", "high", "low", "close", "volume", "amount"]:
-        out[col] = pd.to_numeric(out[col], errors="coerce")
+    for col in ["open", "high", "low", "close", "volume", "amount", *OPTIONAL_PRICE_COLUMNS]:
+        if col in out:
+            out[col] = pd.to_numeric(out[col], errors="coerce")
     out = out.dropna(subset=["date", "symbol", "open", "close"]).drop_duplicates(["date", "symbol"])
     return out.sort_values(["date", "symbol"]).reset_index(drop=True)
 
@@ -1026,6 +1032,9 @@ def merge_fetch_history_provenance(
     merged = pd.concat([cached, current], ignore_index=True)
     if merged.empty:
         return pd.DataFrame(columns=HISTORY_PROVENANCE_COLUMNS)
+    merged["turnover_quality"] = (
+        merged["turnover_quality"].fillna("unavailable").astype(str)
+    )
     merged["symbol"] = merged["symbol"].map(normalize_symbol)
     allowed = {normalize_symbol(symbol) for symbol in scope_symbols}
     return (
@@ -1287,6 +1296,10 @@ def resumable_partial_history(
             continue
         restored.setdefault("source", "resumed_partial_unknown_source")
         restored.setdefault("amount_quality", "preserved_normalized")
+        if pd.isna(restored.get("turnover_quality")) or not str(
+            restored.get("turnover_quality", "")
+        ).strip():
+            restored["turnover_quality"] = "unavailable"
         require_trusted_provenance = bool(
             config.get("data", {}).get(
                 "history_resume_require_trusted_provenance",
@@ -1961,6 +1974,12 @@ def fetch_symbol_history(
                         if requested_source in reported_amount_sources
                         else "estimated_close_x_volume"
                     ),
+                    "turnover_quality": (
+                        "reported_percent"
+                        if "turnover" in normalized
+                        and normalized["turnover"].notna().any()
+                        else "unavailable"
+                    ),
                 }
             except Exception as exc:
                 errors.append(f"attempt {attempt} {requested_source}: {exc}")
@@ -2152,8 +2171,9 @@ def history_from_akshare(hist: pd.DataFrame, symbol: str) -> pd.DataFrame:
     out["close"] = pick_column(hist, ["收盘", "close"], 4)
     out["volume"] = pick_column(hist, ["成交量", "volume"], 5)
     out["amount"] = pick_column(hist, ["成交额", "amount"], 6)
+    out["turnover"] = pick_column(hist, ["换手率", "turnover", "turn"], None)
     out["symbol"] = symbol
-    return out[PRICE_COLUMNS]
+    return normalize_prices(out)
 
 
 def history_from_tx(hist: pd.DataFrame, symbol: str) -> pd.DataFrame:

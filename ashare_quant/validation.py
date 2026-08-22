@@ -198,6 +198,20 @@ def validate_config(config: dict[str, Any]) -> list[str]:
                 errors.append("strategy.lookbacks.volume_ma_long must be at least 20")
             if volume_ma_short is not None and volume_ma_long is not None and volume_ma_short >= volume_ma_long:
                 errors.append("strategy.lookbacks.volume_ma_short must be less than volume_ma_long")
+            turnover_window = parsed_lookbacks.get("turnover")
+            turnover_min_observations = parsed_lookbacks.get("turnover_min_observations")
+            if turnover_window is not None and turnover_window < 20:
+                errors.append("strategy.lookbacks.turnover must be at least 20")
+            if turnover_min_observations is not None and turnover_min_observations < 20:
+                errors.append("strategy.lookbacks.turnover_min_observations must be at least 20")
+            if (
+                turnover_window is not None
+                and turnover_min_observations is not None
+                and turnover_min_observations > turnover_window
+            ):
+                errors.append(
+                    "strategy.lookbacks.turnover_min_observations must not exceed turnover"
+                )
             active_weights = [config["strategy"].get("weights", {})]
             members = config["strategy"].get("ensemble_members", [])
             if isinstance(members, list):
@@ -269,6 +283,24 @@ def validate_config(config: dict[str, Any]) -> list[str]:
             if volume_ma_active and not {"volume_ma_short", "volume_ma_long"}.issubset(lookbacks):
                 errors.append(
                     "strategy low_volume_ma_distance factor requires volume_ma_short and volume_ma_long lookbacks"
+                )
+            low_turnover_active = False
+            for weights in active_weights:
+                if not isinstance(weights, dict) or "low_turnover" not in weights:
+                    continue
+                try:
+                    turnover_weight = float(weights.get("low_turnover", 0.0))
+                except (TypeError, ValueError):
+                    errors.append("strategy low_turnover weight must be numeric")
+                    continue
+                low_turnover_active = low_turnover_active or abs(turnover_weight) > 1e-12
+            if low_turnover_active and not {
+                "turnover",
+                "turnover_min_observations",
+            }.issubset(lookbacks):
+                errors.append(
+                    "strategy low_turnover factor requires turnover and "
+                    "turnover_min_observations lookbacks"
                 )
             high_52_week_active = False
             for weights in active_weights:

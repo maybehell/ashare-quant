@@ -5,6 +5,67 @@ added directly below this introduction, newest first. It records verified facts;
 it is not a release-marketing document and does not replace generated audit
 artifacts.
 
+## 2026-08-22 - Preserve point-in-time turnover for independent research
+
+**Objective**
+
+Add the missing data capability needed to test the published A-share turnover
+effect without translating the failed 52-week-high result into an unsupported
+seasonal timing rule.
+
+**Roadmap phase**
+
+P1 strategy evidence remains unmet. This change prepares independently motivated
+research data and factor capability; it does not register or evaluate a strategy.
+
+**Changes**
+
+- Preserved BaoStock and primary AkShare daily turnover percentage as an optional
+  normalized price column while keeping legacy price caches readable.
+- Added per-symbol `turnover_quality` provenance with `reported_percent` and
+  `unavailable` states.
+- Added an opt-in `low_turnover` factor using negative trailing average daily
+  turnover, explicit lookback and minimum-observation windows, availability
+  filtering, and configuration validation.
+- Added ADR 0037. The decision records why excluding February observations in an
+  academic test is not implemented as a February liquidation strategy.
+
+**Architecture and safety**
+
+- Data acquisition owns provider fields and provenance; factor computation owns
+  the normalized signal. No provider-specific column leaks into strategy code.
+- Existing caches without turnover remain valid for existing strategies. A
+  future strategy declaring `low_turnover` required excludes insufficient data
+  rather than substituting raw volume or current market capitalization.
+- The factor is neutral unless explicitly configured. No experiment, candidate,
+  forward observation, account, order, activation, or broker call was created.
+- Broker submission remains disabled, emergency stop remains active, and the
+  CNY 200,000 system ceiling is unchanged.
+
+**Verification**
+
+- Turnover normalization, BaoStock/AkShare preservation, factor direction,
+  missing-data filtering, neutrality, validation, and compatibility suite:
+  114 passed in 3.34 seconds.
+- The first full run reported 1,236 passed and five unrelated Windows failures:
+  four child Windows PowerShell processes inherited the PowerShell 7 module path
+  and could not discover `Get-FileHash`; one transient directory rename was
+  denied. Direct shell diagnosis proved the cmdlet was installed, and the
+  directory retry passed on focused rerun.
+- Full regression with the explicit Windows PowerShell module path: 1,241 passed,
+  5 skipped, and 39 subtests passed in 192.16 seconds.
+- The current formal price cache still has only the legacy eight columns and was
+  not refreshed or rewritten. Registry, candidate, and failure-history hashes
+  remained unchanged; live account, live orders, generic orders, RPA orders,
+  active strategy, and a low-turnover candidate remained absent.
+
+**Remaining work**
+
+- Refresh turnover into a new isolated cache; do not rewrite the frozen formal
+  cache or evaluate the factor during acquisition.
+- Audit symbol/date coverage and provider provenance before separately
+  preregistering any low-turnover experiment.
+
 ## 2026-08-22 - Reject first independent 52-week-high experiment
 
 **Objective**

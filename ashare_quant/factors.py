@@ -256,6 +256,11 @@ def compute_factor_values(
         if "volume" in history.columns
         else pd.DataFrame(index=close.index, columns=close.columns, dtype=float)
     )
+    turnover = (
+        history.pivot(index="date", columns="symbol", values="turnover").sort_index()
+        if "turnover" in history.columns
+        else pd.DataFrame(index=close.index, columns=close.columns, dtype=float)
+    )
     returns = close.pct_change()
 
     momentum_lookback = int(lookbacks.get("momentum", 60))
@@ -274,6 +279,10 @@ def compute_factor_values(
     volume_ma_short = int(lookbacks.get("volume_ma_short", 21))
     volume_ma_long = int(lookbacks.get("volume_ma_long", 200))
     high_52_week_lookback = int(lookbacks.get("high_52_week", 252))
+    turnover_lookback = int(lookbacks.get("turnover", 252))
+    turnover_min_observations = int(
+        lookbacks.get("turnover_min_observations", turnover_lookback)
+    )
 
     momentum = close.pct_change(momentum_lookback).iloc[-1]
     long_momentum = close.pct_change(long_momentum_lookback).iloc[-1]
@@ -339,6 +348,15 @@ def compute_factor_values(
     drawdown = (close / rolling_high - 1).iloc[-1]
     trend_quality = momentum / volatility.replace(0, pd.NA)
     long_trend_quality = long_momentum / volatility.replace(0, pd.NA)
+    turnover_requested = "turnover" in lookbacks
+    average_turnover = (
+        turnover.rolling(
+            turnover_lookback, min_periods=turnover_min_observations
+        ).mean().iloc[-1]
+        if turnover_requested
+        else pd.Series(index=close.columns, dtype=float)
+    )
+    low_turnover = -average_turnover.where(average_turnover.ge(0))
     high_52_week_requested = "high_52_week" in lookbacks
     near_52_week_high = (
         close.iloc[-1].divide(
@@ -369,6 +387,8 @@ def compute_factor_values(
             "long_trend_quality": long_trend_quality.reindex(close.columns).values,
             "near_52_week_high": near_52_week_high.reindex(close.columns).values,
             "near_52_week_high_available": near_52_week_high.reindex(close.columns).notna().values,
+            "low_turnover": low_turnover.reindex(close.columns).values,
+            "low_turnover_available": low_turnover.reindex(close.columns).notna().values,
             "residual_momentum": residual_cross_section["residual_momentum"].reindex(close.columns).values,
             "low_idiosyncratic_volatility": residual_cross_section["low_idiosyncratic_volatility"].reindex(close.columns).values,
             "residual_momentum_available": residual_cross_section["residual_momentum"].reindex(close.columns).notna().values,
@@ -393,6 +413,7 @@ def compute_factor_values(
     factors["trend_quality"] = zscore(factors["trend_quality"])
     factors["long_trend_quality"] = zscore(factors["long_trend_quality"])
     factors["near_52_week_high"] = zscore(factors["near_52_week_high"])
+    factors["low_turnover"] = zscore(factors["low_turnover"])
     factors["residual_momentum"] = zscore(factors["residual_momentum"])
     factors["low_volume_ma_distance"] = zscore(factors["low_volume_ma_distance"])
     factors["low_idiosyncratic_volatility"] = zscore(factors["low_idiosyncratic_volatility"])

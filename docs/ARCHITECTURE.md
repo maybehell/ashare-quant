@@ -4,7 +4,7 @@ Status: authoritative
 
 Version: 1.0
 
-Last reviewed: 2026-08-13
+Last reviewed: 2026-08-22
 
 ## 1. Purpose
 
@@ -116,6 +116,10 @@ Rules:
 
 - Normalized schemas are the boundary; source-specific columns do not leak into
   strategy or execution code.
+- Daily provider-reported share turnover is an optional normalized price field.
+  Its per-symbol provenance distinguishes reported percentage values from
+  unavailable fallback data. Legacy caches remain readable; a strategy requiring
+  turnover excludes incomplete symbols before scoring.
 - Network failure may preserve a clearly identified old cache, but cannot label
   it fresh.
 - Cache replacement and partial recovery are atomic and auditable.
@@ -233,6 +237,10 @@ Rules:
 - New factor capability does not consume an experiment slot. Strategy parameters,
   decision thresholds, input binding, and registry identity must be committed in
   a later preregistration before that factor is historically evaluated.
+- The low-turnover factor uses only provider-reported point-in-time turnover,
+  requires explicit lookback and minimum-observation windows when active, and is
+  neutral otherwise. Raw volume or current capitalization cannot substitute for
+  missing historical turnover. See ADR 0037.
 - A new research family cannot relabel an already rejected local hypothesis. The
   independent 52-week-high family has at most two experiments, family-wise alpha
   0.05, and Bonferroni nominal alpha 0.025 per experiment. Its first experiment

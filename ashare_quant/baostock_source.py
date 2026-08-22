@@ -27,6 +27,7 @@ HISTORY_FIELDS = [
     "close",
     "volume",
     "amount",
+    "turn",
     "tradestatus",
 ]
 
@@ -171,6 +172,7 @@ def fetch_history_frame_baostock(
             "close": pd.to_numeric(raw.get("close"), errors="coerce"),
             "volume": pd.to_numeric(raw.get("volume"), errors="coerce"),
             "amount": pd.to_numeric(raw.get("amount"), errors="coerce"),
+            "turnover": pd.to_numeric(raw.get("turn"), errors="coerce"),
         }
     )
     out = out.dropna(subset=["date", "open", "high", "low", "close", "volume", "amount"])
@@ -184,6 +186,9 @@ def fetch_history_frame_baostock(
         "last_date": out["date"].max(),
         "rows": len(out),
         "amount_quality": "reported",
+        "turnover_quality": (
+            "reported_percent" if out["turnover"].notna().any() else "unavailable"
+        ),
     }
     return out, provenance
 
