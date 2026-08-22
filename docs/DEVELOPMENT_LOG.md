@@ -5,6 +5,73 @@ added directly below this introduction, newest first. It records verified facts;
 it is not a release-marketing document and does not replace generated audit
 artifacts.
 
+## 2026-08-22 - Add isolated turnover history backfill and coverage audit
+
+**Objective**
+
+Create the restart-safe, provenance-complete data workflow required before any
+independent low-turnover strategy can be preregistered or evaluated.
+
+**Roadmap phase**
+
+P1 strategy evidence remains unmet. This change advances successor research
+data acquisition only; it does not register an experiment or grant a candidate
+or execution authority.
+
+**Changes**
+
+- Added the exact `research_turnover_backfill` configuration role and
+  `turnover-backfill --budget` / `turnover-audit` CLI commands.
+- Added isolated partial history, per-symbol provenance, restart-safe failures,
+  progress, formal publication, and schema-v2 coverage audit artifacts.
+- Bound resume to the exact committed source-price, source-scope, and effective
+  configuration hashes. Identity drift rejects the existing namespace.
+- Kept formal turnover absent until all 800 symbols pass provider-reported
+  quality, minimum-row, and date-coverage checks with no failures.
+- Made partial coverage visible separately from formal pass and real fetch
+  failures. Added interrupted-checkpoint recovery for stale failure rows.
+- Added ADR 0038, architecture ownership, roadmap state, production-config
+  assertions, and focused failure-path tests.
+
+**Architecture and safety**
+
+- The workflow reads the completed formal price cache but writes only
+  `data/cache_turnover_research_v1` and `outputs_turnover_research_v1`; it does
+  not rewrite frozen prices.
+- Provenance is written before partial rows. A partial cache has no research
+  pass, strategy, candidate, observation, account, order, or broker authority.
+- The production backfill configuration is research-only, does not apply active
+  execution, disables broker submission, and keeps its emergency stop active.
+  The CNY 200,000 system ceiling remains unchanged.
+
+**Verification**
+
+- Focused turnover, production-config, factor-compatibility, and documentation
+  suite: 19 passed in 1.71 seconds.
+- Final full regression with the explicit Windows PowerShell module path: 1,248
+  passed, 5 skipped, and 39 subtests passed in 193.22 seconds.
+- Real BaoStock acceptance with budget three completed symbols `000001`,
+  `000021`, and `000032`: 6,246 turnover rows, zero fetch failures, and 100%
+  per-symbol coverage. The schema-v2 audit remains `blocked`, reports 3
+  available and 797 remaining symbols, zero passed symbols, and no formal
+  turnover file.
+- Source-price SHA-256 is
+  `6e5cdcd6e7ff71a34930aa927f6cb18de4de820c7e02b4b84295fc108ce4cb01`;
+  source-scope SHA-256 is
+  `59714b1d76b8247db0eb53ecb464c782219be141cbb18dd0429f672c1004374b`.
+- Existing experiment registry, candidate, and failure-history hashes remained
+  `f8caa9803eeb4d63b2ed259d79f7d19c7d51eed02ff31d62ade5e1a4adc35500`,
+  `e61f89a45cc7d34c95399e6036e10081b2ec83498dac283c0c66c66e7fa89b31`,
+  and `8b262ea7d330ec8d328f3ceb4a21a14caa029cb30a9f9e4c6c77359f62fd5f09`.
+  Live account, live orders, generic orders, RPA orders, and active strategy
+  artifacts remained absent.
+
+**Remaining work**
+
+- Continue bounded backfill for the remaining 797 symbols and rerun the audit.
+- Do not preregister or evaluate the low-turnover family unless the complete
+  formal turnover cache passes the identity-bound audit.
+
 ## 2026-08-22 - Preserve point-in-time turnover for independent research
 
 **Objective**

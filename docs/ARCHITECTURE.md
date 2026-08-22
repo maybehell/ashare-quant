@@ -99,7 +99,8 @@ Rules:
 
 ### 3.2 Configuration, data, and market infrastructure
 
-Owners: `config.py`, `io_utils.py`, `data.py`, `baostock_source.py`,
+Owners: `config.py`, `io_utils.py`, `data.py`, `turnover_history.py`,
+`baostock_source.py`,
 `source_health.py`, `index_membership.py`, `index_symbols.py`,
 `trading_day_status.py`, and `fundamental_policy.py`.
 
@@ -120,6 +121,13 @@ Rules:
   Its per-symbol provenance distinguishes reported percentage values from
   unavailable fallback data. Legacy caches remain readable; a strategy requiring
   turnover excludes incomplete symbols before scoring.
+- Historical turnover reconstruction uses the exact
+  `research_turnover_backfill` role and an isolated target cache. Its partial
+  rows, provenance, failures, and progress bind the committed source-price,
+  source-scope, and effective configuration hashes. Resume rejects identity
+  drift, and formal turnover is published only when every source-scope symbol
+  passes the quality and coverage audit. Completion permits preregistration
+  review only and grants no strategy or execution authority. See ADR 0038.
 - Network failure may preserve a clearly identified old cache, but cannot label
   it fresh.
 - Cache replacement and partial recovery are atomic and auditable.

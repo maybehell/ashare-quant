@@ -1,0 +1,43 @@
+extends: default.yaml
+
+operations:
+  config_role: research_turnover_backfill
+
+paths:
+  cache_dir: data/cache_turnover_research_v1
+  output_dir: outputs_turnover_research_v1
+  state_db: data/state_turnover_research_v1.sqlite3
+
+turnover_research:
+  source_cache_dir: data/cache
+  requested_start: "2018-01-01"
+  requested_end: "2026-08-07"
+  request_budget: 25
+  min_symbol_row_coverage_ratio: 0.95
+  min_turnover_rows: 200
+
+data:
+  history_source: baostock
+  history_session_retries: 2
+  history_session_retry_delay_seconds: 1
+
+backtest:
+  start: "2018-01-01"
+  end: "2026-08-07"
+  initial_cash: 100000
+
+validation:
+  research_only: true
+  apply_active_execution: false
+  optimized_on_current_cache: false
+  candidate_path: data/research_candidate_low_turnover_v1.json
+  research_governance_state_path: data/research_governance_low_turnover_v1.json
+
+observation_task:
+  required: false
+  startup_required: false
+
+auto_live:
+  enabled: false
+  allow_broker_submit: false
+  emergency_stop: true

@@ -120,6 +120,7 @@ from .strategy_health import strategy_health_allows_paper, write_strategy_health
 from .stress import run_cost_stress
 from .small_capital_readiness import write_small_capital_live_readiness
 from .trading_day_status import write_trading_day_status
+from .turnover_history import run_turnover_backfill, write_turnover_audit
 from .validation import dependency_status, optional_dependency_status, validate_config, validate_market_data
 from .validation import complete_market_dates, filter_complete_market_data
 from .strategy_activation import (
@@ -148,6 +149,20 @@ def main(argv: list[str] | None = None) -> None:
     fetch.add_argument("--cached-universe", action="store_true", help="Skip stock spot source and refresh using cached universe symbols")
     fetch.add_argument("--full-history", action="store_true", help="Fetch from backtest.start instead of incremental overlap")
     fetch.add_argument("--history-budget", type=int, help="Maximum unfinished symbols to fetch in this resumable history-backfill run")
+
+    turnover_backfill = sub.add_parser(
+        "turnover-backfill",
+        help="Backfill provider-reported turnover into an isolated research cache",
+    )
+    turnover_backfill.add_argument(
+        "--budget",
+        type=int,
+        help="Maximum unfinished symbols to fetch in this resumable run",
+    )
+    sub.add_parser(
+        "turnover-audit",
+        help="Audit isolated turnover coverage without evaluating a strategy",
+    )
 
     sub.add_parser("fetch-account-prices", help="Refresh only current account-position prices from cached universe, then rerun account-state")
 
@@ -495,6 +510,15 @@ def run_command(args: argparse.Namespace, config: dict) -> None:
             paths = make_sample_data(store) if args.sample else fetch_akshare(store, config)
         store.log_run("fetch", "ok", ", ".join(str(path) for path in paths))
         print_paths(paths)
+    elif args.command == "turnover-backfill":
+        print_paths(
+            run_turnover_backfill(
+                config,
+                request_budget=getattr(args, "budget", None),
+            ).values()
+        )
+    elif args.command == "turnover-audit":
+        print_paths(write_turnover_audit(config).values())
     elif args.command == "fetch-account-prices":
         print_paths(fetch_account_prices(config).values())
     elif args.command == "recover-partial":

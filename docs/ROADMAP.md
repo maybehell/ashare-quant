@@ -40,7 +40,7 @@ As of 2026-08-22:
 | Market history | 800/800 cached symbols | complete for the bound cache |
 | Formal candidate | `d55d124b5800e123`, exact history decision and permanent record bound | rejected |
 | Candidate history validation | matching 1,965-day evidence completed; performance thresholds failed | blocked |
-| Successor research | 52-week-high experiment 1 rejected; optional point-in-time turnover capability added but current formal cache has no turnover field | data refresh required; no new experiment registered |
+| Successor research | 52-week-high experiment 1 rejected; isolated turnover backfill has 3/800 symbols at 100% per-symbol coverage and its audit remains blocked | 797-symbol bounded backfill required; no new experiment registered |
 | Broker read-only | Huatai process found; trading UI not loaded | blocked |
 | Account binding | 8/13 checks | blocked |
 | Live strategy authority | no active execution strategy | absent by design |
@@ -207,10 +207,10 @@ Work is selected from the earliest phase whose exit criteria are not met:
    do not continue tuning the exhausted four-test family or inherit the rejected
    candidate's authority.
    The first 52-week-high experiment is rejected, and the February result is not
-   translated into an unsupported cash-timing rule. Build an isolated,
-   provenance-complete turnover cache, audit its point-in-time coverage, then
-   decide whether to preregister a separate low-turnover family. Do not evaluate
-   the new factor against the current cache before registration.
+   translated into an unsupported cash-timing rule. Continue the bounded,
+   identity-bound turnover backfill until the isolated cache passes complete
+   point-in-time coverage, then decide whether to preregister a separate
+   low-turnover family. Do not evaluate the new factor before registration.
 3. Accumulate a genuine 60-session forward window only for a successor that
    first passes its independent history gate.
 4. Complete the four-tier small-capital evidence for the approved candidate.
